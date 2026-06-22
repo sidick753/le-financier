@@ -1,0 +1,425 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  PME_OWNER
+  PME_MEMBER
+  INVESTOR
+  INSTITUTION
+}
+
+enum KycStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  phone        String?
+  role         UserRole
+  kycStatus    KycStatus @default(PENDING)
+  isActive     Boolean   @default(true)
+  twoFaEnabled Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  organizationMemberships OrganizationMember[]
+  investments             Investment[]
+  documentsUploaded       Document[]
+  disputesOpened          Dispute[]             @relation("DisputeOpenedBy")
+  auditLogs               AuditLog[]
+  notifications           Notification[]
+  refreshTokens           RefreshToken[]
+  validatedScoringReports ScoringReport[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+
+
+
+
+
+enum OrganizationVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum OrganizationMemberRole {
+  OWNER
+  MEMBER
+}
+
+model Organization {
+  id                   String                          @id @default(uuid())
+  legalName            String
+  registrationNumber   String                          @unique // numéro RCCM ou équivalent
+  sector               String
+  foundedYear          Int?
+  legalForm            String?
+  address              String?
+  city                 String?
+  country              String                          @default("CI")
+  verificationStatus   OrganizationVerificationStatus  @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  members         OrganizationMember[]
+  fundingRequests FundingRequest[]
+  documents       Document[]
+  scoringReports  ScoringReport[]
+  disputes        Dispute[]
+
+  @@index([verificationStatus])
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String                  @id @default(uuid())
+  userId         String
+  organizationId String
+  role           OrganizationMemberRole  @default(MEMBER)
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@map("organization_members")
+}
+
+
+
+
+
+
+enum FundingRequestStatus {
+  DRAFT
+  UNDER_REVIEW
+  PUBLISHED
+  FUNDED
+  CLOSED
+  REJECTED
+  CANCELLED
+}
+
+model FundingRequest {
+  id             String                 @id @default(uuid())
+  organizationId String
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  title          String
+  description    String
+  amountRequested Decimal               @db.Decimal(14, 2)
+  amountRaised    Decimal               @default(0) @db.Decimal(14, 2)
+  currency        String                @default("XOF")
+  expectedReturn  Decimal?              @db.Decimal(5, 2) // taux/rendement attendu en %
+  durationMonths  Int?
+  status          FundingRequestStatus  @default(DRAFT)
+
+  publishedAt DateTime?
+  closesAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  investments    Investment[]
+  documents      Document[]
+  scoringReports ScoringReport[]
+  disputes       Dispute[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@map("funding_requests")
+}
+
+
+
+
+
+
+
+enum InvestmentStatus {
+  INTERESTED
+  COMMITTED
+  SETTLED_OFF_PLATFORM
+  CANCELLED
+}
+
+model Investment {
+  id               String           @id @default(uuid())
+  fundingRequestId String
+  fundingRequest   FundingRequest   @relation(fields: [fundingRequestId], references: [id], onDelete: Cascade)
+  investorId       String
+  investor         User             @relation(fields: [investorId], references: [id])
+
+  amountCommitted Decimal           @db.Decimal(14, 2)
+  status          InvestmentStatus  @default(INTERESTED)
+
+  settlementProofId String?   @unique
+  settledAt         DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([fundingRequestId])
+  @@index([investorId])
+  @@index([status])
+  @@map("investments")
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+enum DocumentType {
+  KYC_ID
+  KYC_PROOF_OF_ADDRESS
+  ORGANIZATION_LEGAL
+  FINANCIAL_STATEMENT
+  FUNDING_REQUEST_ATTACHMENT
+  SETTLEMENT_PROOF
+  DISPUTE_EVIDENCE
+  OTHER
+}
+
+enum DocumentStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+model Document {
+  id   String       @id @default(uuid())
+  type DocumentType
+
+  // Stockage : jamais le fichier en base, juste la référence
+  storageKey String  // clé/chemin dans le object storage (S3/MinIO)
+  fileName   String
+  mimeType   String
+  sizeBytes  Int
+
+  status DocumentStatus @default(PENDING_REVIEW)
+
+  uploadedById String
+  uploadedBy   User    @relation(fields: [uploadedById], references: [id])
+
+  // Liens polymorphiques optionnels — un document appartient à UNE de ces entités
+  organizationId   String?
+  organization     Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fundingRequestId String?
+  fundingRequest   FundingRequest?  @relation(fields: [fundingRequestId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([fundingRequestId])
+  @@index([type])
+  @@map("documents")
+}
+
+
+
+
+
+
+
+
+
+
+enum ScoringStatus {
+  CALCULATED
+  PENDING_VALIDATION
+  VALIDATED
+  REJECTED
+}
+
+model ScoringReport {
+  id             String   @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  fundingRequestId String?
+  fundingRequest   FundingRequest? @relation(fields: [fundingRequestId], references: [id])
+
+  // Le score calculé automatiquement
+  autoScore   Decimal  @db.Decimal(5, 2)
+  kpiSnapshot Json     // KPI utilisés pour le calcul, figés à cet instant
+
+  status ScoringStatus @default(CALCULATED)
+
+  // Validation humaine (hybride)
+  validatedById String?
+  validatedBy   User?    @relation(fields: [validatedById], references: [id])
+  validatedScore Decimal? @db.Decimal(5, 2)
+  validationNotes String?
+  validatedAt   DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([status])
+  @@map("scoring_reports")
+}
+
+
+
+
+
+
+
+
+
+enum DisputeStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+enum DisputeCategory {
+  PAYMENT_ISSUE
+  DOCUMENT_DISPUTE
+  FRAUD_SUSPICION
+  COMMUNICATION_ISSUE
+  OTHER
+}
+
+model Dispute {
+  id               String          @id @default(uuid())
+  organizationId   String?
+  organization     Organization?   @relation(fields: [organizationId], references: [id])
+  fundingRequestId String?
+  fundingRequest   FundingRequest? @relation(fields: [fundingRequestId], references: [id])
+
+  openedById String
+  openedBy   User   @relation("DisputeOpenedBy", fields: [openedById], references: [id])
+
+  category    DisputeCategory
+  status      DisputeStatus    @default(OPEN)
+  title       String
+  description String
+
+  resolvedAt    DateTime?
+  resolutionNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages DisputeMessage[]
+
+  @@index([status])
+  @@index([organizationId])
+  @@map("disputes")
+}
+
+model DisputeMessage {
+  id        String  @id @default(uuid())
+  disputeId String
+  dispute   Dispute @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  authorId  String
+
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([disputeId])
+  @@map("dispute_messages")
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+enum NotificationChannel {
+  EMAIL
+  IN_APP
+}
+
+model Notification {
+  id      String              @id @default(uuid())
+  userId  String
+  user    User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel NotificationChannel
+  title   String
+  body    String
+  readAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id     String  @id @default(uuid())
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  action     String  // ex: "FUNDING_REQUEST_PUBLISHED"
+  entityType String  // ex: "FundingRequest"
+  entityId   String
+  metadata   Json?
+  ipAddress  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@map("audit_logs")
+}

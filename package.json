@@ -1,6 +1,7 @@
 {
   "name": "le-financier",
   "version": "1.0.0",
+  "packageManager": "npm@11.9.0",
   "description": "",
   "private": true,
   "workspaces": [
