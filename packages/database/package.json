@@ -2,8 +2,8 @@
   "name": "@le-financier/database",
   "version": "0.0.1",
   "private": true,
-  "main": "./generated/client/index.js",
-  "types": "./generated/client/index.d.ts",
+  "main": "./index.ts",
+  "types": "./index.ts",
   "scripts": {
     "generate": "prisma generate",
     "migrate:dev": "prisma migrate dev",
@@ -12,10 +12,10 @@
     "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
-    "@prisma/client": "^5.20.0"
+    "@prisma/client": "^5.22.0"
   },
   "devDependencies": {
-    "prisma": "^5.20.0",
+    "prisma": "^5.22.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.0"
   }
