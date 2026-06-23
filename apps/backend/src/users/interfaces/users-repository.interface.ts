@@ -6,6 +6,7 @@ export interface CreateUserData {
   firstName: string;
   lastName: string;
   role: User['role'];
+  phone?: string;
 }
 
 export interface IUsersRepository {

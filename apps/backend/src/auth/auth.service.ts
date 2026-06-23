@@ -41,6 +41,7 @@ export class AuthService {
       firstName: dto.firstName,
       lastName: dto.lastName,
       role,
+      phone: dto.phone,
     });
 
     return this.buildAuthResponse(user);

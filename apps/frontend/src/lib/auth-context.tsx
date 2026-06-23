@@ -24,6 +24,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   registerPmeOwner: (data: RegisterData) => Promise<void>;
   registerInvestor: (data: RegisterData) => Promise<void>;
+  registerInstitution: (data: RegisterData) => Promise<void>;
   logout: () => void;
 }
 
@@ -32,6 +33,7 @@ interface RegisterData {
   password: string;
   firstName: string;
   lastName: string;
+  phone?: string;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -74,6 +76,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     persistSession(response);
   }
 
+  async function registerInstitution(data: RegisterData) {
+    const response = await api.post<AuthResponse>("/auth/register/institution", data);
+    persistSession(response);
+  }
+
   function logout() {
     setToken(null);
     setUser(null);
@@ -84,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, isLoading, login, registerPmeOwner, registerInvestor, logout }}
+      value={{ user, token, isLoading, login, registerPmeOwner, registerInvestor, registerInstitution, logout }}
     >
       {children}
     </AuthContext.Provider>
