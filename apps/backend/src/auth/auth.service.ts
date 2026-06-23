@@ -20,7 +20,14 @@ export class AuthService {
     return this.register(dto, 'INVESTOR');
   }
 
-  private async register(dto: RegisterDto, role: 'PME_OWNER' | 'INVESTOR') {
+  async registerInstitution(dto: RegisterDto) {
+    return this.register(dto, 'INSTITUTION');
+  }
+
+  private async register(
+    dto: RegisterDto,
+    role: 'PME_OWNER' | 'INVESTOR' | 'INSTITUTION',
+  ) {
     const existing = await this.usersRepository.findByEmail(dto.email);
     if (existing) {
       throw new ConflictException('Un compte existe déjà avec cet email.');

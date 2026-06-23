@@ -18,6 +18,11 @@ export class AuthController {
     return this.authService.registerInvestor(dto);
   }
 
+  @Post('register/institution')
+  registerInstitution(@Body() dto: RegisterDto) {
+    return this.authService.registerInstitution(dto);
+  }
+
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
