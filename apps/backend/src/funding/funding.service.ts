@@ -66,4 +66,34 @@ export class FundingService {
 
     return this.fundingRepository.updateStatus(fundingRequestId, 'UNDER_REVIEW');
   }
+
+  async approve(fundingRequestId: string) {
+    const fundingRequest = await this.fundingRepository.findById(fundingRequestId);
+    if (!fundingRequest) {
+      throw new NotFoundException('Demande de financement introuvable.');
+    }
+
+    if (fundingRequest.status !== 'UNDER_REVIEW') {
+      throw new BadRequestException(
+        'Seule une demande en révision peut être publiée.',
+      );
+    }
+
+    return this.fundingRepository.updateStatus(fundingRequestId, 'PUBLISHED');
+  }
+
+  async reject(fundingRequestId: string) {
+    const fundingRequest = await this.fundingRepository.findById(fundingRequestId);
+    if (!fundingRequest) {
+      throw new NotFoundException('Demande de financement introuvable.');
+    }
+
+    if (fundingRequest.status !== 'UNDER_REVIEW') {
+      throw new BadRequestException(
+        'Seule une demande en révision peut être rejetée.',
+      );
+    }
+
+    return this.fundingRepository.updateStatus(fundingRequestId, 'REJECTED');
+  }
 }
