@@ -24,6 +24,11 @@ export class InvestmentsController {
     return this.investmentsService.findAllForFundingRequest(fundingRequestId);
   }
 
+  @Get('organization/:organizationId')
+  findAllForOrganization(@Param('organizationId') organizationId: string, @Request() req) {
+    return this.investmentsService.findAllForOrganization(organizationId, req.user.id);
+  }
+
   @Patch(':id/settle')
   settle(@Param('id') id: string, @Body() dto: SettleInvestmentDto, @Request() req) {
     return this.investmentsService.settle(id, dto, req.user.id);

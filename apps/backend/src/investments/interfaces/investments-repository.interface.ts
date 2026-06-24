@@ -6,5 +6,6 @@ export interface IInvestmentsRepository {
   findAllByInvestorId(investorId: string): Promise<Investment[]>;
   sumActiveCommitments(fundingRequestId: string): Promise<number>;
   create(fundingRequestId: string, investorId: string, amountCommitted: number): Promise<Investment>;
+  findAllForOrganization(organizationId: string): Promise<any[]>;
   settle(investmentId: string, settlementProofId: string): Promise<Investment>;
 }

@@ -1,6 +1,7 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { InvestmentsRepository } from './investments.repository';
 import { FundingRepository } from '../funding/funding.repository';
+import { OrganizationsRepository } from '../organizations/organizations.repository';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateInvestmentDto } from './dto/create-investment.dto';
 import { SettleInvestmentDto } from './dto/settle-investment.dto';
@@ -10,6 +11,7 @@ export class InvestmentsService {
   constructor(
     private investmentsRepository: InvestmentsRepository,
     private fundingRepository: FundingRepository,
+    private organizationsRepository: OrganizationsRepository,
     private notificationsService: NotificationsService,
   ) {}
 
@@ -46,6 +48,14 @@ export class InvestmentsService {
 
   async findAllForFundingRequest(fundingRequestId: string) {
     return this.investmentsRepository.findAllByFundingRequestId(fundingRequestId);
+  }
+
+  async findAllForOrganization(organizationId: string, userId: string) {
+    const isMember = await this.organizationsRepository.isMember(organizationId, userId);
+    if (!isMember) {
+      throw new ForbiddenException("Vous n'avez pas accès à cette organisation.");
+    }
+    return this.investmentsRepository.findAllForOrganization(organizationId);
   }
 
   async settle(investmentId: string, dto: SettleInvestmentDto, investorId: string) {

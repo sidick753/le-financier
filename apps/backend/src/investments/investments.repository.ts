@@ -79,6 +79,17 @@ export class InvestmentsRepository implements IInvestmentsRepository {
     });
   }
 
+  async findAllForOrganization(organizationId: string) {
+    return this.prisma.investment.findMany({
+      where: { fundingRequest: { organizationId } },
+      include: {
+        fundingRequest: { select: { title: true, currency: true } },
+        investor: { select: { firstName: true, lastName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async settle(investmentId: string, settlementProofId: string) {
     return this.prisma.$transaction(async (tx) => {
       const investment = await tx.investment.findUnique({

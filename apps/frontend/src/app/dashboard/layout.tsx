@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/sidebar";
 import { usePmeData } from "@/lib/use-pme-data";
+import { NotificationsProvider } from "@/lib/notifications-context";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading: authLoading } = useAuth();
@@ -26,11 +27,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      <Sidebar organizationName={organization?.legalName ?? "Mon entreprise"} />
-      <div className="ml-64 flex min-w-0 flex-1 flex-col">
-        {children}
+    <NotificationsProvider>
+      <div className="flex min-h-screen bg-slate-50">
+        <Sidebar organizationName={organization?.legalName ?? "Mon entreprise"} />
+        <div className="ml-64 flex min-w-0 flex-1 flex-col">
+          {children}
+        </div>
       </div>
-    </div>
+    </NotificationsProvider>
   );
 }
