@@ -12,12 +12,19 @@ export interface Organization {
 
 export interface FundingRequest {
   id: string;
+  organizationId: string;
   title: string;
+  description: string;
   amountRequested: string;
   amountRaised: string;
-  status: string;
   currency: string;
+  expectedReturn: string | null;
+  durationMonths: number | null;
+  status: string;
+  publishedAt: string | null;
+  closesAt: string | null;
   createdAt: string;
+  updatedAt: string;
   _count: { investments: number };
 }
 

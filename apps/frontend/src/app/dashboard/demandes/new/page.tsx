@@ -92,6 +92,17 @@ function fmtInput(raw: string) {
   return isNaN(n) ? "" : n.toLocaleString("fr-FR");
 }
 
+function parseDurationToMonths(s: string): number | undefined {
+  if (!s) return undefined;
+  const jours = s.match(/(\d+)\s*jours?/i);
+  if (jours) return Math.max(1, Math.round(parseInt(jours[1]) / 30));
+  const mois = s.match(/(\d+)\s*mois?/i);
+  if (mois) return parseInt(mois[1]);
+  if (/long terme/i.test(s)) return 36;
+  if (/court terme/i.test(s)) return 18;
+  return undefined;
+}
+
 // ── step components ───────────────────────────────────────────────────────────
 
 function Step1({
@@ -373,10 +384,10 @@ function Step4({ data }: { data: FormData }) {
             <circle cx="12" cy="12" r="10" />
             <polyline points="20 6 9 17 4 12" />
           </svg>
-          Prêt à publier !
+          Prêt à soumettre !
         </div>
         <p className="text-[12px] leading-relaxed text-green-800">
-          Votre demande sera visible par tous les investisseurs de la plateforme. Vous recevrez une notification dès qu'un investisseur fera une offre.
+          Votre demande sera envoyée en révision. Une fois validée par notre équipe, elle sera publiée et visible par les investisseurs de la plateforme.
         </p>
       </div>
     </div>
@@ -439,21 +450,42 @@ export default function NewDemandePage() {
     setError(null);
     try {
       const amountRaw = parseInt(data.amount.replace(/\s/g, ""), 10);
-      await api.patch(
+      if (isNaN(amountRaw) || amountRaw < 1) {
+        setError("Montant invalide.");
+        return;
+      }
+
+      const typeLabel = TYPE_CONFIG[data.type].label;
+      const title = data.title.trim() || `${typeLabel} — ${amountRaw.toLocaleString("fr-FR")} F CFA`;
+
+      // Combine description + objective into a single field (backend has one description field)
+      const description = data.objective.trim()
+        ? `${data.description}\n\nObjectif : ${data.objective}`
+        : data.description;
+
+      // Map duration string → durationMonths integer
+      const durationMonths = parseDurationToMonths(data.duration);
+
+      // Map rate string → expectedReturn float
+      const expectedReturn = data.rate ? parseFloat(data.rate) : undefined;
+
+      // Step 1 : create (status = DRAFT)
+      const created = await api.post<{ id: string }>(
         "/funding-requests",
         {
           organizationId: organization.id,
-          title: data.title || `${TYPE_CONFIG[data.type].label} — ${data.amount} F CFA`,
-          description: data.description,
+          title,
+          description,
           amountRequested: amountRaw,
-          currency: "XOF",
-          financingType: data.type,
-          duration: data.duration,
-          rate: data.rate,
-          objective: data.objective,
+          ...(durationMonths !== undefined && { durationMonths }),
+          ...(expectedReturn !== undefined && !isNaN(expectedReturn) && { expectedReturn }),
         },
         token,
       );
+
+      // Step 2 : submit for review (status → UNDER_REVIEW)
+      await api.patch(`/funding-requests/${created.id}/submit`, {}, token);
+
       router.push("/dashboard/demandes");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Une erreur est survenue.");
@@ -570,7 +602,7 @@ export default function NewDemandePage() {
                   disabled={submitting}
                   className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-green-600 px-5 text-[13px] font-bold text-white transition hover:bg-green-700 disabled:opacity-60"
                 >
-                  {submitting ? "Publication..." : "Publier la demande"}
+                  {submitting ? "Envoi en cours..." : "Soumettre la demande"}
                 </button>
               )}
             </div>

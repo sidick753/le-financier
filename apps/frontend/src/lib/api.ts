@@ -34,8 +34,12 @@ async function request<T>(
 }
 
 export const api = {
-  post: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: "POST", body: JSON.stringify(body) }),
+  post: <T>(path: string, body: unknown, token?: string) =>
+    request<T>(path, {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }),
   get: <T>(path: string, token?: string) =>
     request<T>(path, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -44,6 +48,11 @@ export const api = {
     request<T>(path, {
       method: "PATCH",
       body: JSON.stringify(body),
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }),
+  delete: <T>(path: string, token?: string) =>
+    request<T>(path, {
+      method: "DELETE",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     }),
 };

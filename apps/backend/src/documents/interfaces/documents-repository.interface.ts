@@ -9,6 +9,7 @@ export interface CreateDocumentData {
   uploadedById: string;
   organizationId?: string;
   fundingRequestId?: string;
+  kycRequirementKey?: string;
 }
 
 export interface IDocumentsRepository {

@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, ForbiddenException 
 import { DocumentsRepository } from './documents.repository';
 import { StorageService } from './storage/storage.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
+import { getKycRequirements } from './kyc-checklist';
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = [
@@ -49,6 +50,7 @@ export class DocumentsService {
         uploadedById,
         organizationId: dto.organizationId,
         fundingRequestId: dto.fundingRequestId,
+        kycRequirementKey: dto.kycRequirementKey,
       });
     } catch (err) {
       // Rollback : supprime le fichier MinIO si l'écriture en base échoue
@@ -75,5 +77,25 @@ export class DocumentsService {
 
   async findAllByFundingRequestId(fundingRequestId: string) {
     return this.documentsRepository.findAllByFundingRequestId(fundingRequestId);
+  }
+
+  async getKycStatus(organizationId: string) {
+    const documents = await this.documentsRepository.findAllByOrganizationId(organizationId);
+    const requirements = getKycRequirements();
+
+    return requirements.map((req) => {
+      const matchingDoc = documents.find((d) => d.kycRequirementKey === req.key);
+      return {
+        key: req.key,
+        label: req.label,
+        documentType: req.documentType,
+        status: matchingDoc
+          ? matchingDoc.status === 'APPROVED'
+            ? 'VALIDATED'
+            : 'PENDING_REVIEW'
+          : 'MISSING',
+        documentId: matchingDoc?.id ?? null,
+      };
+    });
   }
 }

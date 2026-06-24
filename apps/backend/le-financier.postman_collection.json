@@ -1,0 +1,294 @@
+{
+  "info": {
+    "_postman_id": "le-financier-api-v1",
+    "name": "LeFinancier API",
+    "description": "Collection complète pour tester l'API LeFinancier.\n\n## Utilisation\n1. Importez ce fichier dans Postman.\n2. Créez un **Environment** avec les variables ci-dessous.\n3. Commencez par **Auth → Login** ou **Register PME Owner** — le token sera sauvegardé automatiquement.\n\n## Variables d'environnement requises\n| Variable | Valeur par défaut |\n|----------|------------------|\n| `base_url` | `http://localhost:4201` |\n| `token` | (auto-rempli après login) |\n| `org_id` | (à remplir après création organisation) |\n| `funding_id` | (à remplir après création demande) |\n| `investment_id` | (à remplir après création engagement) |\n| `doc_id` | (à remplir après upload document) |\n| `notif_id` | (à remplir depuis la liste notifications) |",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:4201", "type": "string" },
+    { "key": "token",       "value": "", "type": "string" },
+    { "key": "org_id",      "value": "", "type": "string" },
+    { "key": "funding_id",  "value": "", "type": "string" },
+    { "key": "investment_id","value": "", "type": "string" },
+    { "key": "doc_id",      "value": "", "type": "string" },
+    { "key": "notif_id",    "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "🔐 Auth",
+      "item": [
+        {
+          "name": "Register — PME Owner",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 201) {", "  const json = pm.response.json();", "  if (json.accessToken) pm.collectionVariables.set('token', json.accessToken);", "}"], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"pme@test.ci\",\n  \"password\": \"Password123!\",\n  \"firstName\": \"Kofi\",\n  \"lastName\": \"Mensah\",\n  \"phone\": \"+225 07 00 00 01\"\n}" },
+            "url": { "raw": "{{base_url}}/auth/register/pme-owner", "host": ["{{base_url}}"], "path": ["auth","register","pme-owner"] },
+            "description": "Crée un compte PME_OWNER. Le `accessToken` est automatiquement sauvegardé dans `{{token}}`."
+          }
+        },
+        {
+          "name": "Register — Investisseur",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 201) {", "  const json = pm.response.json();", "  if (json.accessToken) pm.collectionVariables.set('token', json.accessToken);", "}"], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"investisseur@test.ci\",\n  \"password\": \"Password123!\",\n  \"firstName\": \"Ama\",\n  \"lastName\": \"Diallo\"\n}" },
+            "url": { "raw": "{{base_url}}/auth/register/investor", "host": ["{{base_url}}"], "path": ["auth","register","investor"] }
+          }
+        },
+        {
+          "name": "Register — Institution",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"banque@test.ci\",\n  \"password\": \"Password123!\",\n  \"firstName\": \"Seydou\",\n  \"lastName\": \"Coulibaly\"\n}" },
+            "url": { "raw": "{{base_url}}/auth/register/institution", "host": ["{{base_url}}"], "path": ["auth","register","institution"] }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 200 || pm.response.code === 201) {", "  const json = pm.response.json();", "  if (json.accessToken) pm.collectionVariables.set('token', json.accessToken);", "}"], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"pme@test.ci\",\n  \"password\": \"Password123!\"\n}" },
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth","login"] },
+            "description": "Le `accessToken` est automatiquement sauvegardé dans `{{token}}`."
+          }
+        },
+        {
+          "name": "Mon profil (GET /auth/me)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/auth/me", "host": ["{{base_url}}"], "path": ["auth","me"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🏢 Organizations",
+      "item": [
+        {
+          "name": "Créer une organisation",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 201) {", "  const json = pm.response.json();", "  if (json.id) pm.collectionVariables.set('org_id', json.id);", "}"], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"legalName\": \"Mensah & Associés SARL\",\n  \"registrationNumber\": \"CI-ABJ-2024-B-00123\",\n  \"sector\": \"Agroalimentaire\",\n  \"foundedYear\": 2020,\n  \"legalForm\": \"SARL\",\n  \"address\": \"Rue des Jardins, Cocody\",\n  \"city\": \"Abidjan\"\n}" },
+            "url": { "raw": "{{base_url}}/organizations", "host": ["{{base_url}}"], "path": ["organizations"] },
+            "description": "L'ID de l'organisation est automatiquement sauvegardé dans `{{org_id}}`."
+          }
+        },
+        {
+          "name": "Mes organisations",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/organizations/mine", "host": ["{{base_url}}"], "path": ["organizations","mine"] }
+          }
+        },
+        {
+          "name": "Détail organisation",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/organizations/{{org_id}}", "host": ["{{base_url}}"], "path": ["organizations","{{org_id}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📋 Funding Requests",
+      "item": [
+        {
+          "name": "Créer une demande (→ DRAFT)",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 201) {", "  const json = pm.response.json();", "  if (json.id) pm.collectionVariables.set('funding_id', json.id);", "}"], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"organizationId\": \"{{org_id}}\",\n  \"title\": \"Financement facture client GIZ — 15 000 000 FCFA\",\n  \"description\": \"Nous avons une facture GIZ de 15M FCFA payable à 60 jours. Besoin d'avance pour payer nos fournisseurs.\",\n  \"amountRequested\": 15000000,\n  \"expectedReturn\": 6.5,\n  \"durationMonths\": 2\n}" },
+            "url": { "raw": "{{base_url}}/funding-requests", "host": ["{{base_url}}"], "path": ["funding-requests"] },
+            "description": "Crée en statut DRAFT. L'ID est sauvegardé dans `{{funding_id}}`."
+          }
+        },
+        {
+          "name": "Soumettre pour révision (→ UNDER_REVIEW)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/funding-requests/{{funding_id}}/submit", "host": ["{{base_url}}"], "path": ["funding-requests","{{funding_id}}","submit"] },
+            "description": "Passe le statut de DRAFT → UNDER_REVIEW. Nécessite d'être membre de l'organisation."
+          }
+        },
+        {
+          "name": "[ADMIN] Approuver (→ PUBLISHED)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/funding-requests/{{funding_id}}/approve", "host": ["{{base_url}}"], "path": ["funding-requests","{{funding_id}}","approve"] },
+            "description": "⚠️ Rôle ADMIN ou SUPER_ADMIN requis. Passe UNDER_REVIEW → PUBLISHED."
+          }
+        },
+        {
+          "name": "[ADMIN] Rejeter (→ REJECTED)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/funding-requests/{{funding_id}}/reject", "host": ["{{base_url}}"], "path": ["funding-requests","{{funding_id}}","reject"] },
+            "description": "⚠️ Rôle ADMIN ou SUPER_ADMIN requis. Passe UNDER_REVIEW → REJECTED."
+          }
+        },
+        {
+          "name": "Demandes de mon organisation",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/funding-requests/organization/{{org_id}}", "host": ["{{base_url}}"], "path": ["funding-requests","organization","{{org_id}}"] }
+          }
+        },
+        {
+          "name": "Demandes publiées (public)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/funding-requests/published", "host": ["{{base_url}}"], "path": ["funding-requests","published"] },
+            "description": "Endpoint public — aucun token requis."
+          }
+        }
+      ]
+    },
+    {
+      "name": "💰 Investments",
+      "item": [
+        {
+          "name": "Créer un engagement (→ COMMITTED)",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 201) {", "  const json = pm.response.json();", "  if (json.id) pm.collectionVariables.set('investment_id', json.id);", "}"], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"fundingRequestId\": \"{{funding_id}}\",\n  \"amountCommitted\": 5000000\n}" },
+            "url": { "raw": "{{base_url}}/investments", "host": ["{{base_url}}"], "path": ["investments"] },
+            "description": "La demande doit être en statut PUBLISHED. L'ID engagement est sauvegardé dans `{{investment_id}}`."
+          }
+        },
+        {
+          "name": "Confirmer virement (→ SETTLED_OFF_PLATFORM)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{\n  \"settlementProofId\": \"{{doc_id}}\"\n}" },
+            "url": { "raw": "{{base_url}}/investments/{{investment_id}}/settle", "host": ["{{base_url}}"], "path": ["investments","{{investment_id}}","settle"] },
+            "description": "Uploadez d'abord une preuve via POST /documents/upload (type: SETTLEMENT_PROOF) et mettez son ID dans `{{doc_id}}`."
+          }
+        },
+        {
+          "name": "Mes engagements",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/investments/mine", "host": ["{{base_url}}"], "path": ["investments","mine"] }
+          }
+        },
+        {
+          "name": "Engagements d'une demande",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/investments/funding-request/{{funding_id}}", "host": ["{{base_url}}"], "path": ["investments","funding-request","{{funding_id}}"] }
+          }
+        },
+        {
+          "name": "Engagements reçus (par organisation)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/investments/organization/{{org_id}}", "host": ["{{base_url}}"], "path": ["investments","organization","{{org_id}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📁 Documents",
+      "item": [
+        {
+          "name": "Upload document (multipart)",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 201) {", "  const json = pm.response.json();", "  if (json.id) pm.collectionVariables.set('doc_id', json.id);", "}"], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "" },
+                { "key": "type", "value": "FUNDING_REQUEST_ATTACHMENT", "type": "text" },
+                { "key": "fundingRequestId", "value": "{{funding_id}}", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{base_url}}/documents/upload", "host": ["{{base_url}}"], "path": ["documents","upload"] },
+            "description": "Sélectionnez un fichier dans le champ `file`. L'ID du document est sauvegardé dans `{{doc_id}}`.\n\n**Types disponibles :** KYC_ID | KYC_PROOF_OF_ADDRESS | ORGANIZATION_LEGAL | FINANCIAL_STATEMENT | FUNDING_REQUEST_ATTACHMENT | SETTLEMENT_PROOF | DISPUTE_EVIDENCE | OTHER"
+          }
+        },
+        {
+          "name": "URL de téléchargement",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/documents/{{doc_id}}/download-url", "host": ["{{base_url}}"], "path": ["documents","{{doc_id}}","download-url"] },
+            "description": "Retourne une URL pré-signée valable 15 minutes."
+          }
+        },
+        {
+          "name": "Statut KYC organisation",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/documents/organization/{{org_id}}/kyc-status", "host": ["{{base_url}}"], "path": ["documents","organization","{{org_id}}","kyc-status"] }
+          }
+        },
+        {
+          "name": "Documents d'une organisation",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/documents/organization/{{org_id}}", "host": ["{{base_url}}"], "path": ["documents","organization","{{org_id}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🔔 Notifications",
+      "item": [
+        {
+          "name": "Mes notifications",
+          "event": [{ "listen": "test", "script": { "exec": ["if (pm.response.code === 200) {", "  const json = pm.response.json();", "  if (Array.isArray(json) && json.length > 0) pm.collectionVariables.set('notif_id', json[0].id);", "}"], "type": "text/javascript" } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/notifications", "host": ["{{base_url}}"], "path": ["notifications"] },
+            "description": "Le premier ID de notification est automatiquement sauvegardé dans `{{notif_id}}`."
+          }
+        },
+        {
+          "name": "Compteur non lues",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/notifications/unread-count", "host": ["{{base_url}}"], "path": ["notifications","unread-count"] }
+          }
+        },
+        {
+          "name": "Marquer comme lue",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/notifications/{{notif_id}}/read", "host": ["{{base_url}}"], "path": ["notifications","{{notif_id}}","read"] }
+          }
+        }
+      ]
+    }
+  ]
+}
