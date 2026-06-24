@@ -1,0 +1,58 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useAuth } from "./auth-context";
+import { api } from "./api";
+
+export interface Organization {
+  id: string;
+  legalName: string;
+  verificationStatus: string;
+}
+
+export interface FundingRequest {
+  id: string;
+  title: string;
+  amountRequested: string;
+  amountRaised: string;
+  status: string;
+  currency: string;
+  createdAt: string;
+  _count: { investments: number };
+}
+
+export function usePmeData() {
+  const { token } = useAuth();
+  const [organization, setOrganization] = useState<Organization | null>(null);
+  const [fundingRequests, setFundingRequests] = useState<FundingRequest[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+
+    async function load() {
+      try {
+        const organizations = await api.get<Organization[]>("/organizations/mine", token!);
+        const primaryOrg = organizations[0] ?? null;
+        setOrganization(primaryOrg);
+
+        if (primaryOrg) {
+          const requests = await api.get<FundingRequest[]>(
+            `/funding-requests/organization/${primaryOrg.id}`,
+            token!,
+          );
+          setFundingRequests(requests);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Erreur de chargement.");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    load();
+  }, [token]);
+
+  return { organization, fundingRequests, isLoading, error };
+}

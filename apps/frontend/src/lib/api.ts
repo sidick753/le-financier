@@ -33,4 +33,10 @@ export const api = {
     request<T>(path, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     }),
+  patch: <T>(path: string, body: unknown, token?: string) =>
+    request<T>(path, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }),
 };

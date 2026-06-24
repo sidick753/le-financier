@@ -20,6 +20,11 @@ export class FundingRepository implements IFundingRepository {
     return this.prisma.fundingRequest.findMany({
       where: { organizationId },
       orderBy: { createdAt: 'desc' },
+      include: {
+        _count: {
+          select: { investments: true },
+        },
+      },
     });
   }
 
@@ -39,6 +44,12 @@ export class FundingRepository implements IFundingRepository {
     return this.prisma.fundingRequest.update({
       where: { id },
       data: { status },
+    });
+  }
+
+  async findOrganizationOwner(organizationId: string) {
+    return this.prisma.organizationMember.findFirst({
+      where: { organizationId, role: 'OWNER' },
     });
   }
 }
