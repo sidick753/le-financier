@@ -1,5 +1,7 @@
 "use client";
 
+import React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
@@ -86,6 +88,84 @@ const NAV_ITEMS = [
   },
 ];
 
+const ROLE_CONFIG: Record<string, {
+  bg: string;
+  color: string;
+  label: string;
+  isAdmin?: boolean;
+  icon: React.ReactNode;
+}> = {
+  PME_OWNER: {
+    bg: "bg-violet-100",
+    color: "text-violet-700",
+    label: "Espace PME",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        <polyline points="9 22 9 12 15 12 15 22" />
+      </svg>
+    ),
+  },
+  INVESTOR: {
+    bg: "bg-green-100",
+    color: "text-green-700",
+    label: "Investisseur",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <polyline points="23 6 13.5 20.5 8.5 10.5 1 18" />
+        <polyline points="17 6 23 6 23 12" />
+      </svg>
+    ),
+  },
+  INSTITUTION: {
+    bg: "bg-blue-100",
+    color: "text-blue-700",
+    label: "Institution",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <line x1="3" y1="22" x2="21" y2="22" />
+        <line x1="6" y1="18" x2="6" y2="11" />
+        <line x1="10" y1="18" x2="10" y2="11" />
+        <line x1="14" y1="18" x2="14" y2="11" />
+        <line x1="18" y1="18" x2="18" y2="11" />
+        <polygon points="12 2 20 7 4 7" />
+      </svg>
+    ),
+  },
+  ADMIN: {
+    bg: "bg-red-100",
+    color: "text-red-600",
+    label: "Super Admin",
+    isAdmin: true,
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      </svg>
+    ),
+  },
+};
+
+function RoleAvatar({ role }: { role?: string }) {
+  const config = ROLE_CONFIG[role ?? "PME_OWNER"] ?? ROLE_CONFIG.PME_OWNER;
+  return (
+    <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${config.bg} ${config.color}`}>
+      {config.icon}
+    </div>
+  );
+}
+
+function RoleLabel({ role }: { role?: string }) {
+  const config = ROLE_CONFIG[role ?? "PME_OWNER"] ?? ROLE_CONFIG.PME_OWNER;
+  if (config.isAdmin) {
+    return (
+      <span className="mt-0.5 inline-block rounded-full bg-red-100 px-2 py-px text-[10px] font-semibold text-red-600">
+        Super Admin
+      </span>
+    );
+  }
+  return <p className="mt-0.5 text-[11px] text-slate-500">{config.label}</p>;
+}
+
 export function Sidebar({
   organizationName,
 }: {
@@ -99,25 +179,23 @@ export function Sidebar({
     <aside className="fixed left-0 top-0 z-20 flex h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-white">
       {/* Logo + identity */}
       <div className="border-b border-slate-200 p-4">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-xs font-bold text-white">
-            LF
-          </div>
-          <span className="text-sm font-semibold tracking-tight text-slate-900">LeFinancier</span>
-        </div>
+        <Link href="/dashboard">
+          <Image
+            src="/logo_long_sans_fond.png"
+            alt="LeFinancier"
+            width={140}
+            height={32}
+            className="h-8 w-auto"
+            priority
+          />
+        </Link>
         <div className="mt-3.5 flex items-center gap-2.5">
-          {/* PME avatar */}
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-              <polyline points="9 22 9 12 15 12 15 22" />
-            </svg>
-          </div>
+          <RoleAvatar role={user?.role} />
           <div className="min-w-0">
             <p className="truncate text-[13px] font-semibold text-slate-900">
               {user ? `${user.firstName} ${user.lastName}` : organizationName}
             </p>
-            <p className="text-[11px] text-slate-500">Espace PME</p>
+            <RoleLabel role={user?.role} />
           </div>
         </div>
       </div>
@@ -128,7 +206,9 @@ export function Sidebar({
           Principal
         </p>
         {NAV_ITEMS.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = item.href === "/dashboard"
+            ? pathname === "/dashboard"
+            : pathname.startsWith(item.href);
           const showBadge = item.href === "/dashboard/notifications" && unreadCount > 0;
           return (
             <Link

@@ -17,6 +17,13 @@ async function request<T>(
     },
   });
 
+  if (res.status === 401) {
+    sessionStorage.removeItem("accessToken");
+    sessionStorage.removeItem("user");
+    window.location.replace("/login");
+    throw new Error("Session expirée.");
+  }
+
   const data = await res.json();
 
   if (!res.ok) {

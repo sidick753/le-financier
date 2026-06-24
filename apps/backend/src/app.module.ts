@@ -7,6 +7,7 @@ import { OrganizationsModule } from './organizations/organizations.module';
 import { FundingModule } from './funding/funding.module';
 import { InvestmentsModule } from './investments/investments.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { DocumentsModule } from './documents/documents.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     FundingModule,
     InvestmentsModule,
     NotificationsModule,
+    DocumentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
