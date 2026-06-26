@@ -4,6 +4,7 @@ export interface CreateFundingRequestData {
   organizationId: string;
   title: string;
   description: string;
+  category: string;
   amountRequested: number;
   expectedReturn?: number;
   durationMonths?: number;

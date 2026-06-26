@@ -73,6 +73,7 @@ export class InvestmentsRepository implements IInvestmentsRepository {
           fundingRequestId,
           investorId,
           amountCommitted,
+          lockedReturn: fundingRequest.expectedReturn,
           status: 'COMMITTED',
         },
       });

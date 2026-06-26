@@ -25,6 +25,7 @@ export class FundingService {
       organizationId: dto.organizationId,
       title: dto.title,
       description: dto.description,
+      category: dto.category as any,
       amountRequested: dto.amountRequested,
       expectedReturn: dto.expectedReturn,
       durationMonths: dto.durationMonths,

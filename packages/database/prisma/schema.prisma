@@ -129,6 +129,12 @@ model OrganizationMember {
 
 
 
+enum FundingCategory {
+  FACTURE
+  PRET
+  EQUITY
+}
+
 enum FundingRequestStatus {
   DRAFT
   UNDER_REVIEW
@@ -146,6 +152,7 @@ model FundingRequest {
 
   title          String
   description    String
+  category        FundingCategory       @default(PRET)
   amountRequested Decimal               @db.Decimal(14, 2)
   amountRaised    Decimal               @default(0) @db.Decimal(14, 2)
   currency        String                @default("XOF")
@@ -191,6 +198,7 @@ model Investment {
   investor         User             @relation(fields: [investorId], references: [id])
 
   amountCommitted Decimal           @db.Decimal(14, 2)
+  lockedReturn    Decimal?          @db.Decimal(5, 2)
   status          InvestmentStatus  @default(INTERESTED)
 
   settlementProofId String?   @unique

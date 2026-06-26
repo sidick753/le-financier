@@ -1,5 +1,11 @@
-import { IsString, IsNumber, IsOptional, Min, IsUUID } from 'class-validator';
+import { IsString, IsNumber, IsOptional, Min, IsUUID, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+
+export enum FundingCategoryDto {
+  FACTURE = 'FACTURE',
+  PRET    = 'PRET',
+  EQUITY  = 'EQUITY',
+}
 
 export class CreateFundingRequestDto {
   @ApiProperty({ example: 'uuid-de-l-organisation', description: 'ID de votre organisation' })
@@ -13,6 +19,10 @@ export class CreateFundingRequestDto {
   @ApiProperty({ example: 'Nous avons une facture GIZ de 15M FCFA payable à 60 jours. Besoin d\'avance pour payer nos fournisseurs.', description: 'Description détaillée + objectif' })
   @IsString()
   description: string;
+
+  @ApiProperty({ enum: FundingCategoryDto, example: FundingCategoryDto.PRET, description: 'Catégorie de financement' })
+  @IsEnum(FundingCategoryDto)
+  category: FundingCategoryDto;
 
   @ApiProperty({ example: 15000000, minimum: 1, description: 'Montant demandé en XOF (FCFA)' })
   @IsNumber()
