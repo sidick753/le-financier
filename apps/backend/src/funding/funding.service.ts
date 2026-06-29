@@ -42,6 +42,14 @@ export class FundingService {
     return this.fundingRepository.findAllByOrganizationId(organizationId);
   }
 
+  async findOneWithDetails(id: string) {
+    const fundingRequest = await this.fundingRepository.findById(id);
+    if (!fundingRequest) {
+      throw new NotFoundException('Demande de financement introuvable.');
+    }
+    return fundingRequest;
+  }
+
   async findAllPublished(filters?: { category?: string; search?: string }) {
     return this.fundingRepository.findAllPublished(filters);
   }

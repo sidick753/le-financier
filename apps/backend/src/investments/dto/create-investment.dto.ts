@@ -1,4 +1,4 @@
-import { IsUUID, IsNumber, Min } from 'class-validator';
+import { IsUUID, IsNumber, Min, Max } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateInvestmentDto {
@@ -10,4 +10,10 @@ export class CreateInvestmentDto {
   @IsNumber()
   @Min(1)
   amountCommitted: number;
+
+  @ApiProperty({ example: 8.5, minimum: 0, maximum: 100, description: 'Taux de rendement proposé par l\'investisseur (en %)' })
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  proposedReturn: number;
 }

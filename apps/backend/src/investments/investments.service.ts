@@ -15,31 +15,61 @@ export class InvestmentsService {
     private notificationsService: NotificationsService,
   ) {}
 
-  async create(dto: CreateInvestmentDto, investorId: string) {
-    const investment = await this.investmentsRepository.create(
+  async createNegotiation(dto: CreateInvestmentDto, investorId: string) {
+    const investment = await this.investmentsRepository.createNegotiation(
       dto.fundingRequestId,
       investorId,
       dto.amountCommitted,
+      dto.proposedReturn,
     );
 
     const fundingRequest = await this.fundingRepository.findById(dto.fundingRequestId);
-    if (fundingRequest?.organization) {
-      const owner = await this.fundingRepository.findOrganizationOwner(
-        fundingRequest.organizationId,
-      );
+    if (fundingRequest) {
+      const owner = await this.fundingRepository.findOrganizationOwner(fundingRequest.organizationId);
       if (owner) {
-        // Fire-and-forget : une erreur de notification ne doit jamais bloquer la création.
         this.notificationsService
           .notify(
             owner.userId,
-            'Nouvel engagement reçu',
-            `Un investisseur s'est engagé pour ${dto.amountCommitted} sur "${fundingRequest.title}".`,
+            'Nouvelle proposition de négociation',
+            `Un investisseur propose un taux de ${dto.proposedReturn}% sur "${fundingRequest.title}".`,
           )
           .catch(() => {});
       }
     }
 
     return investment;
+  }
+
+  async counterOffer(investmentId: string, proposedReturn: number, userId: string) {
+    const investment = await this.investmentsRepository.findById(investmentId);
+    if (!investment) throw new NotFoundException('Engagement introuvable.');
+    const actingAs = await this.resolveActingRole(investment, userId);
+    return this.investmentsRepository.counterOffer(investmentId, actingAs, proposedReturn);
+  }
+
+  async acceptOffer(investmentId: string, userId: string) {
+    const investment = await this.investmentsRepository.findById(investmentId);
+    if (!investment) throw new NotFoundException('Engagement introuvable.');
+    const actingAs = await this.resolveActingRole(investment, userId);
+    return this.investmentsRepository.acceptOffer(investmentId, actingAs);
+  }
+
+  private async resolveActingRole(
+    investment: { investorId: string; fundingRequestId: string },
+    userId: string,
+  ): Promise<'INVESTOR' | 'PME'> {
+    if (investment.investorId === userId) return 'INVESTOR';
+
+    const fundingRequest = await this.fundingRepository.findById(investment.fundingRequestId);
+    if (fundingRequest) {
+      const isMember = await this.organizationsRepository.isMember(
+        fundingRequest.organizationId,
+        userId,
+      );
+      if (isMember) return 'PME';
+    }
+
+    throw new ForbiddenException("Vous n'êtes pas partie à cette négociation.");
   }
 
   async findMine(investorId: string) {

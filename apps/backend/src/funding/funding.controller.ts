@@ -46,6 +46,15 @@ export class FundingController {
     return this.fundingService.findAllPublished({ category, search });
   }
 
+  @ApiOperation({ summary: 'Détail d\'une demande', description: 'Retourne une demande avec son organisation et ses documents.' })
+  @ApiParam({ name: 'id', description: 'UUID de la demande' })
+  @ApiResponse({ status: 200, description: 'Détail de la demande' })
+  @ApiResponse({ status: 404, description: 'Demande introuvable' })
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.fundingService.findOneWithDetails(id);
+  }
+
   @ApiBearerAuth('jwt')
   @ApiOperation({
     summary: 'Soumettre pour révision (DRAFT → UNDER_REVIEW)',

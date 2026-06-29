@@ -185,9 +185,23 @@ model FundingRequest {
 
 enum InvestmentStatus {
   INTERESTED
+  NEGOTIATING
   COMMITTED
   SETTLED_OFF_PLATFORM
   CANCELLED
+  REJECTED
+}
+
+enum NegotiationOfferAuthor {
+  INVESTOR
+  PME
+}
+
+enum NegotiationOfferStatus {
+  PENDING
+  ACCEPTED
+  COUNTERED
+  REJECTED
 }
 
 model Investment {
@@ -204,6 +218,8 @@ model Investment {
   settlementProofId String?   @unique
   settledAt         DateTime?
 
+  negotiationOffers NegotiationOffer[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -211,6 +227,21 @@ model Investment {
   @@index([investorId])
   @@index([status])
   @@map("investments")
+}
+
+model NegotiationOffer {
+  id           String                  @id @default(uuid())
+  investmentId String
+  investment   Investment              @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+
+  proposedBy     NegotiationOfferAuthor
+  proposedReturn Decimal                @db.Decimal(5, 2)
+  status         NegotiationOfferStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+
+  @@index([investmentId])
+  @@map("negotiation_offers")
 }
 
 

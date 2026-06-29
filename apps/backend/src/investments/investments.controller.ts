@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Patch, UseGuards, Request } from '@
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { InvestmentsService } from './investments.service';
 import { CreateInvestmentDto } from './dto/create-investment.dto';
+import { CounterOfferDto } from './dto/counter-offer.dto';
 import { SettleInvestmentDto } from './dto/settle-investment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
@@ -20,11 +21,29 @@ export class InvestmentsController {
 - La transaction utilise un verrou en base pour éviter les dépassements concurrents.
 - Envoie une notification in-app au propriétaire de la PME.`,
   })
-  @ApiResponse({ status: 201, description: 'Engagement créé en statut COMMITTED' })
+  @ApiResponse({ status: 201, description: 'Négociation créée en statut NEGOTIATING avec première NegotiationOffer' })
   @ApiResponse({ status: 409, description: 'Demande fermée ou montant dépassé' })
   @Post()
   create(@Body() dto: CreateInvestmentDto, @Request() req) {
-    return this.investmentsService.create(dto, req.user.id);
+    return this.investmentsService.createNegotiation(dto, req.user.id);
+  }
+
+  @ApiOperation({ summary: 'Contre-proposition de taux', description: 'Soumet une nouvelle proposition de taux. Interdit si c\'est votre tour d\'attendre.' })
+  @ApiParam({ name: 'id', description: 'UUID de l\'engagement' })
+  @ApiResponse({ status: 200, description: 'Contre-proposition enregistrée' })
+  @ApiResponse({ status: 409, description: 'Pas en négociation ou contre-proposition consécutive interdite' })
+  @Patch(':id/counter-offer')
+  counterOffer(@Param('id') id: string, @Body() dto: CounterOfferDto, @Request() req) {
+    return this.investmentsService.counterOffer(id, dto.proposedReturn, req.user.id);
+  }
+
+  @ApiOperation({ summary: 'Accepter la dernière offre', description: 'Accepte la proposition en attente. Interdit d\'accepter sa propre proposition.' })
+  @ApiParam({ name: 'id', description: 'UUID de l\'engagement' })
+  @ApiResponse({ status: 200, description: 'Offre acceptée — engagement passe en COMMITTED' })
+  @ApiResponse({ status: 409, description: 'Aucune offre à accepter ou acceptation de sa propre offre' })
+  @Patch(':id/accept-offer')
+  acceptOffer(@Param('id') id: string, @Request() req) {
+    return this.investmentsService.acceptOffer(id, req.user.id);
   }
 
   @ApiOperation({ summary: 'Mes engagements', description: 'Retourne tous les engagements de l\'investisseur courant.' })

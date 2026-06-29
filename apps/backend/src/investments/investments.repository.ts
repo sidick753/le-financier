@@ -40,25 +40,25 @@ export class InvestmentsRepository implements IInvestmentsRepository {
     return Number(result._sum.amountCommitted ?? 0);
   }
 
-  async create(fundingRequestId: string, investorId: string, amountCommitted: number) {
-    // Transaction avec verrou : on relit la demande ET on revérifie le plafond
-    // À L'INTÉRIEUR de la transaction, pour empêcher deux requêtes simultanées
-    // de passer toutes les deux la vérification avant qu'aucune n'ait écrit.
+  async createNegotiation(
+    fundingRequestId: string,
+    investorId: string,
+    amountCommitted: number,
+    proposedReturn: number,
+  ) {
     return this.prisma.$transaction(async (tx) => {
       const fundingRequest = await tx.fundingRequest.findUnique({
         where: { id: fundingRequestId },
       });
 
       if (!fundingRequest || fundingRequest.status !== 'PUBLISHED') {
-        throw new ConflictException(
-          "Cette demande n'est plus ouverte aux engagements.",
-        );
+        throw new ConflictException("Cette demande n'est plus ouverte aux engagements.");
       }
 
       const activeSum = await tx.investment.aggregate({
         where: {
           fundingRequestId,
-          status: { in: ['COMMITTED', 'SETTLED_OFF_PLATFORM'] },
+          status: { in: ['NEGOTIATING', 'COMMITTED', 'SETTLED_OFF_PLATFORM'] },
         },
         _sum: { amountCommitted: true },
       });
@@ -73,14 +73,76 @@ export class InvestmentsRepository implements IInvestmentsRepository {
         );
       }
 
-      return tx.investment.create({
-        data: {
-          fundingRequestId,
-          investorId,
-          amountCommitted,
-          lockedReturn: fundingRequest.expectedReturn,
-          status: 'COMMITTED',
-        },
+      const investment = await tx.investment.create({
+        data: { fundingRequestId, investorId, amountCommitted, status: 'NEGOTIATING' },
+      });
+
+      await tx.negotiationOffer.create({
+        data: { investmentId: investment.id, proposedBy: 'INVESTOR', proposedReturn, status: 'PENDING' },
+      });
+
+      return investment;
+    });
+  }
+
+  async counterOffer(
+    investmentId: string,
+    proposedBy: 'INVESTOR' | 'PME',
+    proposedReturn: number,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const investment = await tx.investment.findUnique({
+        where: { id: investmentId },
+        include: { negotiationOffers: { orderBy: { createdAt: 'desc' }, take: 1 } },
+      });
+
+      if (!investment || investment.status !== 'NEGOTIATING') {
+        throw new ConflictException("Cet engagement n'est pas en négociation.");
+      }
+
+      const lastOffer = investment.negotiationOffers[0];
+      if (lastOffer && lastOffer.proposedBy === proposedBy) {
+        throw new ConflictException(
+          'Vous ne pouvez pas contre-proposer deux fois de suite, en attente d\'une réponse.',
+        );
+      }
+
+      if (lastOffer) {
+        await tx.negotiationOffer.update({ where: { id: lastOffer.id }, data: { status: 'COUNTERED' } });
+      }
+
+      await tx.negotiationOffer.create({
+        data: { investmentId, proposedBy, proposedReturn, status: 'PENDING' },
+      });
+
+      return tx.investment.findUnique({ where: { id: investmentId } });
+    });
+  }
+
+  async acceptOffer(investmentId: string, acceptedBy: 'INVESTOR' | 'PME') {
+    return this.prisma.$transaction(async (tx) => {
+      const investment = await tx.investment.findUnique({
+        where: { id: investmentId },
+        include: { negotiationOffers: { orderBy: { createdAt: 'desc' }, take: 1 } },
+      });
+
+      if (!investment || investment.status !== 'NEGOTIATING') {
+        throw new ConflictException("Cet engagement n'est pas en négociation.");
+      }
+
+      const lastOffer = investment.negotiationOffers[0];
+      if (!lastOffer) {
+        throw new ConflictException('Aucune proposition à accepter.');
+      }
+      if (lastOffer.proposedBy === acceptedBy) {
+        throw new ConflictException('Vous ne pouvez pas accepter votre propre proposition.');
+      }
+
+      await tx.negotiationOffer.update({ where: { id: lastOffer.id }, data: { status: 'ACCEPTED' } });
+
+      return tx.investment.update({
+        where: { id: investmentId },
+        data: { status: 'COMMITTED', lockedReturn: lastOffer.proposedReturn },
       });
     });
   }
