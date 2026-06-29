@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { InvestorSidebar } from "@/components/investor-sidebar";
+import { NotificationsProvider } from "@/lib/notifications-context";
 
 export default function InvestorLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -24,9 +25,11 @@ export default function InvestorLayout({ children }: { children: React.ReactNode
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      <InvestorSidebar />
-      <main className="ml-64 flex-1 overflow-y-auto">{children}</main>
-    </div>
+    <NotificationsProvider>
+      <div className="flex min-h-screen bg-slate-50">
+        <InvestorSidebar />
+        <main className="ml-64 flex-1 overflow-y-auto">{children}</main>
+      </div>
+    </NotificationsProvider>
   );
 }

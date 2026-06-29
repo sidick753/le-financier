@@ -28,9 +28,20 @@ export class FundingRepository implements IFundingRepository {
     });
   }
 
-  async findAllPublished() {
+  async findAllPublished(filters?: { category?: string; search?: string }) {
     return this.prisma.fundingRequest.findMany({
-      where: { status: 'PUBLISHED' },
+      where: {
+        status: 'PUBLISHED',
+        ...(filters?.category ? { category: filters.category as any } : {}),
+        ...(filters?.search
+          ? {
+              OR: [
+                { title: { contains: filters.search, mode: 'insensitive' } },
+                { organization: { legalName: { contains: filters.search, mode: 'insensitive' } } },
+              ],
+            }
+          : {}),
+      },
       include: { organization: true },
       orderBy: { createdAt: 'desc' },
     });

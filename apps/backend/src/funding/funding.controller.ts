@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Patch, UseGuards, Request } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Patch, UseGuards, Request, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { FundingService } from './funding.service';
 import { CreateFundingRequestDto } from './dto/create-funding-request.dto';
@@ -39,8 +39,11 @@ export class FundingController {
   @ApiOperation({ summary: 'Demandes publiées (public)', description: 'Retourne toutes les demandes en statut PUBLISHED. Endpoint public — aucun token requis.' })
   @ApiResponse({ status: 200, description: 'Liste des demandes publiées' })
   @Get('published')
-  findAllPublished() {
-    return this.fundingService.findAllPublished();
+  findAllPublished(
+    @Query('category') category?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.fundingService.findAllPublished({ category, search });
   }
 
   @ApiBearerAuth('jwt')

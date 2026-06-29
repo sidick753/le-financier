@@ -1,4 +1,5 @@
 import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { FundingCategory } from '@le-financier/database';
 import { FundingRepository } from './funding.repository';
 import { OrganizationsRepository } from '../organizations/organizations.repository';
 import { CreateFundingRequestDto } from './dto/create-funding-request.dto';
@@ -25,7 +26,7 @@ export class FundingService {
       organizationId: dto.organizationId,
       title: dto.title,
       description: dto.description,
-      category: dto.category as any,
+      category: dto.category as FundingCategory,
       amountRequested: dto.amountRequested,
       expectedReturn: dto.expectedReturn,
       durationMonths: dto.durationMonths,
@@ -41,8 +42,8 @@ export class FundingService {
     return this.fundingRepository.findAllByOrganizationId(organizationId);
   }
 
-  async findAllPublished() {
-    return this.fundingRepository.findAllPublished();
+  async findAllPublished(filters?: { category?: string; search?: string }) {
+    return this.fundingRepository.findAllPublished(filters);
   }
 
   async submitForReview(fundingRequestId: string, userId: string) {
