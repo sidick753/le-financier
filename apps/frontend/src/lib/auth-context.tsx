@@ -21,10 +21,10 @@ interface AuthContextValue {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  registerPmeOwner: (data: RegisterData) => Promise<void>;
-  registerInvestor: (data: RegisterData) => Promise<void>;
-  registerInstitution: (data: RegisterData) => Promise<void>;
+  login: (email: string, password: string) => Promise<AuthResponse>;
+  registerPmeOwner: (data: RegisterData) => Promise<AuthResponse>;
+  registerInvestor: (data: RegisterData) => Promise<AuthResponse>;
+  registerInstitution: (data: RegisterData) => Promise<AuthResponse>;
   logout: () => void;
 }
 
@@ -64,21 +64,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function login(email: string, password: string) {
     const response = await api.post<AuthResponse>("/auth/login", { email, password });
     persistSession(response);
+    return response;
   }
 
   async function registerPmeOwner(data: RegisterData) {
     const response = await api.post<AuthResponse>("/auth/register/pme-owner", data);
     persistSession(response);
+    return response;
   }
 
   async function registerInvestor(data: RegisterData) {
     const response = await api.post<AuthResponse>("/auth/register/investor", data);
     persistSession(response);
+    return response;
   }
 
   async function registerInstitution(data: RegisterData) {
     const response = await api.post<AuthResponse>("/auth/register/institution", data);
     persistSession(response);
+    return response;
   }
 
   function logout() {

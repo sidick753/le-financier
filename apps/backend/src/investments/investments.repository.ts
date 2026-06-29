@@ -20,6 +20,11 @@ export class InvestmentsRepository implements IInvestmentsRepository {
   async findAllByInvestorId(investorId: string) {
     return this.prisma.investment.findMany({
       where: { investorId },
+      include: {
+        fundingRequest: {
+          include: { organization: { select: { legalName: true } } },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }

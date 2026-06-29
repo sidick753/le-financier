@@ -172,15 +172,16 @@ export default function RegisterPage() {
     setIsSubmitting(true);
     try {
       const phoneValue = phone.trim() || undefined;
+      let response;
       if (isPme) {
-        await registerPmeOwner({ email, password, firstName, lastName, phone: phoneValue });
+        response = await registerPmeOwner({ email, password, firstName, lastName, phone: phoneValue });
       } else if (isInvestisseur) {
-        await registerInvestor({ email, password, firstName, lastName, phone: phoneValue });
+        response = await registerInvestor({ email, password, firstName, lastName, phone: phoneValue });
       } else {
         const [fn = "", ...rest] = responsibleName.trim().split(" ");
-        await registerInstitution({ email, password, firstName: fn, lastName: rest.join(" ") || fn, phone: phoneValue });
+        response = await registerInstitution({ email, password, firstName: fn, lastName: rest.join(" ") || fn, phone: phoneValue });
       }
-      router.push("/dashboard");
+      router.push(response.user.role === "PME_OWNER" ? "/dashboard" : "/investor");
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Inscription impossible.");
     } finally {

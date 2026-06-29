@@ -34,8 +34,8 @@ export default function LoginPage() {
     setError(null);
     setIsSubmitting(true);
     try {
-      await login(email, password);
-      router.push("/dashboard");
+      const response = await login(email, password);
+      router.push(response.user.role === "PME_OWNER" ? "/dashboard" : "/investor");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Connexion impossible.");
     } finally {
