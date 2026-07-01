@@ -4,12 +4,21 @@ import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "./auth-context";
 import { api } from "./api";
 
+interface NegotiationOffer {
+  id: string;
+  proposedBy: "INVESTOR" | "PME";
+  proposedReturn: string;
+  status: string;
+  createdAt: string;
+}
+
 export interface MyInvestment {
   id: string;
   amountCommitted: string;
   lockedReturn: string | null;
   status: string;
   createdAt: string;
+  negotiationOffers: NegotiationOffer[];
   fundingRequest: {
     id: string;
     title: string;
@@ -17,6 +26,8 @@ export interface MyInvestment {
     currency: string;
     amountRequested: string;
     amountRaised: string;
+    expectedReturn: string | null;
+    durationMonths: number | null;
     organization: { legalName: string };
   };
 }

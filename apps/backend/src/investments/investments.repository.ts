@@ -24,6 +24,7 @@ export class InvestmentsRepository implements IInvestmentsRepository {
         fundingRequest: {
           include: { organization: { select: { legalName: true } } },
         },
+        negotiationOffers: { orderBy: { createdAt: 'desc' } },
       },
       orderBy: { createdAt: 'desc' },
     });
