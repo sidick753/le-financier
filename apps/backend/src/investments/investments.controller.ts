@@ -46,6 +46,14 @@ export class InvestmentsController {
     return this.investmentsService.acceptOffer(id, req.user.id);
   }
 
+  @ApiOperation({ summary: 'Mon engagement sur une demande', description: 'Retourne l\'engagement de l\'investisseur courant sur une demande donnée, avec l\'historique des offres de négociation.' })
+  @ApiParam({ name: 'fundingRequestId', description: 'UUID de la demande de financement' })
+  @ApiResponse({ status: 200, description: 'Engagement avec negotiationOffers, ou null' })
+  @Get('my-engagement/:fundingRequestId')
+  findMyEngagement(@Param('fundingRequestId') fundingRequestId: string, @Request() req) {
+    return this.investmentsService.findMyEngagement(fundingRequestId, req.user.id);
+  }
+
   @ApiOperation({ summary: 'Mes engagements', description: 'Retourne tous les engagements de l\'investisseur courant.' })
   @ApiResponse({ status: 200, description: 'Liste d\'engagements' })
   @Get('mine')

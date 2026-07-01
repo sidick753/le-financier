@@ -72,6 +72,10 @@ export class InvestmentsService {
     throw new ForbiddenException("Vous n'êtes pas partie à cette négociation.");
   }
 
+  async findMyEngagement(fundingRequestId: string, investorId: string) {
+    return this.investmentsRepository.findByFundingRequestAndInvestor(fundingRequestId, investorId);
+  }
+
   async findMine(investorId: string) {
     return this.investmentsRepository.findAllByInvestorId(investorId);
   }

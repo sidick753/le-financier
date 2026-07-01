@@ -140,10 +140,34 @@ export class InvestmentsRepository implements IInvestmentsRepository {
 
       await tx.negotiationOffer.update({ where: { id: lastOffer.id }, data: { status: 'ACCEPTED' } });
 
-      return tx.investment.update({
+      const updated = await tx.investment.update({
         where: { id: investmentId },
         data: { status: 'COMMITTED', lockedReturn: lastOffer.proposedReturn },
       });
+
+      // Recalculer amountRaised en incluant COMMITTED + SETTLED_OFF_PLATFORM
+      const raisedSum = await tx.investment.aggregate({
+        where: {
+          fundingRequestId: investment.fundingRequestId,
+          status: { in: ['COMMITTED', 'SETTLED_OFF_PLATFORM'] },
+        },
+        _sum: { amountCommitted: true },
+      });
+      await tx.fundingRequest.update({
+        where: { id: investment.fundingRequestId },
+        data: { amountRaised: Number(raisedSum._sum.amountCommitted ?? 0) },
+      });
+
+      return updated;
+    });
+  }
+
+  async findByFundingRequestAndInvestor(fundingRequestId: string, investorId: string) {
+    return this.prisma.investment.findFirst({
+      where: { fundingRequestId, investorId },
+      include: {
+        negotiationOffers: { orderBy: { createdAt: 'desc' } },
+      },
     });
   }
 
@@ -151,8 +175,9 @@ export class InvestmentsRepository implements IInvestmentsRepository {
     return this.prisma.investment.findMany({
       where: { fundingRequest: { organizationId } },
       include: {
-        fundingRequest: { select: { title: true, currency: true } },
-        investor: { select: { firstName: true, lastName: true } },
+        fundingRequest: { select: { title: true, currency: true, organizationId: true } },
+        investor: { select: { firstName: true, lastName: true, email: true } },
+        negotiationOffers: { orderBy: { createdAt: 'desc' } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -188,7 +213,7 @@ export class InvestmentsRepository implements IInvestmentsRepository {
       const settledSum = await tx.investment.aggregate({
         where: {
           fundingRequestId: investment.fundingRequestId,
-          status: 'SETTLED_OFF_PLATFORM',
+          status: { in: ['COMMITTED', 'SETTLED_OFF_PLATFORM'] },
         },
         _sum: { amountCommitted: true },
       });

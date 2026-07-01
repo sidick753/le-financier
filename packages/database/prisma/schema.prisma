@@ -48,6 +48,7 @@ model User {
   notifications           Notification[]
   refreshTokens           RefreshToken[]
   validatedScoringReports ScoringReport[]
+  watchlist               Watchlist[]
 
   @@index([role])
   @@map("users")
@@ -171,6 +172,7 @@ model FundingRequest {
   documents      Document[]
   scoringReports ScoringReport[]
   disputes       Dispute[]
+  watchlist      Watchlist[]
 
   @@index([organizationId])
   @@index([status])
@@ -356,6 +358,20 @@ model ScoringReport {
 
 
 
+
+model Watchlist {
+  id               String         @id @default(uuid())
+  investorId       String
+  investor         User           @relation(fields: [investorId], references: [id], onDelete: Cascade)
+  fundingRequestId String
+  fundingRequest   FundingRequest @relation(fields: [fundingRequestId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([investorId, fundingRequestId])
+  @@index([investorId])
+  @@map("watchlist")
+}
 
 enum DisputeStatus {
   OPEN

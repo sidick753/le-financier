@@ -1,17 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "./auth-context";
 import { usePmeData } from "./use-pme-data";
 import { api } from "./api";
 
-interface Offer {
+interface NegotiationOffer {
+  id: string;
+  proposedBy: "INVESTOR" | "PME";
+  proposedReturn: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface Offer {
   id: string;
   amountCommitted: string;
   status: string;
+  lockedReturn: string | null;
   createdAt: string;
   fundingRequest: { title: string; currency: string };
-  investor: { firstName: string; lastName: string };
+  investor: { firstName: string; lastName: string; email: string };
+  negotiationOffers: NegotiationOffer[];
 }
 
 export function useOffers() {
@@ -20,15 +30,17 @@ export function useOffers() {
   const [offers, setOffers] = useState<Offer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
     if (!token || !organization) return;
-
     api
       .get<Offer[]>(`/investments/organization/${organization.id}`, token)
       .then(setOffers)
-      .catch(() => {})
       .finally(() => setIsLoading(false));
   }, [token, organization]);
 
-  return { offers, isLoading };
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return { offers, isLoading, refresh };
 }

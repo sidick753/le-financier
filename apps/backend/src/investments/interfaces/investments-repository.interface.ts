@@ -8,6 +8,7 @@ export interface IInvestmentsRepository {
   createNegotiation(fundingRequestId: string, investorId: string, amountCommitted: number, proposedReturn: number): Promise<Investment>;
   counterOffer(investmentId: string, proposedBy: 'INVESTOR' | 'PME', proposedReturn: number): Promise<Investment | null>;
   acceptOffer(investmentId: string, acceptedBy: 'INVESTOR' | 'PME'): Promise<Investment>;
+  findByFundingRequestAndInvestor(fundingRequestId: string, investorId: string): Promise<any>;
   findAllForOrganization(organizationId: string): Promise<any[]>;
   settle(investmentId: string, settlementProofId: string): Promise<Investment>;
 }
