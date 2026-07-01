@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import { useNegotiationSocket } from "@/lib/use-negotiation-socket";
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
@@ -111,6 +112,14 @@ export default function OpportunityDetailPage() {
       // pas encore d'engagement
     }
   }
+
+  useNegotiationSocket(() => {
+    if (!token) return;
+    api
+      .get<MyEngagement>(`/investments/my-engagement/${id}`, token)
+      .then(setEngagement)
+      .catch(() => {});
+  });
 
   useEffect(() => {
     async function load() {

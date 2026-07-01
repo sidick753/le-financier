@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useOffers } from "@/lib/use-offers";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import { useNegotiationSocket } from "@/lib/use-negotiation-socket";
 
 const STATUS_LABELS: Record<string, { label: string; className: string }> = {
   INTERESTED: { label: "Intéressé", className: "bg-gray-100 text-gray-600" },
@@ -33,6 +34,8 @@ export default function OffresPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  useNegotiationSocket(refresh);
+
   const negotiatingOffers = offers.filter((o) => o.status === "NEGOTIATING");
   const otherOffers = offers.filter((o) => o.status !== "NEGOTIATING");
 
@@ -55,6 +58,7 @@ export default function OffresPage() {
       setSelectedOffer(null);
       refresh();
     } catch (err) {
+      console.error("[handleCounter]", err);
       setError(err instanceof Error ? err.message : "Échec de la contre-proposition.");
     } finally {
       setIsSubmitting(false);
@@ -71,6 +75,7 @@ export default function OffresPage() {
       setSelectedOffer(null);
       refresh();
     } catch (err) {
+      console.error("[handleAccept]", err);
       setError(err instanceof Error ? err.message : "Échec de l'acceptation.");
     } finally {
       setIsSubmitting(false);

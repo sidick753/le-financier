@@ -34,7 +34,7 @@ export class InvestmentsController {
   @ApiResponse({ status: 409, description: 'Pas en négociation ou contre-proposition consécutive interdite' })
   @Patch(':id/counter-offer')
   counterOffer(@Param('id') id: string, @Body() dto: CounterOfferDto, @Request() req) {
-    return this.investmentsService.counterOffer(id, dto.proposedReturn, req.user.id);
+    return this.investmentsService.counterOffer(id, dto.proposedReturn, req.user.id, req.user.role);
   }
 
   @ApiOperation({ summary: 'Accepter la dernière offre', description: 'Accepte la proposition en attente. Interdit d\'accepter sa propre proposition.' })
@@ -43,7 +43,7 @@ export class InvestmentsController {
   @ApiResponse({ status: 409, description: 'Aucune offre à accepter ou acceptation de sa propre offre' })
   @Patch(':id/accept-offer')
   acceptOffer(@Param('id') id: string, @Request() req) {
-    return this.investmentsService.acceptOffer(id, req.user.id);
+    return this.investmentsService.acceptOffer(id, req.user.id, req.user.role);
   }
 
   @ApiOperation({ summary: 'Mon engagement sur une demande', description: 'Retourne l\'engagement de l\'investisseur courant sur une demande donnée, avec l\'historique des offres de négociation.' })

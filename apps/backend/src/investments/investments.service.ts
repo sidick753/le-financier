@@ -25,38 +25,89 @@ export class InvestmentsService {
 
     const fundingRequest = await this.fundingRepository.findById(dto.fundingRequestId);
     if (fundingRequest) {
-      const owner = await this.fundingRepository.findOrganizationOwner(fundingRequest.organizationId);
+      const owner = await this.fundingRepository.findOrganizationOwner(
+        fundingRequest.organizationId,
+      );
       if (owner) {
-        this.notificationsService
-          .notify(
-            owner.userId,
-            'Nouvelle proposition de négociation',
-            `Un investisseur propose un taux de ${dto.proposedReturn}% sur "${fundingRequest.title}".`,
-          )
-          .catch(() => {});
+        await this.notificationsService.notify(
+          owner.userId,
+          "Nouvelle proposition d'investissement",
+          `Un investisseur propose ${dto.amountCommitted.toLocaleString('fr-FR')} F CFA à ${dto.proposedReturn}% sur "${fundingRequest.title}".`,
+        );
       }
     }
 
     return investment;
   }
 
-  async counterOffer(investmentId: string, proposedReturn: number, userId: string) {
+  async counterOffer(investmentId: string, proposedReturn: number, userId: string, userRole: string) {
     const investment = await this.investmentsRepository.findById(investmentId);
     if (!investment) throw new NotFoundException('Engagement introuvable.');
-    const actingAs = await this.resolveActingRole(investment, userId);
-    return this.investmentsRepository.counterOffer(investmentId, actingAs, proposedReturn);
+
+    const actingAs = await this.resolveActingRole(investment, userId, userRole);
+    const updated = await this.investmentsRepository.counterOffer(
+      investmentId,
+      actingAs,
+      proposedReturn,
+    ) as any;
+
+    const pmeOwnerId = updated?.fundingRequest?.organization?.members?.[0]?.userId;
+    const investorId = updated?.investor?.id;
+    const investorName = `${updated?.investor?.firstName} ${updated?.investor?.lastName}`;
+    const orgName = updated?.fundingRequest?.organization?.legalName;
+    const requestTitle = updated?.fundingRequest?.title;
+
+    if (actingAs === 'INVESTOR' && pmeOwnerId) {
+      await this.notificationsService.notify(
+        pmeOwnerId,
+        'Nouvelle contre-proposition reçue',
+        `${investorName} contre-propose ${proposedReturn}% sur "${requestTitle}".`,
+      );
+    } else if (actingAs === 'PME' && investorId) {
+      await this.notificationsService.notify(
+        investorId,
+        'Réponse de la PME reçue',
+        `${orgName} contre-propose ${proposedReturn}% sur votre engagement.`,
+      );
+    }
+
+    return updated;
   }
 
-  async acceptOffer(investmentId: string, userId: string) {
+  async acceptOffer(investmentId: string, userId: string, userRole: string) {
     const investment = await this.investmentsRepository.findById(investmentId);
     if (!investment) throw new NotFoundException('Engagement introuvable.');
-    const actingAs = await this.resolveActingRole(investment, userId);
-    return this.investmentsRepository.acceptOffer(investmentId, actingAs);
+
+    const actingAs = await this.resolveActingRole(investment, userId, userRole);
+    const updated = await this.investmentsRepository.acceptOffer(investmentId, actingAs) as any;
+
+    const pmeOwnerId = updated?.fundingRequest?.organization?.members?.[0]?.userId;
+    const investorId = updated?.investor?.id;
+    const orgName = updated?.fundingRequest?.organization?.legalName;
+    const requestTitle = updated?.fundingRequest?.title;
+    const lockedReturn = Number(updated?.lockedReturn);
+
+    if (actingAs === 'INVESTOR' && pmeOwnerId) {
+      await this.notificationsService.notify(
+        pmeOwnerId,
+        "Offre acceptée par l'investisseur",
+        `L'investisseur a accepté ${lockedReturn}% sur "${requestTitle}". L'engagement est confirmé.`,
+      );
+    } else if (actingAs === 'PME' && investorId) {
+      await this.notificationsService.notify(
+        investorId,
+        'Offre acceptée par la PME',
+        `${orgName} a accepté ${lockedReturn}% sur votre engagement. Vous êtes maintenant engagé.`,
+      );
+    }
+
+    return updated;
   }
 
   private async resolveActingRole(
     investment: { investorId: string; fundingRequestId: string },
     userId: string,
+    _userRole?: string,
   ): Promise<'INVESTOR' | 'PME'> {
     if (investment.investorId === userId) return 'INVESTOR';
 

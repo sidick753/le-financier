@@ -35,6 +35,7 @@ export function useOffers() {
     api
       .get<Offer[]>(`/investments/organization/${organization.id}`, token)
       .then(setOffers)
+      .catch((err) => console.error("[useOffers] fetch failed", err))
       .finally(() => setIsLoading(false));
   }, [token, organization]);
 

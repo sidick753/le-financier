@@ -93,7 +93,17 @@ export class InvestmentsRepository implements IInvestmentsRepository {
     return this.prisma.$transaction(async (tx) => {
       const investment = await tx.investment.findUnique({
         where: { id: investmentId },
-        include: { negotiationOffers: { orderBy: { createdAt: 'desc' }, take: 1 } },
+        include: {
+          negotiationOffers: { orderBy: { createdAt: 'desc' }, take: 1 },
+          fundingRequest: {
+            include: {
+              organization: {
+                include: { members: { where: { role: 'OWNER' }, take: 1 } },
+              },
+            },
+          },
+          investor: { select: { id: true, firstName: true, lastName: true } },
+        },
       });
 
       if (!investment || investment.status !== 'NEGOTIATING') {
@@ -103,19 +113,34 @@ export class InvestmentsRepository implements IInvestmentsRepository {
       const lastOffer = investment.negotiationOffers[0];
       if (lastOffer && lastOffer.proposedBy === proposedBy) {
         throw new ConflictException(
-          'Vous ne pouvez pas contre-proposer deux fois de suite, en attente d\'une réponse.',
+          "Vous ne pouvez pas contre-proposer deux fois de suite, en attente d'une réponse.",
         );
       }
 
       if (lastOffer) {
-        await tx.negotiationOffer.update({ where: { id: lastOffer.id }, data: { status: 'COUNTERED' } });
+        await tx.negotiationOffer.update({
+          where: { id: lastOffer.id },
+          data: { status: 'COUNTERED' },
+        });
       }
 
       await tx.negotiationOffer.create({
         data: { investmentId, proposedBy, proposedReturn, status: 'PENDING' },
       });
 
-      return tx.investment.findUnique({ where: { id: investmentId } });
+      return tx.investment.findUnique({
+        where: { id: investmentId },
+        include: {
+          fundingRequest: {
+            include: {
+              organization: {
+                include: { members: { where: { role: 'OWNER' }, take: 1 } },
+              },
+            },
+          },
+          investor: { select: { id: true, firstName: true, lastName: true } },
+        },
+      });
     });
   }
 
@@ -123,7 +148,17 @@ export class InvestmentsRepository implements IInvestmentsRepository {
     return this.prisma.$transaction(async (tx) => {
       const investment = await tx.investment.findUnique({
         where: { id: investmentId },
-        include: { negotiationOffers: { orderBy: { createdAt: 'desc' }, take: 1 } },
+        include: {
+          negotiationOffers: { orderBy: { createdAt: 'desc' }, take: 1 },
+          fundingRequest: {
+            include: {
+              organization: {
+                include: { members: { where: { role: 'OWNER' }, take: 1 } },
+              },
+            },
+          },
+          investor: { select: { id: true, firstName: true, lastName: true } },
+        },
       });
 
       if (!investment || investment.status !== 'NEGOTIATING') {
@@ -135,14 +170,27 @@ export class InvestmentsRepository implements IInvestmentsRepository {
         throw new ConflictException('Aucune proposition à accepter.');
       }
       if (lastOffer.proposedBy === acceptedBy) {
-        throw new ConflictException('Vous ne pouvez pas accepter votre propre proposition.');
+        throw new ConflictException("Vous ne pouvez pas accepter votre propre proposition.");
       }
 
-      await tx.negotiationOffer.update({ where: { id: lastOffer.id }, data: { status: 'ACCEPTED' } });
+      await tx.negotiationOffer.update({
+        where: { id: lastOffer.id },
+        data: { status: 'ACCEPTED' },
+      });
 
       const updated = await tx.investment.update({
         where: { id: investmentId },
         data: { status: 'COMMITTED', lockedReturn: lastOffer.proposedReturn },
+        include: {
+          fundingRequest: {
+            include: {
+              organization: {
+                include: { members: { where: { role: 'OWNER' }, take: 1 } },
+              },
+            },
+          },
+          investor: { select: { id: true, firstName: true, lastName: true } },
+        },
       });
 
       // Recalculer amountRaised en incluant COMMITTED + SETTLED_OFF_PLATFORM
