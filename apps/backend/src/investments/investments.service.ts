@@ -3,6 +3,7 @@ import { InvestmentsRepository } from './investments.repository';
 import { FundingRepository } from '../funding/funding.repository';
 import { OrganizationsRepository } from '../organizations/organizations.repository';
 import { NotificationsService } from '../notifications/notifications.service';
+import { RepaymentService } from '../repayment/repayment.service';
 import { CreateInvestmentDto } from './dto/create-investment.dto';
 import { SettleInvestmentDto } from './dto/settle-investment.dto';
 
@@ -13,6 +14,7 @@ export class InvestmentsService {
     private fundingRepository: FundingRepository,
     private organizationsRepository: OrganizationsRepository,
     private notificationsService: NotificationsService,
+    private repaymentService: RepaymentService,
   ) {}
 
   async createNegotiation(dto: CreateInvestmentDto, investorId: string) {
@@ -153,6 +155,20 @@ export class InvestmentsService {
       throw new ForbiddenException('Vous ne pouvez confirmer que vos propres engagements.');
     }
 
-    return this.investmentsRepository.settle(investmentId, dto.settlementProofId);
+    const settled = await this.investmentsRepository.settle(investmentId, dto.settlementProofId);
+
+    const fundingRequest = await this.fundingRepository.findById(investment.fundingRequestId) as any;
+    if (fundingRequest && investment.lockedReturn && fundingRequest.durationMonths) {
+      await this.repaymentService.generateSchedule({
+        investmentId,
+        fundingRequestId: investment.fundingRequestId,
+        amountCommitted: Number(investment.amountCommitted),
+        lockedReturn: Number(investment.lockedReturn),
+        durationMonths: fundingRequest.durationMonths,
+        category: fundingRequest.category,
+      });
+    }
+
+    return settled;
   }
 }

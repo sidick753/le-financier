@@ -9,6 +9,7 @@ import { InvestmentsModule } from './investments/investments.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { DocumentsModule } from './documents/documents.module';
 import { WatchlistModule } from './watchlist/watchlist.module';
+import { RepaymentModule } from './repayment/repayment.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { WatchlistModule } from './watchlist/watchlist.module';
     NotificationsModule,
     DocumentsModule,
     WatchlistModule,
+    RepaymentModule,
   ],
   controllers: [AppController],
   providers: [AppService],

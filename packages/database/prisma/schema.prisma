@@ -40,15 +40,16 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relations
-  organizationMemberships OrganizationMember[]
-  investments             Investment[]
-  documentsUploaded       Document[]
-  disputesOpened          Dispute[]             @relation("DisputeOpenedBy")
-  auditLogs               AuditLog[]
-  notifications           Notification[]
-  refreshTokens           RefreshToken[]
-  validatedScoringReports ScoringReport[]
-  watchlist               Watchlist[]
+  organizationMemberships    OrganizationMember[]
+  investments                Investment[]
+  documentsUploaded          Document[]
+  disputesOpened             Dispute[]             @relation("DisputeOpenedBy")
+  auditLogs                  AuditLog[]
+  notifications              Notification[]
+  refreshTokens              RefreshToken[]
+  validatedScoringReports    ScoringReport[]
+  watchlist                  Watchlist[]
+  repaymentPaymentsConfirmed RepaymentPayment[]
 
   @@index([role])
   @@map("users")
@@ -168,11 +169,13 @@ model FundingRequest {
   updatedAt DateTime @updatedAt
 
   // Relations
-  investments    Investment[]
-  documents      Document[]
-  scoringReports ScoringReport[]
-  disputes       Dispute[]
-  watchlist      Watchlist[]
+  investments        Investment[]
+  documents          Document[]
+  scoringReports     ScoringReport[]
+  disputes           Dispute[]
+  watchlist          Watchlist[]
+  repaymentSchedules RepaymentSchedule[]
+  commissions        Commission[]
 
   @@index([organizationId])
   @@index([status])
@@ -220,7 +223,8 @@ model Investment {
   settlementProofId String?   @unique
   settledAt         DateTime?
 
-  negotiationOffers NegotiationOffer[]
+  negotiationOffers  NegotiationOffer[]
+  repaymentSchedules RepaymentSchedule[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -441,6 +445,103 @@ model DisputeMessage {
 
 
 
+
+enum RepaymentNature {
+  INTEREST
+  INSTALLMENT
+  FINAL_PAYMENT
+}
+
+enum RepaymentScheduleStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum RepaymentPaymentStatus {
+  CONFIRMED
+  DISPUTED
+}
+
+enum CommissionType {
+  FUNDING_FEE
+  INTEREST_FEE
+}
+
+enum CommissionStatus {
+  PENDING
+  COLLECTED
+}
+
+model RepaymentSchedule {
+  id               String                  @id @default(uuid())
+  fundingRequestId String
+  fundingRequest   FundingRequest          @relation(fields: [fundingRequestId], references: [id], onDelete: Cascade)
+  investmentId     String
+  investment       Investment              @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+
+  dueDate          DateTime
+  amountDue        Decimal                 @db.Decimal(14, 2)
+  interestAmount   Decimal                 @default(0) @db.Decimal(14, 2)
+  principalAmount  Decimal                 @default(0) @db.Decimal(14, 2)
+  nature           RepaymentNature
+  status           RepaymentScheduleStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments RepaymentPayment[]
+
+  @@index([fundingRequestId])
+  @@index([investmentId])
+  @@index([dueDate])
+  @@index([status])
+  @@map("repayment_schedules")
+}
+
+model RepaymentPayment {
+  id                  String                 @id @default(uuid())
+  repaymentScheduleId String
+  repaymentSchedule   RepaymentSchedule      @relation(fields: [repaymentScheduleId], references: [id], onDelete: Cascade)
+
+  amountPaid      Decimal                @db.Decimal(14, 2)
+  paidAt          DateTime
+  status          RepaymentPaymentStatus @default(CONFIRMED)
+  proofDocumentId String?
+
+  confirmedById String
+  confirmedBy   User   @relation(fields: [confirmedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  commissions Commission[]
+
+  @@index([repaymentScheduleId])
+  @@map("repayment_payments")
+}
+
+model Commission {
+  id     String           @id @default(uuid())
+  type   CommissionType
+  status CommissionStatus @default(PENDING)
+
+  fundingRequestId String
+  fundingRequest   FundingRequest @relation(fields: [fundingRequestId], references: [id])
+
+  repaymentPaymentId String?
+  repaymentPayment   RepaymentPayment? @relation(fields: [repaymentPaymentId], references: [id])
+
+  baseAmount       Decimal @db.Decimal(14, 2)
+  rate             Decimal @db.Decimal(5, 4)
+  commissionAmount Decimal @db.Decimal(14, 2)
+
+  createdAt DateTime @default(now())
+
+  @@index([fundingRequestId])
+  @@index([status])
+  @@map("commissions")
+}
 
 enum NotificationChannel {
   EMAIL
