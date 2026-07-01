@@ -1,4 +1,8 @@
-import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersRepository } from '../users/users.repository';
@@ -61,7 +65,21 @@ export class AuthService {
     return this.buildAuthResponse(user);
   }
 
-  private buildAuthResponse(user: { id: string; email: string; role: string; firstName: string; lastName: string }) {
+  async getAllUsers(filters?: { role?: string }) {
+    return this.usersRepository.findAll(filters);
+  }
+
+  async updateUserKyc(id: string, status: 'VERIFIED' | 'REJECTED') {
+    return this.usersRepository.updateKycStatus(id, status);
+  }
+
+  private buildAuthResponse(user: {
+    id: string;
+    email: string;
+    role: string;
+    firstName: string;
+    lastName: string;
+  }) {
     const payload = { sub: user.id, email: user.email, role: user.role };
     return {
       accessToken: this.jwtService.sign(payload),

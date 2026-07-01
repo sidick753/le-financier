@@ -1,9 +1,11 @@
-import { Body, Controller, Post, Get, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Body, Controller, Post, Get, Patch, Query, Param, UseGuards, Request } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RolesGuard } from './guards/roles.guard';
+import { Roles } from './decorators/roles.decorator';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -51,5 +53,38 @@ export class AuthController {
   @Get('me')
   getProfile(@Request() req) {
     return req.user;
+  }
+
+  @ApiBearerAuth('jwt')
+  @ApiOperation({ summary: '[Admin] Liste tous les utilisateurs', description: 'Filtre optionnel par rôle.' })
+  @ApiQuery({ name: 'role', required: false, enum: ['PME_OWNER', 'INVESTOR', 'INSTITUTION', 'ADMIN', 'SUPER_ADMIN'] })
+  @ApiResponse({ status: 200, description: 'Liste des utilisateurs' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Get('admin/users')
+  getAllUsers(@Query('role') role?: string) {
+    return this.authService.getAllUsers({ role });
+  }
+
+  @ApiBearerAuth('jwt')
+  @ApiOperation({ summary: '[Admin] Vérifier KYC utilisateur' })
+  @ApiParam({ name: 'id', description: 'UUID de l\'utilisateur' })
+  @ApiResponse({ status: 200, description: 'KYC mis à jour à VERIFIED' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Patch('admin/users/:id/verify-kyc')
+  verifyUserKyc(@Param('id') id: string) {
+    return this.authService.updateUserKyc(id, 'VERIFIED');
+  }
+
+  @ApiBearerAuth('jwt')
+  @ApiOperation({ summary: '[Admin] Rejeter KYC utilisateur' })
+  @ApiParam({ name: 'id', description: 'UUID de l\'utilisateur' })
+  @ApiResponse({ status: 200, description: 'KYC mis à jour à REJECTED' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Patch('admin/users/:id/reject-kyc')
+  rejectUserKyc(@Param('id') id: string) {
+    return this.authService.updateUserKyc(id, 'REJECTED');
   }
 }

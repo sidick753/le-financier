@@ -48,4 +48,42 @@ export class OrganizationsRepository implements IOrganizationsRepository {
     });
     return member !== null;
   }
+
+  async findAll(filters?: { status?: string; search?: string }) {
+    return this.prisma.organization.findMany({
+      where: {
+        ...(filters?.status ? { verificationStatus: filters.status as any } : {}),
+        ...(filters?.search
+          ? { legalName: { contains: filters.search, mode: 'insensitive' } }
+          : {}),
+      },
+      include: {
+        members: {
+          where: { role: 'OWNER' },
+          include: { user: { select: { firstName: true, lastName: true } } },
+          take: 1,
+        },
+        fundingRequests: {
+          select: { id: true, amountRaised: true, status: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async countByStatus() {
+    const [total, verified, pending] = await Promise.all([
+      this.prisma.organization.count(),
+      this.prisma.organization.count({ where: { verificationStatus: 'VERIFIED' } }),
+      this.prisma.organization.count({ where: { verificationStatus: 'PENDING' } }),
+    ]);
+    return { total, verified, pending, rejected: total - verified - pending };
+  }
+
+  async updateVerificationStatus(id: string, status: 'VERIFIED' | 'REJECTED') {
+    return this.prisma.organization.update({
+      where: { id },
+      data: { verificationStatus: status },
+    });
+  }
 }

@@ -35,7 +35,13 @@ export default function LoginPage() {
     setIsSubmitting(true);
     try {
       const response = await login(email, password);
-      router.push(response.user.role === "PME_OWNER" ? "/dashboard" : "/investor");
+      if (response.user.role === "PME_OWNER" || response.user.role === "PME_MEMBER") {
+        router.push("/dashboard");
+      } else if (response.user.role === "ADMIN" || response.user.role === "SUPER_ADMIN") {
+        router.push("/admin");
+      } else {
+        router.push("/investor");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Connexion impossible.");
     } finally {

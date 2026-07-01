@@ -37,4 +37,20 @@ export class OrganizationsService {
 
     return organization;
   }
+
+  async getAdminStats() {
+    return this.organizationsRepository.countByStatus();
+  }
+
+  async getAllOrganizations(filters?: { status?: string; search?: string }) {
+    return this.organizationsRepository.findAll(filters);
+  }
+
+  async updateVerificationStatus(id: string, status: 'VERIFIED' | 'REJECTED') {
+    const organization = await this.organizationsRepository.findById(id);
+    if (!organization) {
+      throw new NotFoundException('Organisation introuvable.');
+    }
+    return this.organizationsRepository.updateVerificationStatus(id, status);
+  }
 }

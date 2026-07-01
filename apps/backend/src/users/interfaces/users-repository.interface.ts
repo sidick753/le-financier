@@ -12,5 +12,7 @@ export interface CreateUserData {
 export interface IUsersRepository {
   findByEmail(email: string): Promise<User | null>;
   findById(id: string): Promise<User | null>;
+  findAll(filters?: { role?: string }): Promise<User[]>;
   create(data: CreateUserData): Promise<User>;
+  updateKycStatus(id: string, status: 'VERIFIED' | 'REJECTED'): Promise<User>;
 }
