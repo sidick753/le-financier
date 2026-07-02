@@ -2,6 +2,7 @@ import { Injectable, ForbiddenException, NotFoundException, BadRequestException 
 import { FundingCategory } from '@le-financier/database';
 import { FundingRepository } from './funding.repository';
 import { OrganizationsRepository } from '../organizations/organizations.repository';
+import { ScoringService } from '../scoring/scoring.service';
 import { CreateFundingRequestDto } from './dto/create-funding-request.dto';
 
 @Injectable()
@@ -9,6 +10,7 @@ export class FundingService {
   constructor(
     private fundingRepository: FundingRepository,
     private organizationsRepository: OrganizationsRepository,
+    private scoringService: ScoringService,
   ) {}
 
   async create(dto: CreateFundingRequestDto, userId: string) {
@@ -112,7 +114,20 @@ export class FundingService {
       );
     }
 
-    return this.fundingRepository.updateStatus(fundingRequestId, 'UNDER_REVIEW');
+    const updated = await this.fundingRepository.updateStatus(fundingRequestId, 'UNDER_REVIEW');
+
+    // Calcul du score en arrière-plan (non bloquant)
+    this.scoringService.computeAndSave({
+      fundingRequestId,
+      organizationId: fundingRequest.organizationId,
+      product: fundingRequest.category,
+      amountRequested: Number(fundingRequest.amountRequested),
+      durationMonths:  fundingRequest.durationMonths ?? undefined,
+    }).catch((err) => {
+      console.error(`[ScoringService] Erreur calcul scoring ${fundingRequestId}:`, err);
+    });
+
+    return updated;
   }
 
   async approve(fundingRequestId: string) {
@@ -143,6 +158,14 @@ export class FundingService {
     }
 
     return this.fundingRepository.updateStatus(fundingRequestId, 'REJECTED');
+  }
+
+  async getScoringReport(fundingRequestId: string) {
+    const report = await this.scoringService.getReport(fundingRequestId);
+    if (!report) {
+      throw new NotFoundException('Rapport de scoring non disponible — soumettez d\'abord la demande.');
+    }
+    return report;
   }
 
   async findAllForAdmin() {

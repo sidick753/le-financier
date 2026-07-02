@@ -16,13 +16,6 @@ const DURATIONS_FACTURE = [
   { value: "6", label: "180 jours" },
 ];
 
-const DURATIONS_PRET = [
-  { value: "6", label: "6 mois" },
-  { value: "12", label: "12 mois" },
-  { value: "24", label: "24 mois" },
-  { value: "36", label: "36 mois" },
-];
-
 const DEBITEUR_TYPES = [
   { value: "grande_entreprise", label: "Grande entreprise privée" },
   { value: "multinationale", label: "Multinationale" },
@@ -41,11 +34,21 @@ const DELAI_PAIEMENT_OPTIONS = [
 const GARANTIE_TYPES = [
   { value: "depot_cash", label: "Dépôt cash" },
   { value: "nantissement_compte", label: "Nantissement de compte" },
-  { value: "hypotheque", label: "Hypothèque" },
+  { value: "hypotheque", label: "Hypothèque (bien immobilier)" },
   { value: "nantissement_materiel", label: "Nantissement de matériel" },
   { value: "caution_personnelle", label: "Caution personnelle" },
   { value: "caution_morale", label: "Caution morale" },
   { value: "aucune", label: "Aucune garantie" },
+];
+
+const SECTEURS = [
+  { value: "services_essentiels", label: "Services essentiels / Santé / Éducation" },
+  { value: "agro",                label: "Agriculture / Distribution alimentaire" },
+  { value: "commerce_detail",     label: "Commerce de détail" },
+  { value: "btp",                 label: "BTP / Transport & Logistique" },
+  { value: "import_export",       label: "Import / Export" },
+  { value: "commerce_mono",       label: "Commerce mono / Saisonnier" },
+  { value: "volatil",             label: "Secteur volatil" },
 ];
 
 function computeAdvanceRate(debiteurType: string, anciennete: string, partClient: number) {
@@ -77,7 +80,25 @@ function computeAdvanceRange(debiteurType: string): [number, number] | null {
   return rangeByType[debiteurType] ?? null;
 }
 
-function computeConfidence(docs: Record<string, boolean>) {
+function computeConfidence(docs: Record<string, boolean>, category: string): number {
+  if (category === "PRET") {
+    let score = 0;
+    if (docs.mobileMoney) score += 30;
+    if (docs.etatsFinanciers) score += 25;
+    if (docs.justificatifGarantie) score += 20;
+    if (docs.rccm) score += 15;
+    if (docs.businessPlan) score += 10;
+    return score;
+  }
+  if (category === "EQUITY") {
+    let score = 0;
+    if (docs.businessPlan) score += 40;
+    if (docs.etatsFinanciers) score += 25;
+    if (docs.statuts) score += 15;
+    if (docs.rccm) score += 10;
+    if (docs.mobileMoney) score += 10;
+    return score;
+  }
   let score = 0;
   if (docs.facture) score += 40;
   if (docs.bonCommande) score += 25;
@@ -85,6 +106,57 @@ function computeConfidence(docs: Record<string, boolean>) {
   if (docs.etatsFinanciers) score += 10;
   if (docs.rccm) score += 5;
   return score;
+}
+
+function computeMensualite(montant: number, tauxAnnuel: number, dureeeMois: number): number {
+  if (!montant || !dureeeMois) return 0;
+  const r = tauxAnnuel / 100 / 12;
+  if (r === 0) return montant / dureeeMois;
+  return (montant * r) / (1 - Math.pow(1 + r, -dureeeMois));
+}
+
+function DocItem({ doc, docs, setDocs, organization, createdFundingRequestId }: {
+  doc: { key: string; label: string; badge: string; badgeClass: string; desc: string; subdesc: string; docType: string };
+  docs: Record<string, boolean>;
+  setDocs: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  organization: { id: string } | null;
+  createdFundingRequestId: string | null;
+}) {
+  const provided = docs[doc.key] ?? false;
+  return (
+    <div className={`rounded-xl border p-4 ${provided ? "border-green-200 bg-green-50" : "border-gray-200"}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-xl">📄</span>
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-medium text-gray-900">{doc.label}</p>
+              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${doc.badgeClass}`}>
+                {doc.badge}
+              </span>
+            </div>
+            <p className="text-xs text-gray-600">{doc.desc}</p>
+            <p className="text-xs text-gray-400">{doc.subdesc}</p>
+          </div>
+        </div>
+        {provided ? (
+          <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">✓ Déposé</span>
+        ) : organization && createdFundingRequestId ? (
+          <UploadZone
+            organizationId={organization.id}
+            documentType={doc.docType}
+            fundingRequestId={createdFundingRequestId}
+            onUploaded={() => setDocs((d) => ({ ...d, [doc.key]: true }))}
+            compact
+          />
+        ) : (
+          <span className="rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-400">
+            Disponible à l'étape suivante
+          </span>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function NouvelleDemandeFormPage() {
@@ -113,16 +185,21 @@ export default function NouvelleDemandeFormPage() {
   const [tauxImpaye, setTauxImpaye] = useState("");
   const [nbClients, setNbClients] = useState("");
 
-  // Étape 1 — Détails PRET
+  // Étape 1 — Détails PRET (nouvelle version simplifiée)
+  const [durationSlider, setDurationSlider] = useState(9);
+  const [objetFinancement, setObjetFinancement] = useState("");
+  const [descriptionFonds, setDescriptionFonds] = useState("");
+  const [secteurCode, setSecteurCode] = useState("");
+  const [garantieType, setGarantieType] = useState("");
+  const [valeurGarantie, setValeurGarantie] = useState("");
+  // Champs scoring PRET avancés (non affichés dans le formulaire simplifié mais gardés pour compatibilité)
   const [cashFlow, setCashFlow] = useState("");
   const [autonomie, setAutonomie] = useState("");
   const [endettement, setEndettement] = useState("");
   const [liquidite, setLiquidite] = useState("");
-  const [garantieType, setGarantieType] = useState("");
   const [garantieCouverture, setGarantieCouverture] = useState("");
   const [dirigeantExp, setDirigeantExp] = useState("");
   const [dirigeantAnt, setDirigeantAnt] = useState("premiere_perenne");
-  const [secteurCode, setSecteurCode] = useState("");
 
   // Étape 1 — Détails EQUITY
   const [tcam, setTcam] = useState("");
@@ -138,13 +215,16 @@ export default function NouvelleDemandeFormPage() {
   const [droitsInvestisseur, setDroitsInvestisseur] = useState("");
   const [transparence, setTransparence] = useState("");
 
-  // Étape 2 — Documents
-  const [docs, setDocs] = useState({
+  // Étape 2 — Documents (tous produits confondus)
+  const [docs, setDocs] = useState<Record<string, boolean>>({
     facture: false,
     bonCommande: false,
     mobileMoney: false,
     etatsFinanciers: false,
     rccm: false,
+    justificatifGarantie: false,
+    businessPlan: false,
+    statuts: false,
   });
 
   const [createdFundingRequestId, setCreatedFundingRequestId] = useState<string | null>(null);
@@ -154,16 +234,20 @@ export default function NouvelleDemandeFormPage() {
       ? computeAdvanceRate(debiteurType, anciennete, partClient / 100)
       : null;
 
-  const confidence = computeConfidence(docs);
-  const durations = categoryUpper === "FACTURE" ? DURATIONS_FACTURE : DURATIONS_PRET;
+  const confidence = computeConfidence(docs, categoryUpper);
+  const durations = DURATIONS_FACTURE;
 
   const categoryLabel =
     { FACTURE: "Affacturage", PRET: "Prêt MLT", EQUITY: "Equity" }[categoryUpper] ??
     categoryUpper;
 
   async function handleNext() {
-    if (step === 0 && (!amount || !duration)) {
-      setError("Veuillez remplir le montant et la durée.");
+    if (step === 0 && !amount) {
+      setError("Veuillez remplir le montant.");
+      return;
+    }
+    if (step === 0 && categoryUpper !== "PRET" && !duration) {
+      setError("Veuillez sélectionner une durée.");
       return;
     }
     setError(null);
@@ -173,12 +257,16 @@ export default function NouvelleDemandeFormPage() {
       try {
         const body: Record<string, unknown> = {
           organizationId: organization.id,
-          title: `Demande ${categoryLabel} — ${new Date().toLocaleDateString("fr-FR")}`,
-          description: `Demande de financement ${categoryLabel}`,
+          title: categoryUpper === "PRET" && objetFinancement
+            ? objetFinancement
+            : `Demande ${categoryLabel} — ${new Date().toLocaleDateString("fr-FR")}`,
+          description: categoryUpper === "PRET" && (objetFinancement || descriptionFonds)
+            ? [objetFinancement, descriptionFonds].filter(Boolean).join(" — ")
+            : `Demande de financement ${categoryLabel}`,
           category: categoryUpper,
           amountRequested: Number(amount),
           expectedReturn: expectedReturn ? Number(expectedReturn) : undefined,
-          durationMonths: Number(duration),
+          durationMonths: categoryUpper === "PRET" ? durationSlider : Number(duration),
           ...(categoryUpper === "FACTURE" && {
             debiteurNom,
             debiteurType,
@@ -190,15 +278,11 @@ export default function NouvelleDemandeFormPage() {
             nbClientsActifs: nbClients ? Number(nbClients) : undefined,
           }),
           ...(categoryUpper === "PRET" && {
-            cashFlowAnnuel: cashFlow ? Number(cashFlow) : undefined,
-            autonomieFinanciere: autonomie ? Number(autonomie) / 100 : undefined,
-            tauxEndettement: endettement ? Number(endettement) / 100 : undefined,
-            ratioLiquidite: liquidite ? Number(liquidite) : undefined,
-            garantieType: garantieType || undefined,
-            garantieCouverture: garantieCouverture ? Number(garantieCouverture) / 100 : undefined,
-            dirigeantExperienceAns: dirigeantExp ? Number(dirigeantExp) : undefined,
-            dirigeantAntecedents: dirigeantAnt,
             secteurCode: secteurCode || undefined,
+            garantieType: garantieType || undefined,
+            garantieCouverture: valeurGarantie && amount
+              ? Number(valeurGarantie) / Number(amount)
+              : undefined,
           }),
           ...(categoryUpper === "EQUITY" && {
             tcamCa3ans: tcam ? Number(tcam) / 100 : undefined,
@@ -244,33 +328,6 @@ export default function NouvelleDemandeFormPage() {
       setIsSubmitting(false);
     }
   }
-
-  // ── Docs config par catégorie ────────────────────────────────────────────────
-
-  const DOCS_CONFIG =
-    categoryUpper === "FACTURE"
-      ? [
-          { key: "facture",          label: "Facture client",                     badge: "OBLIGATOIRE",           badgeClass: "bg-red-100 text-red-700",    desc: "La facture que vous souhaitez financer (PDF ou image)",          subdesc: "Pièce centrale — indispensable pour l'analyse.",               docType: "FUNDING_REQUEST_ATTACHMENT" },
-          { key: "bonCommande",      label: "Bon de commande / PV de réception",  badge: "FORTEMENT RECOMMANDÉ",  badgeClass: "bg-orange-100 text-orange-700", desc: "Preuve que la livraison ou prestation est acceptée",           subdesc: "Réduit le risque de litige.",                                  docType: "FUNDING_REQUEST_ATTACHMENT" },
-          { key: "mobileMoney",      label: "Relevés Mobile Money — 6 mois",      badge: "RECOMMANDÉ",            badgeClass: "bg-blue-100 text-blue-700",  desc: "Orange Money, Wave, MTN MoMo ou autre portefeuille mobile",     subdesc: "Source principale pour évaluer votre activité réelle.",        docType: "FINANCIAL_STATEMENT" },
-          { key: "etatsFinanciers",  label: "États financiers (bilan, CR)",        badge: "OPTIONNEL",             badgeClass: "bg-gray-100 text-gray-600",  desc: "Derniers 12 mois — si disponibles",                            subdesc: "Renforce la solidité du dossier si vous avez une compta formelle.", docType: "FINANCIAL_STATEMENT" },
-          { key: "rccm",             label: "Registre RCCM",                       badge: "RECOMMANDÉ",            badgeClass: "bg-blue-100 text-blue-700",  desc: "Extrait du Registre de Commerce et du Crédit Mobilier",        subdesc: "Confirme l'existence légale de votre entreprise.",             docType: "ORGANIZATION_LEGAL" },
-        ]
-      : categoryUpper === "PRET"
-      ? [
-          { key: "mobileMoney",      label: "Relevés Mobile Money — 6 mois",      badge: "OBLIGATOIRE",           badgeClass: "bg-red-100 text-red-700",    desc: "Orange Money, Wave, MTN MoMo ou autre portefeuille mobile",     subdesc: "Source principale pour évaluer votre capacité de remboursement.", docType: "FINANCIAL_STATEMENT" },
-          { key: "etatsFinanciers",  label: "États financiers (bilan, CR)",        badge: "FORTEMENT RECOMMANDÉ",  badgeClass: "bg-orange-100 text-orange-700", desc: "Derniers 12 mois de comptabilité",                          subdesc: "Confirme les ratios financiers déclarés.",                     docType: "FINANCIAL_STATEMENT" },
-          { key: "rccm",             label: "Registre RCCM",                       badge: "OBLIGATOIRE",           badgeClass: "bg-red-100 text-red-700",    desc: "Extrait du Registre de Commerce et du Crédit Mobilier",        subdesc: "Confirme l'existence légale de votre entreprise.",             docType: "ORGANIZATION_LEGAL" },
-          { key: "bonCommande",      label: "Contrat ou bon de commande",          badge: "RECOMMANDÉ",            badgeClass: "bg-blue-100 text-blue-700",  desc: "Contrat lié à l'objet du financement si applicable",           subdesc: "Justifie l'usage du prêt.",                                    docType: "FUNDING_REQUEST_ATTACHMENT" },
-          { key: "facture",          label: "Justificatif de garantie",            badge: "RECOMMANDÉ",            badgeClass: "bg-blue-100 text-blue-700",  desc: "Titre foncier, acte de nantissement, ou autre",               subdesc: "Renforce la couverture déclarée.",                             docType: "FUNDING_REQUEST_ATTACHMENT" },
-        ]
-      : [
-          { key: "etatsFinanciers",  label: "États financiers 3 ans",             badge: "OBLIGATOIRE",           badgeClass: "bg-red-100 text-red-700",    desc: "Bilan, compte de résultat sur les 3 derniers exercices",        subdesc: "Confirme le TCAM déclaré.",                                    docType: "FINANCIAL_STATEMENT" },
-          { key: "rccm",             label: "Registre RCCM & statuts",            badge: "OBLIGATOIRE",           badgeClass: "bg-red-100 text-red-700",    desc: "Extrait RCCM et statuts de la société",                        subdesc: "Confirme la structure juridique.",                             docType: "ORGANIZATION_LEGAL" },
-          { key: "bonCommande",      label: "Business plan",                       badge: "FORTEMENT RECOMMANDÉ",  badgeClass: "bg-orange-100 text-orange-700", desc: "Plan d'affaires sur 3 ans avec projections",                subdesc: "Permet d'évaluer la trajectoire et l'usage des fonds.",       docType: "FUNDING_REQUEST_ATTACHMENT" },
-          { key: "mobileMoney",      label: "Relevés bancaires ou Mobile Money",   badge: "RECOMMANDÉ",            badgeClass: "bg-blue-100 text-blue-700",  desc: "6 derniers mois de flux financiers",                           subdesc: "Corrobore l'activité réelle.",                                 docType: "FINANCIAL_STATEMENT" },
-          { key: "facture",          label: "Pitch deck",                          badge: "OPTIONNEL",             badgeClass: "bg-gray-100 text-gray-600",  desc: "Présentation investisseurs (PDF)",                             subdesc: "Améliore la visibilité auprès des investisseurs.",             docType: "FUNDING_REQUEST_ATTACHMENT" },
-        ];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -358,30 +415,30 @@ export default function NouvelleDemandeFormPage() {
                   )}
                 </div>
 
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Durée</label>
-                  <select
-                    value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
-                    className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
-                  >
-                    <option value="">Sélectionnez une durée</option>
-                    {categoryUpper === "EQUITY" ? (
-                      <>
-                        <option value="36">3 ans</option>
-                        <option value="48">4 ans</option>
-                        <option value="60">5 ans</option>
-                        <option value="84">7 ans</option>
-                      </>
-                    ) : (
-                      durations.map((d) => (
-                        <option key={d.value} value={d.value}>
-                          {d.label}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </div>
+                {categoryUpper !== "PRET" && (
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Durée</label>
+                    <select
+                      value={duration}
+                      onChange={(e) => setDuration(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                    >
+                      <option value="">Sélectionnez une durée</option>
+                      {categoryUpper === "EQUITY" ? (
+                        <>
+                          <option value="36">3 ans</option>
+                          <option value="48">4 ans</option>
+                          <option value="60">5 ans</option>
+                          <option value="84">7 ans</option>
+                        </>
+                      ) : (
+                        durations.map((d) => (
+                          <option key={d.value} value={d.value}>{d.label}</option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                )}
 
                 {categoryUpper !== "EQUITY" && (
                   <div>
@@ -404,14 +461,21 @@ export default function NouvelleDemandeFormPage() {
                   </div>
                 )}
 
-                <div className="rounded-lg bg-blue-50 p-4">
-                  <p className="text-sm font-medium text-blue-800">
-                    💡 Score calculé automatiquement
-                  </p>
-                  <p className="mt-1 text-xs text-blue-600">
-                    LeFinancier calcule automatiquement votre score de risque après analyse complète de votre dossier.
-                  </p>
-                </div>
+                {categoryUpper === "PRET" ? (
+                  <div className="rounded-lg bg-blue-50 p-4">
+                    <p className="text-sm font-medium text-blue-800">💡 Scoring automatique</p>
+                    <p className="mt-1 text-xs text-blue-600">
+                      Votre score de crédit sera calculé automatiquement à la soumission, visible par les investisseurs et banques partenaires.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg bg-blue-50 p-4">
+                    <p className="text-sm font-medium text-blue-800">💡 Score calculé automatiquement</p>
+                    <p className="mt-1 text-xs text-blue-600">
+                      LeFinancier calcule automatiquement votre score de risque après analyse complète de votre dossier.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -574,84 +638,110 @@ export default function NouvelleDemandeFormPage() {
             {step === 1 && categoryUpper === "PRET" && (
               <div className="space-y-5">
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Informations financières</h2>
-                  <p className="text-sm text-gray-500">Ces données permettent d'évaluer votre capacité de remboursement.</p>
+                  <h2 className="text-lg font-semibold text-gray-900">Caractéristiques du prêt</h2>
+                  <p className="text-sm text-gray-500">
+                    Ces informations permettent d'évaluer votre capacité de remboursement et de sélectionner les financeurs adaptés.
+                  </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Cash-flow annuel (FCFA)</label>
-                    <input type="number" placeholder="Ex : 50 000 000" value={cashFlow} onChange={(e) => setCashFlow(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Autonomie financière (%)</label>
-                    <input type="number" placeholder="Ex : 35" value={autonomie} onChange={(e) => setAutonomie(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Taux d'endettement (%)</label>
-                    <input type="number" placeholder="Ex : 45" value={endettement} onChange={(e) => setEndettement(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Ratio de liquidité</label>
-                    <input type="number" step="0.1" placeholder="Ex : 1.2" value={liquidite} onChange={(e) => setLiquidite(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Montant souhaité (FCFA)</label>
+                  <input
+                    type="number"
+                    value={amount}
+                    readOnly
+                    className="w-full rounded-md border border-gray-100 bg-gray-100 px-3 py-2 text-sm text-gray-500"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">Montant net à débloquer hors frais.</p>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Durée souhaitée{" "}
+                    <span className="font-bold text-brand-700">{durationSlider} mois</span>
+                  </label>
+                  <input
+                    type="range"
+                    min={6}
+                    max={60}
+                    step={3}
+                    value={durationSlider}
+                    onChange={(e) => setDurationSlider(Number(e.target.value))}
+                    className="w-full accent-brand-700"
+                  />
+                  <div className="flex justify-between text-xs text-gray-400">
+                    <span>6 mois</span>
+                    <span>1 an</span>
+                    <span>2 ans</span>
+                    <span>3 ans</span>
+                    <span>4 ans</span>
+                    <span>5 ans</span>
                   </div>
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Type de garantie</label>
-                  <select value={garantieType} onChange={(e) => setGarantieType(e.target.value)}
-                    className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                    <option value="">Sélectionner</option>
-                    {GARANTIE_TYPES.map((g) => (
-                      <option key={g.value} value={g.value}>{g.label}</option>
-                    ))}
-                  </select>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Objet du financement</label>
+                  <input
+                    type="text"
+                    placeholder="Ex : Achat d'un camion frigorifique, extension de boutique…"
+                    value={objetFinancement}
+                    onChange={(e) => setObjetFinancement(e.target.value)}
+                    className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">Information déclarative — ajoutez une pièce pour renforcer votre dossier.</p>
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Taux de couverture de la garantie (%)</label>
-                  <input type="number" placeholder="Ex : 120 (si garantie vaut 1.2× le montant)" value={garantieCouverture} onChange={(e) => setGarantieCouverture(e.target.value)}
-                    className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Description de l'utilisation des fonds</label>
+                  <textarea
+                    rows={3}
+                    placeholder="Décrivez comment les fonds seront utilisés et comment vous comptez rembourser…"
+                    value={descriptionFonds}
+                    onChange={(e) => setDescriptionFonds(e.target.value)}
+                    className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">Information déclarative — ajoutez une pièce pour renforcer votre dossier.</p>
                 </div>
 
-                <div>
-                  <p className="mb-2 text-sm font-medium text-gray-700">Profil du dirigeant</p>
+                <div className="border-t border-gray-100 pt-4">
+                  <p className="mb-3 text-sm font-medium text-gray-700">Secteur & garanties</p>
+
+                  <div className="mb-4">
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Secteur d'activité principal</label>
+                    <select value={secteurCode} onChange={(e) => setSecteurCode(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
+                      <option value="">Sélectionner</option>
+                      {SECTEURS.map((s) => (
+                        <option key={s.value} value={s.value}>{s.label}</option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-gray-400">Le secteur détermine le coefficient de risque appliqué à votre score.</p>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="mb-1 block text-xs text-gray-600">Expérience dans le secteur (années)</label>
-                      <input type="number" placeholder="Ex : 8" value={dirigeantExp} onChange={(e) => setDirigeantExp(e.target.value)}
-                        className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Garantie proposée</label>
+                      <select value={garantieType} onChange={(e) => setGarantieType(e.target.value)}
+                        className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
+                        <option value="">Sélectionner</option>
+                        {GARANTIE_TYPES.map((g) => (
+                          <option key={g.value} value={g.value}>{g.label}</option>
+                        ))}
+                      </select>
+                      <p className="mt-1 text-xs text-gray-400">Information déclarative — ajoutez une pièce pour renforcer votre dossier.</p>
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs text-gray-600">Antécédents entrepreneuriaux</label>
-                      <select value={dirigeantAnt} onChange={(e) => setDirigeantAnt(e.target.value)}
-                        className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                        <option value="premiere_perenne">Première entreprise pérenne</option>
-                        <option value="premiere_active">Première entreprise active</option>
-                        <option value="echec_sans_incident">Échec sans incident</option>
-                        <option value="faillite_grave">Faillite grave</option>
-                      </select>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Valeur estimée de la garantie (FCFA)</label>
+                      <input
+                        type="number"
+                        placeholder="Ex : 30 000 000"
+                        value={valeurGarantie}
+                        onChange={(e) => setValeurGarantie(e.target.value)}
+                        className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                      />
+                      <p className="mt-1 text-xs text-gray-400">Information déclarative — ajoutez une pièce pour renforcer votre dossier.</p>
                     </div>
                   </div>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Secteur d'activité</label>
-                  <select value={secteurCode} onChange={(e) => setSecteurCode(e.target.value)}
-                    className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                    <option value="">Sélectionner</option>
-                    <option value="services_essentiels">Services essentiels / Santé / Éducation</option>
-                    <option value="agro">Agriculture / Distribution alimentaire</option>
-                    <option value="commerce_detail">Commerce de détail</option>
-                    <option value="btp">BTP / Transport / Logistique</option>
-                    <option value="import_export">Import/Export</option>
-                    <option value="commerce_mono">Commerce mono / Saisonnier</option>
-                    <option value="volatil">Secteur volatil</option>
-                  </select>
                 </div>
               </div>
             )}
@@ -802,47 +892,29 @@ export default function NouvelleDemandeFormPage() {
                   </p>
                 </div>
 
-                {DOCS_CONFIG.map((doc) => (
-                  <div
-                    key={doc.key}
-                    className={`rounded-xl border p-4 ${
-                      docs[doc.key as keyof typeof docs] ? "border-green-200 bg-green-50" : "border-gray-200"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="text-xl">📄</span>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium text-gray-900">{doc.label}</p>
-                            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${doc.badgeClass}`}>
-                              {doc.badge}
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-600">{doc.desc}</p>
-                          <p className="text-xs text-gray-400">{doc.subdesc}</p>
-                        </div>
-                      </div>
-                      {docs[doc.key as keyof typeof docs] ? (
-                        <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
-                          ✓ Déposé
-                        </span>
-                      ) : organization && createdFundingRequestId ? (
-                        <UploadZone
-                          organizationId={organization.id}
-                          documentType={doc.docType}
-                          fundingRequestId={createdFundingRequestId}
-                          onUploaded={() => setDocs((d) => ({ ...d, [doc.key]: true }))}
-                          compact
-                        />
-                      ) : (
-                        <span className="rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-400">
-                          Disponible à l'étape suivante
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                {categoryUpper === "FACTURE" && [
+                  { key: "facture",         label: "Facture client",                    badge: "OBLIGATOIRE",          badgeClass: "bg-red-100 text-red-700",       desc: "La facture que vous souhaitez financer (PDF ou image)",           subdesc: "Pièce centrale — indispensable pour l'analyse.",                   docType: "FUNDING_REQUEST_ATTACHMENT" },
+                  { key: "bonCommande",     label: "Bon de commande / PV de réception", badge: "FORTEMENT RECOMMANDÉ", badgeClass: "bg-orange-100 text-orange-700", desc: "Preuve que la livraison ou prestation est acceptée par le client", subdesc: "Réduit le risque de litige.",                                       docType: "FUNDING_REQUEST_ATTACHMENT" },
+                  { key: "mobileMoney",     label: "Relevés Mobile Money — 6 mois",     badge: "RECOMMANDÉ",           badgeClass: "bg-blue-100 text-blue-700",     desc: "Orange Money, Wave, MTN MoMo ou autre portefeuille mobile",       subdesc: "Notre principale source pour évaluer votre activité réelle.",      docType: "FINANCIAL_STATEMENT" },
+                  { key: "etatsFinanciers", label: "États financiers (bilan, CR)",       badge: "OPTIONNEL",            badgeClass: "bg-gray-100 text-gray-600",     desc: "Derniers 12 mois — si disponibles",                              subdesc: "Renforce la solidité du dossier si vous avez une compta formelle.", docType: "FINANCIAL_STATEMENT" },
+                  { key: "rccm",            label: "Registre RCCM",                     badge: "RECOMMANDÉ",           badgeClass: "bg-blue-100 text-blue-700",     desc: "Extrait du Registre de Commerce et du Crédit Mobilier",          subdesc: "Confirme l'existence légale de votre entreprise.",                 docType: "ORGANIZATION_LEGAL" },
+                ].map((doc) => <DocItem key={doc.key} doc={doc} docs={docs} setDocs={setDocs} organization={organization} createdFundingRequestId={createdFundingRequestId} />)}
+
+                {categoryUpper === "PRET" && [
+                  { key: "mobileMoney",         label: "Relevés Mobile Money — 6 mois", badge: "FORTEMENT RECOMMANDÉ", badgeClass: "bg-orange-100 text-orange-700", desc: "Orange Money, Wave, MTN MoMo ou autre portefeuille mobile",      subdesc: "Notre principale source pour évaluer votre capacité de remboursement.", docType: "FINANCIAL_STATEMENT" },
+                  { key: "etatsFinanciers",     label: "États financiers (bilan, CR)",  badge: "FORTEMENT RECOMMANDÉ", badgeClass: "bg-orange-100 text-orange-700", desc: "Derniers 12 mois — bilan et compte de résultat",                subdesc: "Déterminant pour le calcul du DSCR et votre note de crédit.",           docType: "FINANCIAL_STATEMENT" },
+                  { key: "justificatifGarantie",label: "Justificatif de garantie",      badge: "RECOMMANDÉ",           badgeClass: "bg-blue-100 text-blue-700",     desc: "Titre foncier, contrat de nantissement, ou attestation de dépôt", subdesc: "Augmente la quotité financée et améliore votre taux.",                 docType: "FUNDING_REQUEST_ATTACHMENT" },
+                  { key: "rccm",                label: "Registre RCCM",                 badge: "RECOMMANDÉ",           badgeClass: "bg-blue-100 text-blue-700",     desc: "Extrait du Registre de Commerce et du Crédit Mobilier",          subdesc: "Confirme l'existence légale de votre entreprise.",                     docType: "ORGANIZATION_LEGAL" },
+                  { key: "businessPlan",        label: "Business plan / prévisionnel",  badge: "OPTIONNEL",            badgeClass: "bg-gray-100 text-gray-600",     desc: "Projections sur 12-24 mois",                                    subdesc: "Démontre votre capacité à rembourser sur la durée.",                   docType: "FUNDING_REQUEST_ATTACHMENT" },
+                ].map((doc) => <DocItem key={doc.key} doc={doc} docs={docs} setDocs={setDocs} organization={organization} createdFundingRequestId={createdFundingRequestId} />)}
+
+                {categoryUpper === "EQUITY" && [
+                  { key: "businessPlan",    label: "Business plan / pitch deck",    badge: "OBLIGATOIRE",          badgeClass: "bg-red-100 text-red-700",       desc: "Présentation du projet et projections financières",              subdesc: "Pièce centrale pour les investisseurs en equity.",                    docType: "FUNDING_REQUEST_ATTACHMENT" },
+                  { key: "etatsFinanciers", label: "États financiers (bilan, CR)",  badge: "FORTEMENT RECOMMANDÉ", badgeClass: "bg-orange-100 text-orange-700", desc: "Derniers 12-24 mois",                                           subdesc: "Démontre la solidité financière actuelle.",                           docType: "FINANCIAL_STATEMENT" },
+                  { key: "statuts",         label: "Statuts de la société",         badge: "RECOMMANDÉ",           badgeClass: "bg-blue-100 text-blue-700",     desc: "Statuts et pacte d'associés existant",                          subdesc: "Confirme la structure juridique et les droits des associés.",         docType: "ORGANIZATION_LEGAL" },
+                  { key: "rccm",            label: "Registre RCCM",                 badge: "RECOMMANDÉ",           badgeClass: "bg-blue-100 text-blue-700",     desc: "Extrait du Registre de Commerce et du Crédit Mobilier",         subdesc: "Confirme l'existence légale de votre entreprise.",                    docType: "ORGANIZATION_LEGAL" },
+                  { key: "mobileMoney",     label: "Relevés Mobile Money — 6 mois", badge: "OPTIONNEL",            badgeClass: "bg-gray-100 text-gray-600",     desc: "Orange Money, Wave, MTN MoMo ou autre portefeuille mobile",     subdesc: "Renforce la crédibilité de vos projections.",                         docType: "FINANCIAL_STATEMENT" },
+                ].map((doc) => <DocItem key={doc.key} doc={doc} docs={docs} setDocs={setDocs} organization={organization} createdFundingRequestId={createdFundingRequestId} />)}
               </div>
             )}
 
@@ -859,6 +931,9 @@ export default function NouvelleDemandeFormPage() {
                 {/* Bloc principal */}
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-5">
                   <div className="mb-3 flex items-center gap-2">
+                    <span className="text-base">
+                      {{ FACTURE: "🏷️", PRET: "🏛️", EQUITY: "📊" }[categoryUpper]}
+                    </span>
                     <span className="text-sm font-semibold text-gray-900">{categoryLabel}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-4 text-sm">
@@ -871,15 +946,46 @@ export default function NouvelleDemandeFormPage() {
                     <div>
                       <p className="text-xs text-gray-400">Durée</p>
                       <p className="font-semibold text-gray-900">
-                        {duration ? (categoryUpper === "FACTURE" ? `${Number(duration) * 30} jours` : `${duration} mois`) : "—"}
+                        {categoryUpper === "PRET"
+                          ? `${durationSlider} mois`
+                          : duration
+                          ? categoryUpper === "FACTURE"
+                            ? `${Number(duration) * 30} jours`
+                            : `${duration} mois`
+                          : "—"}
                       </p>
                     </div>
+                    {/* Champ Objet — PRET */}
+                    {categoryUpper === "PRET" && (
+                      <div>
+                        <p className="text-xs text-gray-400">Objet</p>
+                        <p className="font-semibold text-gray-900">{objetFinancement || "—"}</p>
+                      </div>
+                    )}
                     {expectedReturn && (
                       <div>
                         <p className="text-xs text-gray-400">Taux proposé</p>
                         <p className="font-semibold text-green-600">{expectedReturn} %</p>
                       </div>
                     )}
+                    {/* Secteur & Garantie — PRET */}
+                    {categoryUpper === "PRET" && secteurCode && (
+                      <div>
+                        <p className="text-xs text-gray-400">Secteur</p>
+                        <p className="font-semibold text-gray-900">
+                          {SECTEURS.find((s) => s.value === secteurCode)?.label ?? secteurCode}
+                        </p>
+                      </div>
+                    )}
+                    {categoryUpper === "PRET" && garantieType && (
+                      <div>
+                        <p className="text-xs text-gray-400">Garantie</p>
+                        <p className="font-semibold text-gray-900">
+                          {GARANTIE_TYPES.find((g) => g.value === garantieType)?.label ?? garantieType}
+                        </p>
+                      </div>
+                    )}
+                    {/* Champs FACTURE */}
                     {debiteurNom && (
                       <div>
                         <p className="text-xs text-gray-400">Débiteur</p>
@@ -902,14 +1008,7 @@ export default function NouvelleDemandeFormPage() {
                         </p>
                       </div>
                     )}
-                    {cashFlow && (
-                      <div>
-                        <p className="text-xs text-gray-400">Cash-flow annuel</p>
-                        <p className="font-semibold text-gray-900">
-                          {Number(cashFlow).toLocaleString("fr-FR")} FCFA
-                        </p>
-                      </div>
-                    )}
+                    {/* Champs EQUITY */}
                     {tcam && (
                       <div>
                         <p className="text-xs text-gray-400">TCAM CA</p>
@@ -923,8 +1022,31 @@ export default function NouvelleDemandeFormPage() {
                 <div>
                   <p className="mb-3 text-sm font-semibold text-gray-900">Documents fournis</p>
                   <div className="space-y-2">
-                    {DOCS_CONFIG.map((doc) => {
-                      const provided = docs[doc.key as keyof typeof docs];
+                    {(categoryUpper === "FACTURE"
+                      ? [
+                          { key: "facture",         label: "Facture client" },
+                          { key: "bonCommande",     label: "Bon de commande" },
+                          { key: "mobileMoney",     label: "Relevés Mobile Money" },
+                          { key: "etatsFinanciers", label: "États financiers" },
+                          { key: "rccm",            label: "Registre RCCM" },
+                        ]
+                      : categoryUpper === "PRET"
+                      ? [
+                          { key: "mobileMoney",         label: "Relevés Mobile Money" },
+                          { key: "etatsFinanciers",     label: "États financiers" },
+                          { key: "rccm",                label: "Registre RCCM" },
+                          { key: "justificatifGarantie",label: "Justificatif de garantie" },
+                          { key: "businessPlan",        label: "Business plan" },
+                        ]
+                      : [
+                          { key: "etatsFinanciers", label: "États financiers 3 ans" },
+                          { key: "rccm",            label: "RCCM & Statuts" },
+                          { key: "businessPlan",    label: "Business plan" },
+                          { key: "mobileMoney",     label: "Relevés bancaires" },
+                          { key: "statuts",         label: "Statuts société" },
+                        ]
+                    ).map((doc) => {
+                      const provided = docs[doc.key];
                       return (
                         <div key={doc.key} className="flex items-center justify-between text-sm">
                           <div className="flex items-center gap-2">
@@ -999,16 +1121,40 @@ export default function NouvelleDemandeFormPage() {
               </div>
             )}
 
-            {/* ÉTAPE 1 — Conseils PRET */}
+            {/* ÉTAPE 1 — Conseils PRET + mensualité temps réel */}
             {step === 1 && categoryUpper === "PRET" && (
-              <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
-                <p className="mb-3 text-xs font-semibold text-blue-800">ℹ Conseils — Prêt MLT</p>
-                <ul className="space-y-2 text-xs text-blue-700">
-                  <li><strong>Cash-flow :</strong> C'est le premier indicateur regardé. Un cash-flow positif régulier renforce la confiance.</li>
-                  <li><strong>Garantie :</strong> Une garantie solide (hypothèque, nantissement) peut compenser un taux d'endettement élevé.</li>
-                  <li><strong>Expérience dirigeant :</strong> Plus de 5 ans dans le secteur améliore significativement le score.</li>
-                </ul>
-              </div>
+              <>
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+                  <p className="mb-3 text-xs font-semibold text-blue-800">💡 Conseils — Prêt MLT</p>
+                  <ul className="space-y-2 text-xs text-blue-700">
+                    <li><strong>Garantie réelle :</strong> Une hypothèque ou un dépôt cash améliore significativement votre score et réduit le taux proposé.</li>
+                    <li><strong>Durée courte :</strong> Un prêt sur 12 mois est plus facile à financer qu'un prêt sur 36 mois — réduisez si possible.</li>
+                    <li><strong>Objet précis :</strong> Un financement d'équipement identifiable rassure davantage qu'un besoin en fonds de roulement générique.</li>
+                    <li><strong>Relevés Mobile Money :</strong> Si vous n'avez pas de bilan formel, vos relevés M-Money des 6 derniers mois sont acceptés.</li>
+                  </ul>
+                </div>
+
+                {amount && durationSlider > 0 && (
+                  <div className="rounded-xl border border-gray-200 bg-white p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                      Mensualité estimée
+                    </p>
+                    <p className="mt-1 text-2xl font-bold text-gray-900">
+                      {Math.round(computeMensualite(
+                        Number(amount),
+                        expectedReturn ? Number(expectedReturn) : 12,
+                        durationSlider,
+                      )).toLocaleString("fr-FR")} FCFA
+                    </p>
+                    <p className="mt-1 text-xs text-gray-400">
+                      Estimation à {expectedReturn || 12} % / an · {durationSlider} mois
+                    </p>
+                    <p className="mt-1 text-xs text-gray-400">
+                      Calculée définitivement après analyse du dossier.
+                    </p>
+                  </div>
+                )}
+              </>
             )}
 
             {/* ÉTAPE 1 — Conseils EQUITY */}
@@ -1078,17 +1224,32 @@ export default function NouvelleDemandeFormPage() {
                     )}
 
                     <div className="mt-3 space-y-1">
-                      {DOCS_CONFIG.map((doc) => {
-                        const pts = { facture: 40, bonCommande: 25, mobileMoney: 20, etatsFinanciers: 10, rccm: 5 }[doc.key] ?? 0;
-                        return (
-                          <div key={doc.key} className="flex items-center justify-between text-xs text-gray-500">
-                            <span className={docs[doc.key as keyof typeof docs] ? "line-through text-gray-300" : ""}>
-                              ◦ {doc.label.length > 22 ? doc.label.slice(0, 22) + "…" : doc.label}
-                            </span>
-                            <span className="font-medium text-gray-700">+{pts}</span>
-                          </div>
-                        );
-                      })}
+                      {(categoryUpper === "PRET" ? [
+                        { key: "mobileMoney",          label: "Relevés Mobile Money",   pts: 30 },
+                        { key: "etatsFinanciers",      label: "États financiers",        pts: 25 },
+                        { key: "justificatifGarantie", label: "Justif. de garantie",    pts: 20 },
+                        { key: "rccm",                 label: "Registre RCCM",          pts: 15 },
+                        { key: "businessPlan",         label: "Business plan",           pts: 10 },
+                      ] : categoryUpper === "EQUITY" ? [
+                        { key: "businessPlan",    label: "Business plan / pitch",  pts: 40 },
+                        { key: "etatsFinanciers", label: "États financiers",        pts: 25 },
+                        { key: "statuts",         label: "Statuts société",         pts: 15 },
+                        { key: "rccm",            label: "Registre RCCM",          pts: 10 },
+                        { key: "mobileMoney",     label: "Relevés Mobile Money",   pts: 10 },
+                      ] : [
+                        { key: "facture",         label: "Facture client",          pts: 40 },
+                        { key: "bonCommande",     label: "Bon de commande",         pts: 25 },
+                        { key: "mobileMoney",     label: "Relevés Mobile Money",   pts: 20 },
+                        { key: "etatsFinanciers", label: "États financiers",        pts: 10 },
+                        { key: "rccm",            label: "Registre RCCM",          pts:  5 },
+                      ]).map((d) => (
+                        <div key={d.key} className="flex items-center justify-between text-xs text-gray-500">
+                          <span className={docs[d.key] ? "line-through text-gray-300" : ""}>
+                            ◦ {d.label}
+                          </span>
+                          <span className="font-medium text-gray-700">+{d.pts}</span>
+                        </div>
+                      ))}
                     </div>
 
                     <button
@@ -1110,9 +1271,9 @@ export default function NouvelleDemandeFormPage() {
                 </p>
                 <div className="space-y-3">
                   {[
-                    { icon: "✓", label: "Accusé de réception", delay: "Immédiat", color: "text-green-600" },
-                    { icon: "$", label: "Analyse du dossier",   delay: "Sous 24h", color: "text-gray-600" },
-                    { icon: "📄", label: "Premières offres",    delay: "Sous 48h", color: "text-gray-600" },
+                    { icon: "✓",  label: "Accusé de réception", delay: "Immédiat",  color: "text-green-600" },
+                    { icon: "$",  label: "Analyse du dossier",   delay: "Sous 24h",  color: "text-gray-600" },
+                    { icon: "📄", label: "Premières offres",     delay: categoryUpper === "PRET" ? "Sous 72h" : "Sous 48h", color: "text-gray-600" },
                   ].map((item) => (
                     <div key={item.label} className="flex items-center justify-between text-xs">
                       <div className="flex items-center gap-2">

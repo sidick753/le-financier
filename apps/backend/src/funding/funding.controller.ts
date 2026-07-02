@@ -102,6 +102,17 @@ export class FundingController {
     return this.fundingService.reject(id);
   }
 
+  @ApiBearerAuth('jwt')
+  @ApiOperation({ summary: 'Rapport de scoring d\'une demande' })
+  @ApiParam({ name: 'id', description: 'UUID de la demande' })
+  @ApiResponse({ status: 200, description: 'Rapport de scoring calculé' })
+  @ApiResponse({ status: 404, description: 'Pas encore calculé' })
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/scoring')
+  getScoringReport(@Param('id') id: string) {
+    return this.fundingService.getScoringReport(id);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
   @Get('admin/all')
