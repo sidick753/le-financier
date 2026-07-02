@@ -63,4 +63,14 @@ export class FundingRepository implements IFundingRepository {
       where: { organizationId, role: 'OWNER' },
     });
   }
+
+  async findAllForAdmin() {
+    return this.prisma.fundingRequest.findMany({
+      include: {
+        organization: { select: { legalName: true } },
+        _count: { select: { investments: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 }

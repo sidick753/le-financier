@@ -45,7 +45,7 @@ export function useAdminData() {
     Promise.all([
       api.get<AdminOrganization[]>("/organizations/admin/all", token),
       api.get<AdminUser[]>("/auth/admin/users", token),
-      api.get<any[]>("/funding-requests/published", token),
+      api.get<any[]>("/funding-requests/admin/all", token),
     ])
       .then(([orgs, usrs, funding]) => {
         setOrganizations(orgs);

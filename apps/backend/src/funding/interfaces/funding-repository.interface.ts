@@ -14,6 +14,7 @@ export interface IFundingRepository {
   findById(id: string): Promise<FundingRequest | null>;
   findAllByOrganizationId(organizationId: string): Promise<FundingRequest[]>;
   findAllPublished(filters?: { category?: string; search?: string }): Promise<FundingRequest[]>;
+  findAllForAdmin(): Promise<any[]>;
   create(data: CreateFundingRequestData): Promise<FundingRequest>;
   updateStatus(id: string, status: FundingRequest['status']): Promise<FundingRequest>;
 }

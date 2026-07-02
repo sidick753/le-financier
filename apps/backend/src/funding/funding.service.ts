@@ -106,4 +106,14 @@ export class FundingService {
 
     return this.fundingRepository.updateStatus(fundingRequestId, 'REJECTED');
   }
+
+  async findAllForAdmin() {
+    return this.fundingRepository.findAllForAdmin();
+  }
+
+  async cancel(id: string) {
+    const fr = await this.fundingRepository.findById(id);
+    if (!fr) throw new NotFoundException('Demande introuvable.');
+    return this.fundingRepository.updateStatus(id, 'CANCELLED');
+  }
 }

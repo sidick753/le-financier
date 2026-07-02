@@ -2,6 +2,8 @@ import { Body, Controller, Get, Param, Post, UseGuards, Request } from '@nestjs/
 import { RepaymentService } from './repayment.service';
 import { ConfirmPaymentDto } from './dto/confirm-payment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('repayments')
@@ -30,5 +32,12 @@ export class RepaymentController {
     @Request() req,
   ) {
     return this.repaymentService.confirmPayment(scheduleId, dto, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Get('admin/commissions')
+  getAllCommissions() {
+    return this.repaymentService.getAllCommissions();
   }
 }

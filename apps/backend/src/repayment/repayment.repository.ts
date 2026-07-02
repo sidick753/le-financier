@@ -144,4 +144,15 @@ export class RepaymentRepository implements IRepaymentRepository {
       orderBy: { createdAt: 'desc' },
     });
   }
+
+  async findAllCommissions() {
+    return this.prisma.commission.findMany({
+      include: {
+        fundingRequest: {
+          include: { organization: { select: { legalName: true } } },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 }

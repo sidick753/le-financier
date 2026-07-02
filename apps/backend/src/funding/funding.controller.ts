@@ -101,4 +101,18 @@ export class FundingController {
   reject(@Param('id') id: string) {
     return this.fundingService.reject(id);
   }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Get('admin/all')
+  findAllAdmin() {
+    return this.fundingService.findAllForAdmin();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Patch(':id/cancel')
+  cancel(@Param('id') id: string) {
+    return this.fundingService.cancel(id);
+  }
 }

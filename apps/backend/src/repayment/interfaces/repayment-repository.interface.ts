@@ -13,4 +13,5 @@ export interface IRepaymentRepository {
   confirmPayment(scheduleId: string, userId: string, proofDocumentId?: string): Promise<any>;
   findPaymentsByInvestorId(investorId: string): Promise<any[]>;
   findCommissionsByFundingRequestId(fundingRequestId: string): Promise<any[]>;
+  findAllCommissions(): Promise<any[]>;
 }

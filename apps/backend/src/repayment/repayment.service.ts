@@ -32,4 +32,8 @@ export class RepaymentService {
   async confirmPayment(scheduleId: string, dto: ConfirmPaymentDto, userId: string) {
     return this.repaymentRepository.confirmPayment(scheduleId, userId, dto.proofDocumentId);
   }
+
+  async getAllCommissions() {
+    return this.repaymentRepository.findAllCommissions();
+  }
 }
