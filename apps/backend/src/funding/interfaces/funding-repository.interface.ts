@@ -8,6 +8,47 @@ export interface CreateFundingRequestData {
   amountRequested: number;
   expectedReturn?: number;
   durationMonths?: number;
+
+  // Scoring FACTURE
+  debiteurNom?: string;
+  debiteurType?: string;
+  debiteurSolvabilite?: string;
+  echeanceFactureDate?: string;
+  ancienneteRelation?: string;
+  partPlusGrosClient?: number;
+  delaiPaiementMenu?: string;
+  tauxImpaye12m?: number;
+  nbClientsActifs?: number;
+
+  // Scoring PRET MLT
+  cashFlowAnnuel?: number;
+  fluxMobileMoneyMensuel?: number;
+  autonomieFinanciere?: number;
+  tauxEndettement?: number;
+  ratioLiquidite?: number;
+  garantieType?: string;
+  garantieCouverture?: number;
+  dirigeantExperienceAns?: number;
+  dirigeantAntecedents?: string;
+  dirigeantIncidentsLegaux?: string;
+  secteurCode?: string;
+  secteurSaisonnalite?: boolean;
+  secteurImportDevises?: boolean;
+  secteurSoutienPublic?: boolean;
+
+  // Scoring EQUITY
+  tcamCa3ans?: number;
+  tailleMarche?: string;
+  scalabilite?: string;
+  experienceSecteurAns?: number;
+  trackRecord?: string;
+  completudeEquipe?: string;
+  moat?: string;
+  partMarcheRelative?: string;
+  runwayMois?: number;
+  margeBrute?: number;
+  droitsInvestisseur?: string;
+  transparence?: string;
 }
 
 export interface IFundingRepository {

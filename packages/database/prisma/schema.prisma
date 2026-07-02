@@ -172,6 +172,7 @@ model FundingRequest {
   investments        Investment[]
   documents          Document[]
   scoringReports     ScoringReport[]
+  scoringInput       ScoringInput?
   disputes           Dispute[]
   watchlist          Watchlist[]
   repaymentSchedules RepaymentSchedule[]
@@ -321,37 +322,101 @@ model Document {
 
 
 enum ScoringStatus {
+  RECU
+  EXTRACTION
+  A_COMPLETER
   CALCULATED
   PENDING_VALIDATION
+  COMPLEMENTS_DEMANDES
   VALIDATED
-  REJECTED
+  REFUSED
+}
+
+model ScoringInput {
+  id               String         @id @default(uuid())
+  fundingRequestId String         @unique
+  fundingRequest   FundingRequest @relation(fields: [fundingRequestId], references: [id], onDelete: Cascade)
+
+  product          String         // FACTURE | PRET | EQUITY
+
+  // Données FACTURE
+  debiteurNom             String?
+  debiteurType            String?   // grande_entreprise | multinationale | public_solvable | pme_etablie | petite_structure | particulier
+  debiteurSolvabilite     String?   // solide | neutre | tension | incident
+  echeanceFactureDate     DateTime?
+  ancienneteRelation      String?   // plus_2ans | 6mois_2ans | premiere_transaction
+  partPlusGrosClient      Decimal?  @db.Decimal(5, 4)
+  delaiPaiementMenu       String?   // a_echeance | leger_retard | souvent_retard
+  tauxImpaye12m           Decimal?  @db.Decimal(5, 4)
+  nbClientsActifs         Int?
+
+  // Données PRET MLT
+  cashFlowAnnuel          Decimal?  @db.Decimal(14, 2)
+  fluxMobileMoneyMensuel  Decimal?  @db.Decimal(14, 2)
+  autonomieFinanciere     Decimal?  @db.Decimal(5, 4)
+  tauxEndettement         Decimal?  @db.Decimal(5, 4)
+  ratioLiquidite          Decimal?  @db.Decimal(5, 4)
+  garantieType            String?
+  garantieCouverture      Decimal?  @db.Decimal(5, 4)
+  dirigeantExperienceAns  Int?
+  dirigeantAntecedents    String?
+  dirigeantIncidentsLegaux String?
+  secteurCode             String?
+  secteurSaisonnalite     Boolean?  @default(false)
+  secteurImportDevises    Boolean?  @default(false)
+  secteurSoutienPublic    Boolean?  @default(false)
+
+  // Données EQUITY
+  tcamCa3ans              Decimal?  @db.Decimal(5, 4)
+  tailleMarche            String?
+  scalabilite             String?
+  experienceSecteurAns    Int?
+  trackRecord             String?
+  completudeEquipe        String?
+  moat                    String?
+  partMarcheRelative      String?
+  runwayMois              Int?
+  margeBrute              Decimal?  @db.Decimal(5, 4)
+  droitsInvestisseur      String?
+  transparence            String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("scoring_inputs")
 }
 
 model ScoringReport {
-  id             String   @id @default(uuid())
+  id             String       @id @default(uuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   fundingRequestId String?
   fundingRequest   FundingRequest? @relation(fields: [fundingRequestId], references: [id])
 
-  // Le score calculé automatiquement
-  autoScore   Decimal  @db.Decimal(5, 2)
-  kpiSnapshot Json     // KPI utilisés pour le calcul, figés à cet instant
+  product        String       // FACTURE | PRET | EQUITY
+  bareme_version String       @default("2026.1")
+  autoScore      Decimal      @db.Decimal(5, 1)
+  grade          String?      // A+ | A | BBB | BB | B
+  gradeCapped    Boolean      @default(false)
+  coverage       Decimal      @db.Decimal(4, 3)
+  confidence     Decimal      @db.Decimal(4, 3)
+  advanceRate    Decimal?     @db.Decimal(4, 3)
+  kpiSnapshot    Json
 
   status ScoringStatus @default(CALCULATED)
 
-  // Validation humaine (hybride)
-  validatedById String?
-  validatedBy   User?    @relation(fields: [validatedById], references: [id])
-  validatedScore Decimal? @db.Decimal(5, 2)
+  validatedById   String?
+  validatedBy     User?     @relation(fields: [validatedById], references: [id])
+  validatedScore  Decimal?  @db.Decimal(5, 1)
   validationNotes String?
-  validatedAt   DateTime?
+  validatedAt     DateTime?
 
   createdAt DateTime @default(now())
 
   @@index([organizationId])
   @@index([status])
+  @@index([fundingRequestId])
   @@map("scoring_reports")
 }
 
