@@ -139,15 +139,25 @@ export default function NouvelleDemandeTypePage() {
           })}
         </div>
 
-        <div className="mb-6 rounded-xl bg-blue-50 p-4">
-          <p className="text-sm font-medium text-blue-800">
-            ⚡ Parcours digital en 4 étapes — environ 10 minutes.
-          </p>
-          <p className="mt-1 text-xs text-blue-600">
-            Type & Montant → Détails → Documents → Résumé. Votre dossier sera scoré
-            automatiquement et mis en ligne pour les investisseurs.
-          </p>
-        </div>
+        {selected === "EQUITY" ? (
+          <div className="mb-6 rounded-xl border border-orange-200 bg-orange-50 p-4">
+            <p className="text-sm font-medium text-orange-800">
+              👥 L'Equity suit un parcours accompagné, pas un formulaire.
+            </p>
+            <p className="mt-1 text-xs text-orange-600">
+              Un chargé d'affaires LeFinancier vous contactera sous 48h pour un premier entretien. Ce parcours comprend une due diligence et une mise en relation ciblée avec des fonds et business angels.
+            </p>
+          </div>
+        ) : (
+          <div className="mb-6 rounded-xl bg-blue-50 p-4">
+            <p className="text-sm font-medium text-blue-800">
+              ⚡ Parcours digital en 4 étapes — environ 10 minutes.
+            </p>
+            <p className="mt-1 text-xs text-blue-600">
+              Type & Montant → Détails → Documents → Résumé. Votre dossier sera scoré automatiquement et mis en ligne pour les investisseurs.
+            </p>
+          </div>
+        )}
 
         <div className="flex items-center justify-between">
           <button
@@ -158,9 +168,13 @@ export default function NouvelleDemandeTypePage() {
           </button>
           <button
             onClick={handleStart}
-            className="rounded-md bg-brand-700 px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-800"
+            className={`rounded-md px-6 py-2.5 text-sm font-medium text-white ${
+              selected === "EQUITY"
+                ? "bg-orange-500 hover:bg-orange-600"
+                : "bg-brand-700 hover:bg-brand-800"
+            }`}
           >
-            Commencer le dossier →
+            {selected === "EQUITY" ? "Demander un accompagnement →" : "Commencer le dossier →"}
           </button>
         </div>
       </div>
