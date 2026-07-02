@@ -11,6 +11,7 @@ interface UploadZoneProps {
   organizationId: string;
   documentType: string;
   kycRequirementKey?: string;
+  fundingRequestId?: string;
   onUploaded: () => void;
   compact?: boolean;
 }
@@ -19,6 +20,7 @@ export function UploadZone({
   organizationId,
   documentType,
   kycRequirementKey,
+  fundingRequestId,
   onUploaded,
   compact = false,
 }: UploadZoneProps) {
@@ -46,6 +48,9 @@ export function UploadZone({
     formData.append("organizationId", organizationId);
     if (kycRequirementKey) {
       formData.append("kycRequirementKey", kycRequirementKey);
+    }
+    if (fundingRequestId) {
+      formData.append("fundingRequestId", fundingRequestId);
     }
 
     setIsUploading(true);
