@@ -22,7 +22,10 @@ export class InvestmentsRepository implements IInvestmentsRepository {
       where: { investorId },
       include: {
         fundingRequest: {
-          include: { organization: { select: { legalName: true } } },
+          include: {
+            organization: { select: { legalName: true, sector: true } },
+            scoringReports: { orderBy: { createdAt: 'desc' }, take: 1 },
+          },
         },
         negotiationOffers: { orderBy: { createdAt: 'desc' } },
       },

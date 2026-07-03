@@ -71,7 +71,10 @@ export class FundingRepository implements IFundingRepository {
             }
           : {}),
       },
-      include: { organization: true },
+      include: {
+        organization: true,
+        scoringReports: { orderBy: { createdAt: 'desc' }, take: 1 },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }

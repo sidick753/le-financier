@@ -35,7 +35,9 @@ export default function LoginPage() {
     setIsSubmitting(true);
     try {
       const response = await login(email, password);
-      if (response.user.role === "PME_OWNER" || response.user.role === "PME_MEMBER") {
+      if (response.user.role === "INSTITUTION") {
+        router.push("/institution");
+      } else if (response.user.role === "PME_OWNER" || response.user.role === "PME_MEMBER") {
         router.push("/dashboard");
       } else if (response.user.role === "ADMIN" || response.user.role === "SUPER_ADMIN") {
         router.push("/admin");
