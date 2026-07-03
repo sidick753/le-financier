@@ -43,6 +43,17 @@ export class ScoringRepository {
     });
   }
 
+  async findReportById(reportId: string) {
+    return this.prisma.scoringReport.findUnique({
+      where: { id: reportId },
+      include: {
+        organization: { select: { legalName: true } },
+        fundingRequest: { select: { title: true, category: true } },
+        validatedBy: { select: { firstName: true, lastName: true } },
+      },
+    });
+  }
+
   // ── Lookup d'une FundingRequest pour le scoring admin ─────────────────────
   async findFundingRequestForScoring(fundingRequestId: string) {
     return this.prisma.fundingRequest.findUnique({

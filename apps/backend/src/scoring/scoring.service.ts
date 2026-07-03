@@ -115,6 +115,12 @@ export class ScoringService {
     return this.scoringRepository.findByFundingRequest(fundingRequestId);
   }
 
+  async getReportById(reportId: string) {
+    const report = await this.scoringRepository.findReportById(reportId);
+    if (!report) throw new NotFoundException('Rapport introuvable.');
+    return report;
+  }
+
   getBaremeVersion(): string {
     return BAREME_VERSION;
   }

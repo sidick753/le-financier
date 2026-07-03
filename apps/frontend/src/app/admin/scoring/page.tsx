@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useScoringAdmin } from "@/lib/use-scoring-admin";
+import { ScoringSnapshotModal } from "@/components/scoring-snapshot-modal";
 
 type Tab = "automatise" | "configuration" | "historique";
 
@@ -75,6 +76,7 @@ export default function AdminScoringPage() {
   const [search, setSearch] = useState("");
   const [productFilter, setProductFilter] = useState("Tous");
   const [weights, setWeights] = useState(DEFAULT_WEIGHTS);
+  const [snapshotReportId, setSnapshotReportId] = useState<string | null>(null);
 
   const aScorer    = dossiers.filter((d) => d.scoringStatus === "A_SCORER").length;
   const enAnalyse  = dossiers.filter((d) => d.scoringStatus === "EXTRACTION").length;
@@ -481,7 +483,10 @@ export default function AdminScoringPage() {
                             </span>
                           </td>
                           <td className="px-5 py-3">
-                            <button className="text-xs text-brand-700 hover:underline">
+                            <button
+                              onClick={() => setSnapshotReportId(report.id)}
+                              className="text-xs text-brand-700 hover:underline"
+                            >
                               📋 Snapshot
                             </button>
                           </td>
@@ -497,6 +502,13 @@ export default function AdminScoringPage() {
             )}
           </div>
         </div>
+      )}
+
+      {snapshotReportId && (
+        <ScoringSnapshotModal
+          reportId={snapshotReportId}
+          onClose={() => setSnapshotReportId(null)}
+        />
       )}
     </div>
   );

@@ -40,6 +40,13 @@ export class ScoringController {
     return { message: 'Scoring lancé avec succès.' };
   }
 
+  @ApiOperation({ summary: '[ADMIN] Détail complet d\'un rapport de scoring' })
+  @ApiParam({ name: 'reportId', description: 'UUID du rapport' })
+  @Get('report/:reportId')
+  getReport(@Param('reportId') reportId: string) {
+    return this.scoringService.getReportById(reportId);
+  }
+
   @ApiOperation({ summary: '[ADMIN] Valider un rapport de scoring' })
   @ApiParam({ name: 'reportId', description: 'UUID du rapport' })
   @Patch('report/:reportId/validate')
