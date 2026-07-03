@@ -43,4 +43,28 @@ export class UsersRepository implements IUsersRepository {
       data: { kycStatus: status },
     });
   }
+
+  async createRefreshToken(userId: string, token: string, expiresAt: Date) {
+    return this.prisma.refreshToken.create({
+      data: { userId, token, expiresAt },
+    });
+  }
+
+  async findRefreshToken(token: string) {
+    return this.prisma.refreshToken.findUnique({ where: { token } });
+  }
+
+  async revokeRefreshToken(token: string) {
+    return this.prisma.refreshToken.update({
+      where: { token },
+      data: { revoked: true },
+    });
+  }
+
+  async revokeAllUserRefreshTokens(userId: string) {
+    return this.prisma.refreshToken.updateMany({
+      where: { userId, revoked: false },
+      data: { revoked: true },
+    });
+  }
 }

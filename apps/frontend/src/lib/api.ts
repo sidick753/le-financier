@@ -1,14 +1,11 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4201";
 
-interface ApiError {
+interface ApiErrorBody {
   message: string;
   statusCode: number;
 }
 
-async function request<T>(
-  path: string,
-  options: RequestInit = {},
-): Promise<T> {
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: {
@@ -17,17 +14,10 @@ async function request<T>(
     },
   });
 
-  if (res.status === 401) {
-    sessionStorage.removeItem("accessToken");
-    sessionStorage.removeItem("user");
-    window.location.replace("/login");
-    throw new Error("Session expirée.");
-  }
-
   const data = await res.json();
 
   if (!res.ok) {
-    throw new Error((data as ApiError).message ?? "Une erreur est survenue.");
+    throw new Error((data as ApiErrorBody).message ?? "Une erreur est survenue.");
   }
 
   return data as T;

@@ -1,6 +1,14 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  ReactNode,
+} from "react";
 import { useRouter } from "next/navigation";
 import { api } from "./api";
 
@@ -14,7 +22,17 @@ interface User {
 
 interface AuthResponse {
   accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
   user: User;
+}
+
+interface RegisterData {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
 }
 
 interface AuthContextValue {
@@ -28,38 +46,92 @@ interface AuthContextValue {
   logout: () => void;
 }
 
-interface RegisterData {
-  email: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-  phone?: string;
-}
-
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+const REFRESH_MARGIN_MS = 60 * 1000; // Renouvelle 1 minute avant expiration
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearSession = useCallback(() => {
+    setToken(null);
+    setUser(null);
+    sessionStorage.removeItem("accessToken");
+    sessionStorage.removeItem("refreshToken");
+    sessionStorage.removeItem("user");
+    sessionStorage.removeItem("expiresAt");
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+  }, []);
+
+  const scheduleRefresh = useCallback(
+    (expiresInSeconds: number, currentRefreshToken: string) => {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+
+      const delayMs = Math.max(0, expiresInSeconds * 1000 - REFRESH_MARGIN_MS);
+
+      refreshTimerRef.current = setTimeout(async () => {
+        try {
+          const response = await api.post<AuthResponse>("/auth/refresh", {
+            refreshToken: currentRefreshToken,
+          });
+          persistSession(response);
+        } catch {
+          clearSession();
+          router.push("/login");
+        }
+      }, delayMs);
+    },
+    // persistSession is stable (defined below with useCallback) — safe to omit from deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [clearSession, router],
+  );
+
+  const persistSession = useCallback(
+    (response: AuthResponse) => {
+      const expiresAt = Date.now() + response.expiresIn * 1000;
+      setToken(response.accessToken);
+      setUser(response.user);
+      sessionStorage.setItem("accessToken", response.accessToken);
+      sessionStorage.setItem("refreshToken", response.refreshToken);
+      sessionStorage.setItem("user", JSON.stringify(response.user));
+      sessionStorage.setItem("expiresAt", String(expiresAt));
+      scheduleRefresh(response.expiresIn, response.refreshToken);
+    },
+    [scheduleRefresh],
+  );
 
   useEffect(() => {
     const storedToken = sessionStorage.getItem("accessToken");
+    const storedRefreshToken = sessionStorage.getItem("refreshToken");
     const storedUser = sessionStorage.getItem("user");
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
-    }
-    setIsLoading(false);
-  }, []);
+    const storedExpiresAt = sessionStorage.getItem("expiresAt");
 
-  function persistSession(response: AuthResponse) {
-    setToken(response.accessToken);
-    setUser(response.user);
-    sessionStorage.setItem("accessToken", response.accessToken);
-    sessionStorage.setItem("user", JSON.stringify(response.user));
-  }
+    if (storedToken && storedRefreshToken && storedUser && storedExpiresAt) {
+      const remainingMs = Number(storedExpiresAt) - Date.now();
+
+      if (remainingMs > 0) {
+        setToken(storedToken);
+        setUser(JSON.parse(storedUser));
+        scheduleRefresh(Math.floor(remainingMs / 1000), storedRefreshToken);
+      } else {
+        // Access token expiré — tente un refresh immédiat
+        api
+          .post<AuthResponse>("/auth/refresh", { refreshToken: storedRefreshToken })
+          .then(persistSession)
+          .catch(() => clearSession());
+      }
+    }
+
+    setIsLoading(false);
+
+    return () => {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    };
+  }, [scheduleRefresh, persistSession, clearSession]);
 
   async function login(email: string, password: string) {
     const response = await api.post<AuthResponse>("/auth/login", { email, password });
@@ -86,16 +158,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function logout() {
-    setToken(null);
-    setUser(null);
-    sessionStorage.removeItem("accessToken");
-    sessionStorage.removeItem("user");
+    const refreshToken = sessionStorage.getItem("refreshToken");
+    if (refreshToken) {
+      api.post("/auth/logout", { refreshToken }).catch(() => {});
+    }
+    clearSession();
     router.push("/login");
   }
 
   return (
     <AuthContext.Provider
-      value={{ user, token, isLoading, login, registerPmeOwner, registerInvestor, registerInstitution, logout }}
+      value={{
+        user,
+        token,
+        isLoading,
+        login,
+        registerPmeOwner,
+        registerInvestor,
+        registerInstitution,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>

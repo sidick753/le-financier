@@ -37,12 +37,27 @@ export class AuthController {
     return this.authService.registerInstitution(dto);
   }
 
-  @ApiOperation({ summary: 'Connexion', description: 'Retourne un JWT `accessToken` valable 7 jours.' })
-  @ApiResponse({ status: 200, description: '{ accessToken: string, user: { id, email, role, ... } }' })
+  @ApiOperation({ summary: 'Connexion', description: 'Retourne un `accessToken` (15 min) + un `refreshToken` opaque (7 jours, stocké en DB).' })
+  @ApiResponse({ status: 200, description: '{ accessToken, refreshToken, expiresIn, user }' })
   @ApiResponse({ status: 401, description: 'Identifiants incorrects' })
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  @ApiOperation({ summary: 'Renouveler l\'access token via le refresh token (rotation automatique)' })
+  @ApiResponse({ status: 200, description: '{ accessToken, refreshToken, expiresIn, user }' })
+  @ApiResponse({ status: 401, description: 'Refresh token invalide, révoqué ou expiré' })
+  @Post('refresh')
+  refresh(@Body() body: { refreshToken: string }) {
+    return this.authService.refresh(body.refreshToken);
+  }
+
+  @ApiOperation({ summary: 'Déconnexion — révoque le refresh token' })
+  @ApiResponse({ status: 200, description: '{ message: string }' })
+  @Post('logout')
+  logout(@Body() body: { refreshToken: string }) {
+    return this.authService.logout(body.refreshToken);
   }
 
   @ApiBearerAuth('jwt')

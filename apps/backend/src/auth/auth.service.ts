@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 import { UsersRepository } from '../users/users.repository';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -65,6 +66,33 @@ export class AuthService {
     return this.buildAuthResponse(user);
   }
 
+  async refresh(refreshToken: string) {
+    const stored = await this.usersRepository.findRefreshToken(refreshToken);
+
+    if (!stored || stored.revoked || new Date() > stored.expiresAt) {
+      // Détection de réutilisation : révoque tous les tokens de l'utilisateur
+      if (stored?.userId) {
+        await this.usersRepository.revokeAllUserRefreshTokens(stored.userId);
+      }
+      throw new UnauthorizedException('Session expirée. Veuillez vous reconnecter.');
+    }
+
+    // Rotation : révoque l'ancien avant d'en émettre un nouveau
+    await this.usersRepository.revokeRefreshToken(refreshToken);
+
+    const user = await this.usersRepository.findById(stored.userId);
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Compte inactif ou supprimé.');
+    }
+
+    return this.buildAuthResponse(user);
+  }
+
+  async logout(refreshToken: string) {
+    await this.usersRepository.revokeRefreshToken(refreshToken).catch(() => {});
+    return { message: 'Déconnexion réussie.' };
+  }
+
   async getAllUsers(filters?: { role?: string }) {
     return this.usersRepository.findAll(filters);
   }
@@ -73,7 +101,7 @@ export class AuthService {
     return this.usersRepository.updateKycStatus(id, status);
   }
 
-  private buildAuthResponse(user: {
+  private async buildAuthResponse(user: {
     id: string;
     email: string;
     role: string;
@@ -81,8 +109,18 @@ export class AuthService {
     lastName: string;
   }) {
     const payload = { sub: user.id, email: user.email, role: user.role };
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+
+    const rawRefreshToken = randomBytes(64).toString('hex');
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    await this.usersRepository.createRefreshToken(user.id, rawRefreshToken, expiresAt);
+
     return {
-      accessToken: this.jwtService.sign(payload),
+      accessToken,
+      refreshToken: rawRefreshToken,
+      expiresIn: 15 * 60,
       user: {
         id: user.id,
         email: user.email,
