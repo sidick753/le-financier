@@ -11,6 +11,7 @@ import { DocumentsModule } from './documents/documents.module';
 import { WatchlistModule } from './watchlist/watchlist.module';
 import { RepaymentModule } from './repayment/repayment.module';
 import { ScoringModule } from './scoring/scoring.module';
+import { InstitutionsModule } from './institutions/institutions.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ScoringModule } from './scoring/scoring.module';
     WatchlistModule,
     RepaymentModule,
     ScoringModule,
+    InstitutionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -44,6 +44,13 @@ export class UsersRepository implements IUsersRepository {
     });
   }
 
+  async updatePassword(id: string, passwordHash: string) {
+    return this.prisma.user.update({
+      where: { id },
+      data: { passwordHash },
+    });
+  }
+
   async createRefreshToken(userId: string, token: string, expiresAt: Date) {
     return this.prisma.refreshToken.create({
       data: { userId, token, expiresAt },

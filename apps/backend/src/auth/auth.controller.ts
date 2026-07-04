@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam }
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
@@ -68,6 +69,16 @@ export class AuthController {
   @Get('me')
   getProfile(@Request() req) {
     return req.user;
+  }
+
+  @ApiBearerAuth('jwt')
+  @ApiOperation({ summary: 'Changer mon mot de passe', description: 'Révoque toutes les sessions existantes (refresh tokens) après le changement.' })
+  @ApiResponse({ status: 200, description: '{ message: string }' })
+  @ApiResponse({ status: 401, description: 'Mot de passe actuel incorrect' })
+  @UseGuards(JwtAuthGuard)
+  @Patch('change-password')
+  changePassword(@Body() dto: ChangePasswordDto, @Request() req) {
+    return this.authService.changePassword(req.user.id, dto.currentPassword, dto.newPassword);
   }
 
   @ApiBearerAuth('jwt')

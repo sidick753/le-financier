@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useInstitutionSettings } from "@/lib/use-institution-settings";
 
 type Tab = "institution" | "limites" | "securite";
 
 const INPUT =
   "w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900";
+
+const SECTEURS_DISPONIBLES = ["Tabac", "Armement", "Jeux", "Alcool"];
 
 function EyeIcon() {
   return (
@@ -26,53 +29,109 @@ function RefreshIcon() {
 }
 
 export default function InstitutionParametresPage() {
+  const { institution, isLoading, updateProfile, updateLimits, regenerateApiKey, changePassword } =
+    useInstitutionSettings();
   const [tab, setTab] = useState<Tab>("institution");
 
-  const [nomInstitution, setNomInstitution] = useState("Banque Atlantique CI");
-  const [type, setType] = useState("Banque commerciale");
-  const [agrementBceao, setAgrementBceao] = useState("CI-B-2010-001");
-  const [pays, setPays] = useState("Côte d'Ivoire");
-  const [adresse, setAdresse] = useState("Plateau, Avenue Botreau Roussel");
-  const [emailInstitutionnel, setEmailInstitutionnel] = useState("contact@banque-atlantique.ci");
-  const [telephone, setTelephone] = useState("+225 20 20 20 20");
+  const [nomInstitution, setNomInstitution] = useState("");
+  const [type, setType] = useState("");
+  const [agrementBceao, setAgrementBceao] = useState("");
+  const [pays, setPays] = useState("");
+  const [adresse, setAdresse] = useState("");
+  const [emailInstitutionnel, setEmailInstitutionnel] = useState("");
+  const [telephone, setTelephone] = useState("");
   const [savedInstitution, setSavedInstitution] = useState(false);
 
-  const [enveloppeMax, setEnveloppeMax] = useState("1000000000");
-  const [ticketMin, setTicketMin] = useState("25000000");
-  const [ticketMax, setTicketMax] = useState("500000000");
-  const [secteursExclus, setSecteursExclus] = useState({
-    Tabac: true,
-    Armement: true,
-    Jeux: true,
-    Alcool: true,
-  });
+  const [enveloppeMax, setEnveloppeMax] = useState("");
+  const [ticketMin, setTicketMin] = useState("");
+  const [ticketMax, setTicketMax] = useState("");
+  const [secteursExclus, setSecteursExclus] = useState<Record<string, boolean>>({});
   const [savedLimites, setSavedLimites] = useState(false);
 
   const [motDePasseActuel, setMotDePasseActuel] = useState("");
   const [nouveauMotDePasse, setNouveauMotDePasse] = useState("");
   const [confirmerMotDePasse, setConfirmerMotDePasse] = useState("");
   const [showMotDePasseActuel, setShowMotDePasseActuel] = useState(false);
-  const [apiKey] = useState("lf_live_sk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+
+  const [revealedApiKey, setRevealedApiKey] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
 
-  function handleSaveInstitution() {
+  useEffect(() => {
+    if (!institution) return;
+    setNomInstitution(institution.name ?? "");
+    setType(institution.type ?? "");
+    setAgrementBceao(institution.bceaoApprovalNumber ?? "");
+    setPays(institution.country ?? "");
+    setAdresse(institution.address ?? "");
+    setEmailInstitutionnel(institution.contactEmail ?? "");
+    setTelephone(institution.contactPhone ?? "");
+    setEnveloppeMax(institution.envelopeMax ?? "");
+    setTicketMin(institution.ticketMin ?? "");
+    setTicketMax(institution.ticketMax ?? "");
+    setSecteursExclus(
+      Object.fromEntries(SECTEURS_DISPONIBLES.map((s) => [s, institution.excludedSectors.includes(s)])),
+    );
+  }, [institution]);
+
+  async function handleSaveInstitution() {
+    await updateProfile({
+      name: nomInstitution,
+      type,
+      bceaoApprovalNumber: agrementBceao,
+      country: pays,
+      address: adresse,
+      contactEmail: emailInstitutionnel,
+      contactPhone: telephone,
+    });
     setSavedInstitution(true);
     setTimeout(() => setSavedInstitution(false), 2000);
   }
 
-  function handleSaveLimites() {
+  async function handleSaveLimites() {
+    await updateLimits({
+      envelopeMax: enveloppeMax ? Number(enveloppeMax) : undefined,
+      ticketMin: ticketMin ? Number(ticketMin) : undefined,
+      ticketMax: ticketMax ? Number(ticketMax) : undefined,
+      excludedSectors: Object.keys(secteursExclus).filter((s) => secteursExclus[s]),
+    });
     setSavedLimites(true);
     setTimeout(() => setSavedLimites(false), 2000);
   }
 
-  function handleChangePassword() {
-    setMotDePasseActuel("");
-    setNouveauMotDePasse("");
-    setConfirmerMotDePasse("");
+  async function handleChangePassword() {
+    setPasswordError(null);
+    setPasswordSuccess(false);
+    if (nouveauMotDePasse !== confirmerMotDePasse) {
+      setPasswordError("Les deux mots de passe ne correspondent pas.");
+      return;
+    }
+    try {
+      await changePassword(motDePasseActuel, nouveauMotDePasse);
+      setMotDePasseActuel("");
+      setNouveauMotDePasse("");
+      setConfirmerMotDePasse("");
+      setPasswordSuccess(true);
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : "Erreur inconnue.");
+    }
   }
 
-  function handleRegenerateKey() {
-    setShowApiKey(true);
+  async function handleRegenerateKey() {
+    const plainKey = await regenerateApiKey();
+    if (plainKey) {
+      setRevealedApiKey(plainKey);
+      setShowApiKey(true);
+    }
+  }
+
+  if (isLoading || !institution) {
+    return (
+      <div className="p-8">
+        <p className="text-sm text-gray-400">Chargement...</p>
+      </div>
+    );
   }
 
   return (
@@ -168,13 +227,13 @@ export default function InstitutionParametresPage() {
             <div>
               <label className="mb-2 block text-xs font-medium text-gray-700">Secteurs exclus</label>
               <div className="grid grid-cols-2 gap-2">
-                {Object.keys(secteursExclus).map((secteur) => (
+                {SECTEURS_DISPONIBLES.map((secteur) => (
                   <label key={secteur} className="flex items-center gap-2 text-sm text-gray-700">
                     <input
                       type="checkbox"
-                      checked={secteursExclus[secteur as keyof typeof secteursExclus]}
+                      checked={secteursExclus[secteur] ?? false}
                       onChange={() =>
-                        setSecteursExclus((prev) => ({ ...prev, [secteur]: !prev[secteur as keyof typeof prev] }))
+                        setSecteursExclus((prev) => ({ ...prev, [secteur]: !prev[secteur] }))
                       }
                       className="h-4 w-4 rounded border-gray-300 accent-brand-700"
                     />
@@ -239,6 +298,8 @@ export default function InstitutionParametresPage() {
                   className={INPUT}
                 />
               </div>
+              {passwordError && <p className="text-xs text-red-600">{passwordError}</p>}
+              {passwordSuccess && <p className="text-xs text-green-600">✓ Mot de passe mis à jour.</p>}
               <button
                 onClick={handleChangePassword}
                 className="rounded-md bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800"
@@ -253,12 +314,19 @@ export default function InstitutionParametresPage() {
             <p className="mb-3 text-xs text-gray-400">
               La clé API permet d'intégrer LeFinancier à votre système de gestion interne (core banking).
             </p>
+            {revealedApiKey && (
+              <div className="mb-3 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2.5">
+                <p className="text-xs text-orange-800">
+                  ⚠ Copiez cette clé maintenant — elle ne sera plus jamais affichée en clair.
+                </p>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <input
                   readOnly
                   type={showApiKey ? "text" : "password"}
-                  value={apiKey}
+                  value={revealedApiKey ?? `••••••••••••${institution.apiKeyLastFour ?? "····"}`}
                   className={`${INPUT} pr-10 font-mono`}
                 />
                 <button

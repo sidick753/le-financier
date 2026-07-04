@@ -41,6 +41,7 @@ model User {
 
   // Relations
   organizationMemberships    OrganizationMember[]
+  institutionMembership      InstitutionMember?
   investments                Investment[]
   documentsUploaded          Document[]
   disputesOpened             Dispute[]             @relation("DisputeOpenedBy")
@@ -126,7 +127,60 @@ model OrganizationMember {
   @@map("organization_members")
 }
 
+enum InstitutionMemberRole {
+  OWNER
+  ANALYST
+  COMPLIANCE
+}
 
+enum InstitutionMemberStatus {
+  ACTIVE
+  TRAINING
+}
+
+model Institution {
+  id                  String    @id @default(uuid())
+  name                String
+  type                String?
+  bceaoApprovalNumber String?
+  country             String    @default("CI")
+  address             String?
+  contactEmail        String?
+  contactPhone        String?
+
+  envelopeMax     Decimal? @db.Decimal(16, 2)
+  ticketMin       Decimal? @db.Decimal(16, 2)
+  ticketMax       Decimal? @db.Decimal(16, 2)
+  excludedSectors String[] @default([])
+
+  apiKeyHash        String?
+  apiKeyLastFour    String?
+  apiKeyGeneratedAt DateTime?
+
+  members InstitutionMember[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("institutions")
+}
+
+model InstitutionMember {
+  id            String                  @id @default(uuid())
+  userId        String                  @unique
+  institutionId String
+  role          InstitutionMemberRole   @default(ANALYST)
+  status        InstitutionMemberStatus @default(ACTIVE)
+  specialty     String?
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([institutionId])
+  @@map("institution_members")
+}
 
 
 

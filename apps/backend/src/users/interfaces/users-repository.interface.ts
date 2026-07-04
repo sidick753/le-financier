@@ -15,6 +15,7 @@ export interface IUsersRepository {
   findAll(filters?: { role?: string }): Promise<any[]>;
   create(data: CreateUserData): Promise<User>;
   updateKycStatus(id: string, status: 'VERIFIED' | 'REJECTED'): Promise<User>;
+  updatePassword(id: string, passwordHash: string): Promise<User>;
   createRefreshToken(userId: string, token: string, expiresAt: Date): Promise<any>;
   findRefreshToken(token: string): Promise<any>;
   revokeRefreshToken(token: string): Promise<any>;

@@ -8,6 +8,73 @@ function daysAgo(days: number): Date {
   return d;
 }
 
+// Hash bcrypt pré-calculé pour "Demo1234!" (mot de passe des comptes analystes de démo)
+const DEMO_PASSWORD_HASH = '$2b$12$kmQ4Djdr0ybrI0yL9YlwHO2IbN/v56JkIJtLXTm1CF/neYtJP4L/a';
+
+async function ensureInstitutionTeam(ownerId: string) {
+  let institutionRecord = await prisma.institution.findFirst({
+    where: { members: { some: { userId: ownerId } } },
+  });
+
+  if (!institutionRecord) {
+    institutionRecord = await prisma.institution.create({
+      data: {
+        name: 'Banque Atlantique CI',
+        type: 'Banque commerciale',
+        bceaoApprovalNumber: 'CI-B-2010-001',
+        country: 'CI',
+        address: 'Plateau, Avenue Botreau Roussel',
+        contactEmail: 'contact@banque-atlantique.ci',
+        contactPhone: '+225 20 20 20 20',
+        envelopeMax: 1_000_000_000,
+        ticketMin: 25_000_000,
+        ticketMax: 500_000_000,
+        excludedSectors: ['Tabac', 'Armement', 'Jeux', 'Alcool'],
+        members: {
+          create: { userId: ownerId, role: 'OWNER', status: 'ACTIVE' },
+        },
+      },
+    });
+    console.log('Institution créée : Banque Atlantique CI');
+  }
+
+  const teammates = [
+    { email: 'k.assoumou@banque-atlantique.ci', firstName: 'Kouamé', lastName: 'Assoumou', role: 'ANALYST' as const, specialty: 'Affacturage & Prêts' },
+    { email: 'm.toure@banque-atlantique.ci', firstName: 'Mariame', lastName: 'Touré', role: 'ANALYST' as const, specialty: 'Prêts MLT & Equity' },
+    { email: 's.bamba@banque-atlantique.ci', firstName: 'Serge', lastName: 'Bamba', role: 'COMPLIANCE' as const, specialty: 'Conformité & AML' },
+  ];
+
+  const teammateIds: Record<string, string> = {};
+
+  for (const teammate of teammates) {
+    let user = await prisma.user.findUnique({ where: { email: teammate.email } });
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          email: teammate.email,
+          passwordHash: DEMO_PASSWORD_HASH,
+          firstName: teammate.firstName,
+          lastName: teammate.lastName,
+          role: 'INSTITUTION',
+          kycStatus: 'VERIFIED',
+        },
+      });
+      await prisma.institutionMember.create({
+        data: {
+          userId: user.id,
+          institutionId: institutionRecord.id,
+          role: teammate.role,
+          specialty: teammate.specialty,
+        },
+      });
+      console.log(`Coéquipier créé : ${teammate.firstName} ${teammate.lastName}`);
+    }
+    teammateIds[teammate.email] = user.id;
+  }
+
+  return teammateIds;
+}
+
 async function main() {
   const institution = await prisma.user.findUnique({
     where: { email: 'banque@lefinancier.ci' },
@@ -17,6 +84,8 @@ async function main() {
       "Utilisateur banque@lefinancier.ci introuvable — ce seed suppose que le compte de test institution existe déjà.",
     );
   }
+
+  const teammateIds = await ensureInstitutionTeam(institution.id);
 
   const deals = [
     {
@@ -34,7 +103,7 @@ async function main() {
       createdAt: daysAgo(25),
       score: 82,
       grade: 'A',
-      investment: { amountCommitted: 80_000_000, lockedReturn: 8.5 },
+      investment: { amountCommitted: 80_000_000, lockedReturn: 8.5, investorEmail: 'k.assoumou@banque-atlantique.ci' },
     },
     {
       legalName: 'AGRO MORONOU',
@@ -51,7 +120,7 @@ async function main() {
       createdAt: daysAgo(210),
       score: 88,
       grade: 'A+',
-      investment: { amountCommitted: 300_000_000, lockedReturn: 11 },
+      investment: { amountCommitted: 300_000_000, lockedReturn: 11, investorEmail: 'banque@lefinancier.ci' },
     },
     {
       legalName: 'FRESHNI',
@@ -68,7 +137,7 @@ async function main() {
       createdAt: daysAgo(20),
       score: 79,
       grade: 'A',
-      investment: { amountCommitted: 45_000_000, lockedReturn: 7.8 },
+      investment: { amountCommitted: 45_000_000, lockedReturn: 7.8, investorEmail: 'm.toure@banque-atlantique.ci' },
     },
     {
       legalName: 'LogiTrans CI',
@@ -85,7 +154,7 @@ async function main() {
       createdAt: daysAgo(60),
       score: 48,
       grade: 'BB',
-      investment: { amountCommitted: 150_000_000, lockedReturn: 15 },
+      investment: { amountCommitted: 150_000_000, lockedReturn: 15, investorEmail: 'banque@lefinancier.ci' },
     },
     {
       legalName: 'SolarTech Abidjan',
@@ -102,7 +171,7 @@ async function main() {
       createdAt: daysAgo(3),
       score: 60,
       grade: 'BBB',
-      investment: { amountCommitted: 120_000_000, lockedReturn: 9.2 },
+      investment: { amountCommitted: 120_000_000, lockedReturn: 9.2, investorEmail: 'k.assoumou@banque-atlantique.ci' },
     },
     {
       legalName: 'Pharmacie Du Golfe',
@@ -177,10 +246,12 @@ async function main() {
     });
 
     if (deal.investment) {
+      const investorId = teammateIds[deal.investment.investorEmail] ?? institution.id;
+
       await prisma.investment.create({
         data: {
           fundingRequestId: fundingRequest.id,
-          investorId: institution.id,
+          investorId,
           amountCommitted: deal.investment.amountCommitted,
           lockedReturn: deal.investment.lockedReturn,
           status: 'COMMITTED',

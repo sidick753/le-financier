@@ -93,6 +93,26 @@ export class AuthService {
     return { message: 'Déconnexion réussie.' };
   }
 
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.usersRepository.findById(userId);
+    if (!user) {
+      throw new UnauthorizedException('Utilisateur introuvable.');
+    }
+
+    const currentValid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!currentValid) {
+      throw new UnauthorizedException('Mot de passe actuel incorrect.');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await this.usersRepository.updatePassword(userId, passwordHash);
+
+    // Un changement de mot de passe invalide toutes les sessions existantes.
+    await this.usersRepository.revokeAllUserRefreshTokens(userId);
+
+    return { message: 'Mot de passe mis à jour.' };
+  }
+
   async getAllUsers(filters?: { role?: string }) {
     return this.usersRepository.findAll(filters);
   }
