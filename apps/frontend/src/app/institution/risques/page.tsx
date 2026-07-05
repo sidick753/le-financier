@@ -1,7 +1,37 @@
 "use client";
 
 import { useState } from "react";
-import { useInstitutionSettings, type RiskIndicators } from "@/lib/use-institution-settings";
+import {
+  useInstitutionSettings,
+  type RiskIndicators,
+  type AmlAlertType,
+  type AmlAlertStatus,
+} from "@/lib/use-institution-settings";
+import { NotifBell } from "@/components/ui/notif-bell";
+
+const AML_TYPE_LABELS: Record<AmlAlertType, string> = {
+  TRANSACTION_INHABITUELLE: "Transaction inhabituelle",
+  PEP_DETECTE: "PEP détecté (screening)",
+  BENEFICIAIRE_NON_IDENTIFIE: "Bénéficiaire tiers non identifié",
+};
+
+const AML_STATUS_CONFIG: Record<AmlAlertStatus, { label: string; className: string }> = {
+  EN_ANALYSE: { label: "En analyse", className: "bg-yellow-100 text-yellow-700" },
+  BLOQUE: { label: "Bloqué", className: "bg-red-100 text-red-700" },
+  RESOLU: { label: "Résolu", className: "bg-green-100 text-green-700" },
+};
+
+function formatMontantAml(v: string | null) {
+  if (v === null) return "—";
+  const n = Number(v);
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)} Md FCFA`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(0)} M FCFA`;
+  return `${n.toLocaleString("fr-FR")} FCFA`;
+}
+
+function formatDateAml(d: string) {
+  return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
+}
 
 type RisqueTab = "prudentiels" | "reglementaires" | "aml";
 
@@ -99,7 +129,7 @@ const RAPPORTS = [
 ];
 
 export default function RisquesPage() {
-  const { riskIndicators, isLoading, refresh } = useInstitutionSettings();
+  const { riskIndicators, amlAlerts, amlStats, isLoading, refresh, resolveAmlAlert } = useInstitutionSettings();
   const [tab, setTab] = useState<RisqueTab>("prudentiels");
 
   const indicateurs = INDICATOR_DEFS.map((def) => {
@@ -115,26 +145,28 @@ export default function RisquesPage() {
   const violations = indicateurs.filter((i) => i.status === "violation").length;
 
   return (
-    <div className="p-8">
-      <div className="mb-6 flex items-center justify-between">
+    <>
+      <header className="sticky top-0 z-10 flex h-15 items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Risques & Conformité</h1>
-          <p className="text-sm text-gray-500">Tableau de bord prudentiel · BCEAO / Bâle III</p>
+          <p className="text-[18px] font-bold tracking-tight text-slate-900">Risques & Conformité</p>
+          <p className="text-xs text-slate-500">Tableau de bord prudentiel · BCEAO / Bâle III</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-3">
           <button
             onClick={() => refresh()}
-            className="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded-[10px] border border-slate-200 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
           >
             🔄 Actualiser
           </button>
-          <button className="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+          <button className="rounded-[10px] border border-slate-200 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50">
             ⬇ Exporter rapport
           </button>
+          <NotifBell href="/institution/notifications" />
         </div>
-      </div>
+      </header>
 
-      {/* 3 stats */}
+      <div className="p-8 pb-16">
+        {/* 3 stats */}
       <div className="mb-6 grid grid-cols-3 gap-4">
         {[
           { label: "Indicateurs conformes", value: `${conformes}/${indicateurs.length}`, icon: "✓", color: "text-green-600", bg: "bg-green-50 border-green-200", iconBg: "bg-green-100" },
@@ -283,13 +315,101 @@ export default function RisquesPage() {
 
       {/* AML */}
       {tab === "aml" && (
-        <div className="rounded-xl border border-gray-200 bg-white p-8 text-center">
-          <p className="text-sm font-medium text-gray-700">Module Anti-blanchiment (AML)</p>
-          <p className="mt-2 text-xs text-gray-400">
-            Le suivi automatisé LAB-CFT avec screening des contreparties et déclarations CENTIF sera disponible dans une prochaine version.
-          </p>
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-gray-500">Alertes actives</p>
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-yellow-100 text-yellow-600">⚠</span>
+              </div>
+              <p className="mt-2 text-2xl font-bold text-gray-900">{amlStats.alertesActives}</p>
+            </div>
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-gray-500">Cas bloqués</p>
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-red-100 text-red-600">🔒</span>
+              </div>
+              <p className="mt-2 text-2xl font-bold text-gray-900">{amlStats.casBloques}</p>
+            </div>
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-gray-500">Résolus ce mois</p>
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-green-100 text-green-600">✓</span>
+              </div>
+              <p className="mt-2 text-2xl font-bold text-gray-900">{amlStats.resolusCeMois}</p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-gray-200 bg-white">
+            <div className="border-b border-gray-100 p-5">
+              <p className="text-sm font-semibold text-gray-900">Alertes AML / LAB-CFT</p>
+            </div>
+            {isLoading && <p className="p-5 text-sm text-gray-400">Chargement...</p>}
+            {!isLoading && amlAlerts.length === 0 && (
+              <p className="p-5 text-sm text-gray-400">Aucune alerte.</p>
+            )}
+            {amlAlerts.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500">
+                      <th className="px-5 py-3 text-left font-medium">Client / Contrepartie</th>
+                      <th className="px-5 py-3 text-left font-medium">Type d&apos;alerte</th>
+                      <th className="px-5 py-3 text-right font-medium">Montant</th>
+                      <th className="px-5 py-3 text-left font-medium">Date</th>
+                      <th className="px-5 py-3 text-left font-medium">Statut</th>
+                      <th className="px-5 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {amlAlerts.map((alert) => {
+                      const statusConfig = AML_STATUS_CONFIG[alert.status];
+                      return (
+                        <tr key={alert.id} className="hover:bg-gray-50">
+                          <td className="px-5 py-3 font-medium text-gray-900">{alert.clientLabel}</td>
+                          <td className="px-5 py-3 text-xs text-gray-600">{AML_TYPE_LABELS[alert.alertType]}</td>
+                          <td className="px-5 py-3 text-right text-xs font-medium text-gray-900">
+                            {formatMontantAml(alert.amount)}
+                          </td>
+                          <td className="px-5 py-3 text-xs text-gray-500">{formatDateAml(alert.detectedAt)}</td>
+                          <td className="px-5 py-3">
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusConfig.className}`}>
+                              {statusConfig.label}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3 text-right">
+                            {alert.status !== "RESOLU" && (
+                              <button
+                                onClick={() => resolveAmlAlert(alert.id)}
+                                className="rounded-md border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                              >
+                                Traiter
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-blue-100 bg-blue-50 p-5">
+            <p className="text-sm font-semibold text-blue-900">Obligation de déclaration CENTIF</p>
+            <p className="mt-1 text-xs text-blue-800">
+              Tout cas non résolu dans les 48h doit faire l&apos;objet d&apos;une déclaration de soupçon auprès de la
+              Cellule Nationale de Traitement des Informations Financières (CENTIF), conformément à la loi UEMOA
+              n°2023-004.
+            </p>
+            <button className="mt-3 rounded-md bg-blue-900 px-4 py-2 text-xs font-medium text-white hover:bg-blue-800">
+              Accéder au portail CENTIF
+            </button>
+          </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

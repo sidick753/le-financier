@@ -21,8 +21,8 @@ export default function InstitutionLayout({ children }: { children: React.ReactN
 
   if (isLoading || !user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <p className="text-sm text-gray-400">Chargement...</p>
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <p className="text-[13px] text-slate-400">Chargement...</p>
       </div>
     );
   }
@@ -33,9 +33,9 @@ export default function InstitutionLayout({ children }: { children: React.ReactN
 
   return (
     <NotificationsProvider>
-      <div className="flex min-h-screen bg-gray-50">
+      <div className="flex min-h-screen bg-slate-50">
         <InstitutionSidebar />
-        <main className="ml-56 flex-1 overflow-y-auto">{children}</main>
+        <main className="ml-64 flex-1 overflow-y-auto">{children}</main>
       </div>
     </NotificationsProvider>
   );

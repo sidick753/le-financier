@@ -72,7 +72,63 @@ async function ensureInstitutionTeam(ownerId: string) {
     teammateIds[teammate.email] = user.id;
   }
 
-  return teammateIds;
+  return { institutionId: institutionRecord.id, teammateIds };
+}
+
+async function ensureAmlAlerts(institutionId: string) {
+  const existingCount = await prisma.amlAlert.count({ where: { institutionId } });
+  if (existingCount > 0) {
+    console.log('Alertes AML déjà seedées, ignoré.');
+    return;
+  }
+
+  const kawa = await prisma.organization.findUnique({ where: { registrationNumber: 'CI-ABJ-2024-B-9001' } });
+  const freshni = await prisma.organization.findUnique({ where: { registrationNumber: 'CI-ABJ-2024-B-9003' } });
+  const solarTech = await prisma.organization.findUnique({ where: { registrationNumber: 'CI-ABJ-2024-B-9005' } });
+
+  await prisma.amlAlert.createMany({
+    data: [
+      {
+        institutionId,
+        organizationId: kawa?.id ?? null,
+        clientLabel: 'KAWA Services',
+        alertType: 'TRANSACTION_INHABITUELLE',
+        amount: 45_000_000,
+        status: 'EN_ANALYSE',
+        detectedAt: daysAgo(23),
+      },
+      {
+        institutionId,
+        organizationId: null,
+        clientLabel: 'Nouveau client',
+        alertType: 'PEP_DETECTE',
+        amount: null,
+        status: 'BLOQUE',
+        detectedAt: daysAgo(24),
+      },
+      {
+        institutionId,
+        organizationId: freshni?.id ?? null,
+        clientLabel: 'FRESHNI',
+        alertType: 'BENEFICIAIRE_NON_IDENTIFIE',
+        amount: 12_000_000,
+        status: 'RESOLU',
+        detectedAt: daysAgo(26),
+        resolvedAt: daysAgo(3),
+      },
+      {
+        institutionId,
+        organizationId: solarTech?.id ?? null,
+        clientLabel: 'SolarTech Abidjan',
+        alertType: 'TRANSACTION_INHABITUELLE',
+        amount: 30_000_000,
+        status: 'RESOLU',
+        detectedAt: daysAgo(15),
+        resolvedAt: daysAgo(1),
+      },
+    ],
+  });
+  console.log('Alertes AML créées (4).');
 }
 
 async function main() {
@@ -85,7 +141,7 @@ async function main() {
     );
   }
 
-  const teammateIds = await ensureInstitutionTeam(institution.id);
+  const { institutionId, teammateIds } = await ensureInstitutionTeam(institution.id);
 
   const deals = [
     {
@@ -262,6 +318,8 @@ async function main() {
 
     console.log(`Créé : ${deal.legalName}`);
   }
+
+  await ensureAmlAlerts(institutionId);
 }
 
 main()

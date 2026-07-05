@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useNotifications } from "@/lib/use-notifications";
 
-export function NotifBell() {
+export function NotifBell({ href = "/dashboard/notifications" }: { href?: string }) {
   const { unreadCount } = useNotifications();
 
   return (
     <Link
-      href="/dashboard/notifications"
+      href={href}
       className="relative flex h-9 w-9 items-center justify-center rounded-[10px] border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

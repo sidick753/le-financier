@@ -146,7 +146,7 @@ export default function ExplorerPage() {
               : `${opportunities.length} opportunité${opportunities.length !== 1 ? "s" : ""} disponible${opportunities.length !== 1 ? "s" : ""}`}
           </p>
         </div>
-        <NotifBell />
+        <NotifBell href="/investor/notifications" />
       </header>
 
       <div className="p-8 pb-16">

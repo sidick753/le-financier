@@ -343,7 +343,7 @@ export default function PortefeuillePage() {
           <p className="text-[18px] font-bold tracking-tight text-slate-900">Mon portefeuille</p>
           <p className="text-xs text-slate-500">Gestion de vos investissements actifs</p>
         </div>
-        <NotifBell />
+        <NotifBell href="/investor/notifications" />
       </header>
 
       <div className="p-8 pb-16">

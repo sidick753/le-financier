@@ -81,4 +81,20 @@ export class InstitutionsController {
   getRiskIndicators(@Request() req) {
     return this.institutionsService.getRiskIndicators(req.user.id);
   }
+
+  @ApiOperation({
+    summary: 'Alertes AML / LAB-CFT',
+    description: 'Alertes de conformité (transaction inhabituelle, PEP détecté, bénéficiaire non identifié) et statistiques associées.',
+  })
+  @Get('mine/aml-alerts')
+  getAmlAlerts(@Request() req) {
+    return this.institutionsService.getAmlAlerts(req.user.id);
+  }
+
+  @ApiOperation({ summary: 'Marquer une alerte AML comme traitée' })
+  @ApiParam({ name: 'alertId', description: 'UUID de l\'alerte' })
+  @Patch('mine/aml-alerts/:alertId/resolve')
+  resolveAmlAlert(@Param('alertId') alertId: string, @Request() req) {
+    return this.institutionsService.resolveAmlAlert(req.user.id, alertId);
+  }
 }

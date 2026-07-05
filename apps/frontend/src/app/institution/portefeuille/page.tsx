@@ -1,6 +1,7 @@
 "use client";
 
 import { useInstitutionData, isRecentlyCreated } from "@/lib/use-institution-data";
+import { NotifBell } from "@/components/ui/notif-bell";
 
 const CATEGORY_LABELS: Record<string, string> = {
   FACTURE: "Affacturage",
@@ -67,20 +68,24 @@ export default function InstitutionPortefeuillePage() {
     }, 0);
 
   return (
-    <div className="p-8">
-      <div className="mb-6 flex items-center justify-between">
+    <>
+      <header className="sticky top-0 z-10 flex h-15 items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Portefeuille institutionnel</h1>
-          <p className="text-sm text-gray-500">
+          <p className="text-[18px] font-bold tracking-tight text-slate-900">Portefeuille institutionnel</p>
+          <p className="text-xs text-slate-500">
             {activeInvestments.length} positions actives · Mise à jour en temps réel
           </p>
         </div>
-        <button className="flex items-center gap-2 rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-          ⬇ Exporter XLSX
-        </button>
-      </div>
+        <div className="flex items-center gap-3">
+          <button className="flex items-center gap-2 rounded-[10px] border border-slate-200 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50">
+            ⬇ Exporter XLSX
+          </button>
+          <NotifBell href="/institution/notifications" />
+        </div>
+      </header>
 
-      {/* 4 KPI */}
+      <div className="p-8 pb-16">
+        {/* 4 KPI */}
       <div className="mb-6 grid grid-cols-4 gap-4">
         {[
           { label: "Capital investi", value: `${formatAmount(totalDeployed)} FCFA`, hint: `${totalDeployed.toLocaleString("fr-FR")} F CFA`, icon: "🏛️" },
@@ -204,6 +209,7 @@ export default function InstitutionPortefeuillePage() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }

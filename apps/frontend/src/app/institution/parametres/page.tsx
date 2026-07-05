@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useInstitutionSettings } from "@/lib/use-institution-settings";
+import { NotifBell } from "@/components/ui/notif-bell";
 
 type Tab = "institution" | "limites" | "securite";
 
@@ -135,13 +136,17 @@ export default function InstitutionParametresPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Paramètres</h1>
-        <p className="text-sm text-gray-500">Configuration de votre compte institutionnel</p>
-      </div>
+    <>
+      <header className="sticky top-0 z-10 flex h-15 items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
+        <div>
+          <p className="text-[18px] font-bold tracking-tight text-slate-900">Paramètres</p>
+          <p className="text-xs text-slate-500">Configuration de votre compte institutionnel</p>
+        </div>
+        <NotifBell href="/institution/notifications" />
+      </header>
 
-      <div className="mb-6 flex gap-6 border-b border-gray-200">
+      <div className="p-8 pb-16">
+        <div className="mb-6 flex gap-6 border-b border-gray-200">
         {[
           { id: "institution", label: "Institution" },
           { id: "limites", label: "Limites & Mandats" },
@@ -347,6 +352,7 @@ export default function InstitutionParametresPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

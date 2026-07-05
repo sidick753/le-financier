@@ -2,6 +2,7 @@
 
 import { useInstitutionData, GRADE_CLASSNAMES } from "@/lib/use-institution-data";
 import { useRouter } from "next/navigation";
+import { NotifBell } from "@/components/ui/notif-bell";
 
 const CATEGORY_LABELS: Record<string, string> = {
   FACTURE: "Affacturage",
@@ -37,47 +38,51 @@ export default function InstitutionOverviewPage() {
   const totalByCategory = Object.values(byCategory).reduce((s, v) => s + v, 0);
 
   return (
-    <div className="p-8">
-      {/* Alertes */}
-      <div className="mb-6 space-y-2">
-        <div className="flex items-center justify-between rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-2.5">
-          <p className="text-xs text-yellow-800">
-            ⚠️ <strong>Garantie en portefeuille</strong> — Vérifiez vos couvertures de garantie.
-          </p>
-          <button className="text-xs text-yellow-700 underline">Voir dossier</button>
-        </div>
-        <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-2.5">
-          <p className="text-xs text-red-800">
-            🔴 <strong>Rapport BCEAO trimestriel</strong> à soumettre avant le 30/06/2026
-          </p>
-          <button onClick={() => router.push("/institution/risques")} className="text-xs text-red-700 underline">
-            Compléter
-          </button>
-        </div>
-        <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5">
-          <p className="text-xs text-blue-800">
-            ⭐ <strong>Nouvelle opportunité premium</strong> disponible dans le Deal Flow
-          </p>
-          <button onClick={() => router.push("/institution/deal-flow")} className="text-xs text-blue-700 underline">
-            Consulter
-          </button>
-        </div>
-      </div>
-
-      <div className="mb-6 flex items-center justify-between">
+    <>
+      <header className="sticky top-0 z-10 flex h-15 items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Vue d'ensemble</h1>
-          <p className="text-sm text-gray-500">Tableau de bord institutionnel</p>
+          <p className="text-[18px] font-bold tracking-tight text-slate-900">Vue d'ensemble</p>
+          <p className="text-xs text-slate-500">Tableau de bord institutionnel</p>
         </div>
-        <button
-          onClick={() => router.push("/institution/deal-flow")}
-          className="rounded-md bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800"
-        >
-          + Nouveau dossier
-        </button>
-      </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.push("/institution/deal-flow")}
+            className="rounded-[10px] bg-brand-700 px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-brand-800"
+          >
+            + Nouveau dossier
+          </button>
+          <NotifBell href="/institution/notifications" />
+        </div>
+      </header>
 
-      {/* 4 KPI */}
+      <div className="p-8 pb-16">
+        {/* Alertes */}
+        <div className="mb-6 space-y-2">
+          <div className="flex items-center justify-between rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-2.5">
+            <p className="text-xs text-yellow-800">
+              ⚠️ <strong>Garantie en portefeuille</strong> — Vérifiez vos couvertures de garantie.
+            </p>
+            <button className="text-xs text-yellow-700 underline">Voir dossier</button>
+          </div>
+          <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-2.5">
+            <p className="text-xs text-red-800">
+              🔴 <strong>Rapport BCEAO trimestriel</strong> à soumettre avant le 30/06/2026
+            </p>
+            <button onClick={() => router.push("/institution/risques")} className="text-xs text-red-700 underline">
+              Compléter
+            </button>
+          </div>
+          <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5">
+            <p className="text-xs text-blue-800">
+              ⭐ <strong>Nouvelle opportunité premium</strong> disponible dans le Deal Flow
+            </p>
+            <button onClick={() => router.push("/institution/deal-flow")} className="text-xs text-blue-700 underline">
+              Consulter
+            </button>
+          </div>
+        </div>
+
+        {/* 4 KPI */}
       <div className="mb-6 grid grid-cols-4 gap-4">
         <KpiCard
           label="Encours déployés"
@@ -292,7 +297,8 @@ export default function InstitutionOverviewPage() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useInstitutionSettings } from "@/lib/use-institution-settings";
+import { NotifBell } from "@/components/ui/notif-bell";
 
 const AVATAR_COLORS = [
   "bg-blue-200 text-blue-700",
@@ -68,21 +69,25 @@ export default function EquipePage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="mb-6 flex items-center justify-between">
+    <>
+      <header className="sticky top-0 z-10 flex h-15 items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Équipe</h1>
-          <p className="text-sm text-gray-500">Gestion des membres de votre équipe</p>
+          <p className="text-[18px] font-bold tracking-tight text-slate-900">Équipe</p>
+          <p className="text-xs text-slate-500">Gestion des membres de votre équipe</p>
         </div>
-        <button
-          onClick={() => setShowInviteForm((v) => !v)}
-          className="flex items-center gap-2 rounded-md bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800"
-        >
-          👥 Inviter un membre
-        </button>
-      </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowInviteForm((v) => !v)}
+            className="flex items-center gap-2 rounded-[10px] bg-brand-700 px-4 py-2 text-[13px] font-semibold text-white hover:bg-brand-800"
+          >
+            👥 Inviter un membre
+          </button>
+          <NotifBell href="/institution/notifications" />
+        </div>
+      </header>
 
-      {temporaryPassword && (
+      <div className="p-8 pb-16">
+        {temporaryPassword && (
         <div className="mb-6 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3">
           <p className="text-xs text-orange-800">
             ⚠ Membre invité. Mot de passe temporaire (communiquez-le hors-ligne, il ne sera plus affiché) :{" "}
@@ -200,6 +205,7 @@ export default function EquipePage() {
           </p>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

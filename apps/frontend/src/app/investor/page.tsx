@@ -169,7 +169,7 @@ export default function InvestorDashboardPage() {
             </svg>
             Explorer les opportunités
           </Link>
-          <NotifBell />
+          <NotifBell href="/investor/notifications" />
         </div>
       </header>
 

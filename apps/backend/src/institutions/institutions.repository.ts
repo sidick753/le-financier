@@ -177,4 +177,24 @@ export class InstitutionsRepository {
           : null,
     };
   }
+
+  // ── Alertes AML / LAB-CFT ──────────────────────────────────────────────
+
+  async findAmlAlerts(institutionId: string) {
+    return this.prisma.amlAlert.findMany({
+      where: { institutionId },
+      orderBy: { detectedAt: 'desc' },
+    });
+  }
+
+  async findAmlAlertById(id: string) {
+    return this.prisma.amlAlert.findUnique({ where: { id } });
+  }
+
+  async resolveAmlAlert(id: string) {
+    return this.prisma.amlAlert.update({
+      where: { id },
+      data: { status: 'RESOLU', resolvedAt: new Date() },
+    });
+  }
 }

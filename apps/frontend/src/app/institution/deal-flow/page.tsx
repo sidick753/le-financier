@@ -5,6 +5,7 @@ import { useInstitutionData, gradeToRisk, isRecentlyCreated, GRADE_CLASSNAMES, R
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
+import { NotifBell } from "@/components/ui/notif-bell";
 
 const CATEGORY_LABELS: Record<string, string> = {
   FACTURE: "Affacturage",
@@ -64,15 +65,19 @@ export default function DealFlowPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Deal Flow</h1>
-        <p className="text-sm text-gray-500">
-          {filtered.length} opportunités disponibles · Accès institutionnel
-        </p>
-      </div>
+    <>
+      <header className="sticky top-0 z-10 flex h-15 items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
+        <div>
+          <p className="text-[18px] font-bold tracking-tight text-slate-900">Deal Flow</p>
+          <p className="text-xs text-slate-500">
+            {filtered.length} opportunités disponibles · Accès institutionnel
+          </p>
+        </div>
+        <NotifBell href="/institution/notifications" />
+      </header>
 
-      {/* Bannière Premium */}
+      <div className="p-8 pb-16">
+        {/* Bannière Premium */}
       <div className="mb-6 flex items-center justify-between rounded-xl bg-brand-700 px-5 py-3">
         <div className="flex items-center gap-3">
           <span className="text-yellow-400">⭐</span>
@@ -241,6 +246,7 @@ export default function DealFlowPage() {
           );
         })}
       </div>
-    </div>
+      </div>
+    </>
   );
 }

@@ -142,4 +142,36 @@ export class InstitutionsService {
       ratioLevier: { value: null, disponible: false },
     };
   }
+
+  // ── AML / LAB-CFT ──────────────────────────────────────────────────────
+
+  async getAmlAlerts(userId: string) {
+    const membership = await this.getOrProvisionMembership(userId);
+    const alerts = await this.institutionsRepository.findAmlAlerts(membership.institutionId);
+
+    const now = new Date();
+    const alertesActives = alerts.filter((a) => a.status !== 'RESOLU').length;
+    const casBloques = alerts.filter((a) => a.status === 'BLOQUE').length;
+    const resolusCeMois = alerts.filter(
+      (a) =>
+        a.status === 'RESOLU' &&
+        a.resolvedAt &&
+        a.resolvedAt.getMonth() === now.getMonth() &&
+        a.resolvedAt.getFullYear() === now.getFullYear(),
+    ).length;
+
+    return {
+      stats: { alertesActives, casBloques, resolusCeMois },
+      alerts,
+    };
+  }
+
+  async resolveAmlAlert(userId: string, alertId: string) {
+    const membership = await this.getOrProvisionMembership(userId);
+    const alert = await this.institutionsRepository.findAmlAlertById(alertId);
+    if (!alert || alert.institutionId !== membership.institutionId) {
+      throw new NotFoundException('Alerte introuvable.');
+    }
+    return this.institutionsRepository.resolveAmlAlert(alertId);
+  }
 }

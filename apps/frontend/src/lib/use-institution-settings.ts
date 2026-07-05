@@ -48,11 +48,32 @@ export interface RiskIndicators {
   ratioLevier: RiskIndicator;
 }
 
+export type AmlAlertType = "TRANSACTION_INHABITUELLE" | "PEP_DETECTE" | "BENEFICIAIRE_NON_IDENTIFIE";
+export type AmlAlertStatus = "EN_ANALYSE" | "BLOQUE" | "RESOLU";
+
+export interface AmlAlert {
+  id: string;
+  clientLabel: string;
+  alertType: AmlAlertType;
+  amount: string | null;
+  status: AmlAlertStatus;
+  detectedAt: string;
+  resolvedAt: string | null;
+}
+
+export interface AmlStats {
+  alertesActives: number;
+  casBloques: number;
+  resolusCeMois: number;
+}
+
 export function useInstitutionSettings() {
   const { token } = useAuth();
   const [institution, setInstitution] = useState<InstitutionProfile | null>(null);
   const [members, setMembers] = useState<InstitutionMember[]>([]);
   const [riskIndicators, setRiskIndicators] = useState<RiskIndicators | null>(null);
+  const [amlAlerts, setAmlAlerts] = useState<AmlAlert[]>([]);
+  const [amlStats, setAmlStats] = useState<AmlStats>({ alertesActives: 0, casBloques: 0, resolusCeMois: 0 });
   const [isLoading, setIsLoading] = useState(true);
 
   const refresh = useCallback(() => {
@@ -62,11 +83,14 @@ export function useInstitutionSettings() {
       api.get<InstitutionProfile>("/institutions/mine", token),
       api.get<InstitutionMember[]>("/institutions/mine/members", token),
       api.get<RiskIndicators>("/institutions/mine/risk-indicators", token),
+      api.get<{ stats: AmlStats; alerts: AmlAlert[] }>("/institutions/mine/aml-alerts", token),
     ])
-      .then(([inst, mem, risk]) => {
+      .then(([inst, mem, risk, aml]) => {
         setInstitution(inst);
         setMembers(mem);
         setRiskIndicators(risk);
+        setAmlStats(aml.stats);
+        setAmlAlerts(aml.alerts);
       })
       .finally(() => setIsLoading(false));
   }, [token]);
@@ -120,10 +144,24 @@ export function useInstitutionSettings() {
     refresh();
   }
 
+  async function resolveAmlAlert(alertId: string) {
+    if (!token) return;
+    const wasBloque = amlAlerts.find((a) => a.id === alertId)?.status === "BLOQUE";
+    const updated = await api.patch<AmlAlert>(`/institutions/mine/aml-alerts/${alertId}/resolve`, {}, token);
+    setAmlAlerts((prev) => prev.map((a) => (a.id === alertId ? updated : a)));
+    setAmlStats((prev) => ({
+      alertesActives: Math.max(0, prev.alertesActives - 1),
+      casBloques: wasBloque ? Math.max(0, prev.casBloques - 1) : prev.casBloques,
+      resolusCeMois: prev.resolusCeMois + 1,
+    }));
+  }
+
   return {
     institution,
     members,
     riskIndicators,
+    amlAlerts,
+    amlStats,
     isLoading,
     refresh,
     updateProfile,
@@ -132,5 +170,6 @@ export function useInstitutionSettings() {
     changePassword,
     inviteMember,
     removeMember,
+    resolveAmlAlert,
   };
 }
