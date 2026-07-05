@@ -9,7 +9,8 @@
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "studio": "prisma studio --port 4555",
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "ts-node prisma/seed.ts",
+    "seed:admin": "ts-node prisma/seed-admin.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0"
