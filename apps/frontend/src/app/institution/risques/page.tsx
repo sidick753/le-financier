@@ -122,12 +122,6 @@ function computeStatus(value: number, seuil: number, plusBas: boolean): Indicato
   return "violation";
 }
 
-const RAPPORTS = [
-  { label: "Rapport prudentiel T2 2026", deadline: "30/06/2026", progress: 85, status: "urgent" },
-  { label: "Déclaration LAB-CFT S1 2026", deadline: "15/07/2026", progress: 40, status: "en_cours" },
-  { label: "Statistiques marché PME", deadline: "01/07/2026", progress: 100, status: "soumis" },
-];
-
 export default function RisquesPage() {
   const { riskIndicators, amlAlerts, amlStats, isLoading, refresh, resolveAmlAlert } = useInstitutionSettings();
   const [tab, setTab] = useState<RisqueTab>("prudentiels");
@@ -281,35 +275,11 @@ export default function RisquesPage() {
 
       {/* Rapports réglementaires */}
       {tab === "reglementaires" && (
-        <div className="space-y-4">
-          {RAPPORTS.map((r) => (
-            <div key={r.label} className="rounded-xl border border-gray-200 bg-white p-5">
-              <div className="mb-3 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">{r.label}</p>
-                  <p className="text-xs text-gray-400">À soumettre avant le {r.deadline}</p>
-                </div>
-                <button className={`rounded-md px-3 py-1 text-xs font-medium ${
-                  r.status === "soumis" ? "bg-green-100 text-green-700" :
-                  r.status === "urgent" ? "bg-red-100 text-red-700" :
-                  "bg-orange-100 text-orange-700"
-                }`}>
-                  {r.status === "soumis" ? "Voir" : r.status === "urgent" ? "Compléter" : "Continuer"}
-                </button>
-              </div>
-              <div className="h-1.5 w-full rounded-full bg-gray-100">
-                <div
-                  className={`h-1.5 rounded-full ${
-                    r.status === "soumis" ? "bg-green-500" :
-                    r.status === "urgent" ? "bg-brand-700" :
-                    "bg-orange-400"
-                  }`}
-                  style={{ width: `${r.progress}%` }}
-                />
-              </div>
-              <p className="mt-1 text-right text-xs text-gray-400">{r.progress}%</p>
-            </div>
-          ))}
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-white p-16 text-center">
+          <p className="text-sm font-medium text-gray-700">Bientôt disponible</p>
+          <p className="mt-1 text-sm text-gray-400">
+            Le suivi des rapports réglementaires (BCEAO, LAB-CFT, statistiques marché) arrive prochainement.
+          </p>
         </div>
       )}
 

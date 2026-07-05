@@ -49,12 +49,20 @@ export default function InstitutionPortefeuillePage() {
   const { investments, isLoading, totalDeployed, avgReturn, activeInvestments } =
     useInstitutionData();
 
+  const deployedInvestments = investments.filter((i) =>
+    ["COMMITTED", "SETTLED_OFF_PLATFORM"].includes(i.status),
+  );
   const monthlyData = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - (5 - i));
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setMonth(monthStart.getMonth() - (5 - i));
+    const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
+    const total = deployedInvestments
+      .filter((inv) => new Date(inv.createdAt) < monthEnd)
+      .reduce((sum, inv) => sum + Number(inv.amountCommitted), 0);
     return {
-      label: d.toLocaleDateString("fr-FR", { month: "short" }),
-      total: totalDeployed * (0.6 + i * 0.08),
+      label: monthStart.toLocaleDateString("fr-FR", { month: "short" }),
+      total,
     };
   });
 

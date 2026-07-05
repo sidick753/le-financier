@@ -17,9 +17,6 @@ const STATUS_PIPELINE: Record<string, { label: string; className: string }> = {
   INTERESTED: { label: "Due diligence", className: "bg-purple-100 text-purple-700" },
 };
 
-// Assignation illustrative — la gestion réelle des analystes arrive avec la page Équipe (cf. équipe/page.tsx)
-const PIPELINE_ANALYSTS = ["K. Assoumou", "M. Touré"];
-
 function formatAmount(v: number) {
   if (v >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(1)} Md`;
   if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(0)} M`;
@@ -153,11 +150,10 @@ export default function InstitutionOverviewPage() {
                     <th className="px-5 py-3 text-center font-medium">Note</th>
                     <th className="px-5 py-3 text-center font-medium">Score</th>
                     <th className="px-5 py-3 text-left font-medium">Statut</th>
-                    <th className="px-5 py-3 text-left font-medium">Analyste</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {investments.slice(0, 5).map((inv, i) => {
+                  {investments.slice(0, 5).map((inv) => {
                     const statusConfig =
                       STATUS_PIPELINE[inv.status] ?? STATUS_PIPELINE.NEGOTIATING;
                     const report = inv.fundingRequest.scoringReports[0];
@@ -193,9 +189,6 @@ export default function InstitutionOverviewPage() {
                           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusConfig.className}`}>
                             {statusConfig.label}
                           </span>
-                        </td>
-                        <td className="px-5 py-3 text-xs text-gray-600">
-                          {PIPELINE_ANALYSTS[i % PIPELINE_ANALYSTS.length]}
                         </td>
                       </tr>
                     );
