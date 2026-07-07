@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useScoringAdmin } from "@/lib/use-scoring-admin";
+import { useEffect, useState } from "react";
+import { useScoringAdmin, ScoringWeightCriterion } from "@/lib/use-scoring-admin";
 import { ScoringSnapshotModal } from "@/components/scoring-snapshot-modal";
 
 type Tab = "automatise" | "configuration" | "historique";
@@ -28,37 +28,15 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   A_COMPLETER:        { label: "À compléter", className: "bg-orange-100 text-orange-700" },
   VALIDATED:          { label: "Publié",      className: "bg-brand-100 text-brand-700" },
   REFUSED:            { label: "Refusé",      className: "bg-red-100 text-red-700" },
+  ERREUR_CALCUL:      { label: "Erreur de calcul", className: "bg-red-100 text-red-700" },
 };
 
 const DECISION_CONFIG: Record<string, { label: string; className: string }> = {
   VALIDATED:            { label: "Publié",      className: "text-green-600" },
   REFUSED:              { label: "Refusé",      className: "text-red-600" },
+  CALCULATED:           { label: "Brouillon",   className: "text-gray-400" },
   PENDING_VALIDATION:   { label: "Brouillon",   className: "text-gray-400" },
   COMPLEMENTS_DEMANDES: { label: "Compléments", className: "text-orange-600" },
-};
-
-const DEFAULT_WEIGHTS = {
-  FACTURE: [
-    { label: "Qualité des débiteurs",              weight: 35 },
-    { label: "Historique délai de paiement",       weight: 25 },
-    { label: "Taux d'impayé historique",           weight: 20 },
-    { label: "Diversification clients",            weight: 12 },
-    { label: "Solidité financière PME",            weight:  8 },
-  ],
-  PRET: [
-    { label: "Capacité de remboursement (DSCR)",   weight: 30 },
-    { label: "Solidité financière",                weight: 25 },
-    { label: "Qualité des garanties",              weight: 20 },
-    { label: "Historique du dirigeant",            weight: 15 },
-    { label: "Risque sectoriel",                   weight: 10 },
-  ],
-  EQUITY: [
-    { label: "Potentiel de croissance",            weight: 30 },
-    { label: "Qualité du management",              weight: 25 },
-    { label: "Position concurrentielle",           weight: 20 },
-    { label: "Solidité financière actuelle",       weight: 15 },
-    { label: "Gouvernance & droits investisseurs", weight: 10 },
-  ],
 };
 
 const BAREME = [
@@ -70,13 +48,19 @@ const BAREME = [
 ];
 
 export default function AdminScoringPage() {
-  const { dossiers, history, isLoading, actionLoading, launchScoring, validateReport } =
-    useScoringAdmin();
+  const {
+    dossiers, history, isLoading, actionLoading, launchScoring, validateReport,
+    weights, weightsLoading, weightsSaving, weightsError, saveWeights,
+  } = useScoringAdmin();
   const [tab, setTab] = useState<Tab>("automatise");
   const [search, setSearch] = useState("");
   const [productFilter, setProductFilter] = useState("Tous");
-  const [weights, setWeights] = useState(DEFAULT_WEIGHTS);
+  const [draftWeights, setDraftWeights] = useState<Record<string, ScoringWeightCriterion[]>>({});
   const [snapshotReportId, setSnapshotReportId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (weights) setDraftWeights(weights);
+  }, [weights]);
 
   const aScorer    = dossiers.filter((d) => d.scoringStatus === "A_SCORER").length;
   const enAnalyse  = dossiers.filter((d) => d.scoringStatus === "EXTRACTION").length;
@@ -196,7 +180,7 @@ export default function AdminScoringPage() {
                     {filteredDossiers.map((d) => {
                       const productCfg = PRODUCT_LABELS[d.product];
                       const statusCfg  = STATUS_CONFIG[d.scoringStatus] ?? STATUS_CONFIG.A_SCORER;
-                      const canScore   = d.scoringStatus === "A_SCORER";
+                      const canScore   = d.scoringStatus === "A_SCORER" || d.scoringStatus === "ERREUR_CALCUL";
                       const hasScore   = d.score !== null && d.grade !== null;
 
                       return (
@@ -254,7 +238,7 @@ export default function AdminScoringPage() {
                                 disabled={actionLoading === d.id}
                                 className="flex items-center gap-1 rounded-md bg-brand-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-800 disabled:opacity-50"
                               >
-                                {actionLoading === d.id ? "⏳" : "⚡"} Lancer le scoring
+                                {actionLoading === d.id ? "⏳" : "⚡"} {d.scoringStatus === "ERREUR_CALCUL" ? "Relancer le scoring" : "Lancer le scoring"}
                               </button>
                             )}
                             {hasScore && d.reportId && (
@@ -268,6 +252,11 @@ export default function AdminScoringPage() {
                             )}
                             {d.scoringStatus === "A_COMPLETER" && (
                               <span className="text-xs text-orange-600">⚠ Dossier incomplet</span>
+                            )}
+                            {d.scoringStatus === "ERREUR_CALCUL" && d.scoringError && (
+                              <p className="mt-1 max-w-xs truncate text-xs text-red-500" title={d.scoringError}>
+                                {d.scoringError}
+                              </p>
                             )}
                           </td>
                         </tr>
@@ -287,10 +276,25 @@ export default function AdminScoringPage() {
       {/* ═══ ONGLET 2 — CONFIGURATION ═══ */}
       {tab === "configuration" && (
         <div className="space-y-6">
+          {weightsLoading && !weights && (
+            <p className="p-5 text-sm text-gray-400">Chargement des pondérations…</p>
+          )}
+
+          {weightsError && (
+            <div className="rounded-lg bg-red-50 px-4 py-2.5 text-sm font-medium text-red-700">
+              {weightsError}
+            </div>
+          )}
+
           {(["FACTURE", "PRET", "EQUITY"] as const).map((product) => {
-            const productCfg     = PRODUCT_LABELS[product];
-            const productWeights = weights[product];
-            const total          = productWeights.reduce((s, w) => s + w.weight, 0);
+            const productCfg = PRODUCT_LABELS[product];
+            const criteria   = draftWeights[product];
+            if (!criteria) return null;
+
+            const savedCriteria = weights?.[product] ?? [];
+            const total   = criteria.reduce((s, c) => s + c.weight, 0);
+            const isDirty = JSON.stringify(criteria) !== JSON.stringify(savedCriteria);
+            const isSaving = weightsSaving === product;
 
             return (
               <div key={product} className="rounded-xl border border-gray-200 bg-white p-5">
@@ -309,8 +313,8 @@ export default function AdminScoringPage() {
                 </div>
 
                 <div className="space-y-4">
-                  {productWeights.map((criterion, index) => (
-                    <div key={criterion.label}>
+                  {criteria.map((criterion, index) => (
+                    <div key={criterion.key}>
                       <div className="mb-1 flex items-center justify-between">
                         <p className="text-xs text-gray-700">{criterion.label}</p>
                         <span className="text-xs font-bold text-gray-900">{criterion.weight} %</span>
@@ -321,11 +325,12 @@ export default function AdminScoringPage() {
                         max={60}
                         value={criterion.weight}
                         onChange={(e) => {
-                          const next = { ...weights };
-                          next[product] = productWeights.map((w, i) =>
-                            i === index ? { ...w, weight: Number(e.target.value) } : w,
-                          );
-                          setWeights(next);
+                          setDraftWeights({
+                            ...draftWeights,
+                            [product]: criteria.map((c, i) =>
+                              i === index ? { ...c, weight: Number(e.target.value) } : c,
+                            ),
+                          });
                         }}
                         className="w-full accent-brand-700"
                       />
@@ -340,16 +345,22 @@ export default function AdminScoringPage() {
                       {total}%
                     </strong>
                   </p>
-                  <button
-                    onClick={() => {
-                      const next = { ...weights };
-                      next[product] = DEFAULT_WEIGHTS[product].map((w) => ({ ...w }));
-                      setWeights(next);
-                    }}
-                    className="text-xs text-brand-700 hover:underline"
-                  >
-                    Réinitialiser
-                  </button>
+                  <div className="flex items-center gap-4">
+                    <button
+                      disabled={!isDirty || isSaving}
+                      onClick={() => setDraftWeights({ ...draftWeights, [product]: savedCriteria })}
+                      className="text-xs text-gray-500 hover:underline disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      disabled={!isDirty || total !== 100 || isSaving}
+                      onClick={() => saveWeights(product, criteria).catch(() => {})}
+                      className="text-xs font-semibold text-brand-700 hover:underline disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {isSaving ? "Enregistrement…" : "Enregistrer"}
+                    </button>
+                  </div>
                 </div>
               </div>
             );

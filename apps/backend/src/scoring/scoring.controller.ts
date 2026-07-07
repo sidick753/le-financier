@@ -1,7 +1,9 @@
 import {
-  Controller, Get, Post, Patch, Param, Body, UseGuards, Request,
+  Controller, Get, Post, Put, Patch, Param, Body, UseGuards, Request,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import { IsArray, IsInt, IsString, Max, Min, ValidateNested } from 'class-validator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -10,6 +12,23 @@ import { ScoringService } from './scoring.service';
 class ValidateReportDto {
   validatedScore?: number;
   notes?: string;
+}
+
+class WeightCriterionDto {
+  @IsString()
+  key: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  weight: number;
+}
+
+class UpdateWeightsDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => WeightCriterionDto)
+  weights: WeightCriterionDto[];
 }
 
 @ApiTags('Scoring')
@@ -61,5 +80,19 @@ export class ScoringController {
       dto.validatedScore,
       dto.notes,
     );
+  }
+
+  @ApiOperation({ summary: '[ADMIN] Récupérer les pondérations de scoring configurées (par produit)' })
+  @Get('weights')
+  getWeights() {
+    return this.scoringService.getWeightConfigs();
+  }
+
+  @ApiOperation({ summary: '[ADMIN] Mettre à jour les pondérations de scoring d\'un produit' })
+  @ApiParam({ name: 'product', description: 'FACTURE | PRET | EQUITY' })
+  @Put('weights/:product')
+  async updateWeights(@Param('product') product: string, @Body() dto: UpdateWeightsDto) {
+    await this.scoringService.updateWeights(product, dto.weights);
+    return { message: 'Pondérations mises à jour avec succès.' };
   }
 }

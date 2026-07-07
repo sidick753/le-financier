@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "./api";
+import { ScoringReportSummary } from "./use-institution-data";
 
 export interface Opportunity {
   id: string;
@@ -15,6 +16,7 @@ export interface Opportunity {
   currency: string;
   closesAt: string | null;
   organization: { legalName: string };
+  scoringReports: ScoringReportSummary[];
 }
 
 interface Filters {

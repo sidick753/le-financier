@@ -15,6 +15,7 @@ export interface ScoringDossier {
   grade: string | null;
   score: number | null;
   reportId: string | null;
+  scoringError: string | null;
 }
 
 export interface ScoringHistoryReport {
@@ -39,12 +40,24 @@ export interface ScoringHistory {
   reports: ScoringHistoryReport[];
 }
 
+export interface ScoringWeightCriterion {
+  key: string;
+  label: string;
+  weight: number;
+}
+
+export type ScoringWeights = Record<string, ScoringWeightCriterion[]>;
+
 export function useScoringAdmin() {
   const { token } = useAuth();
   const [dossiers, setDossiers] = useState<ScoringDossier[]>([]);
   const [history, setHistory] = useState<ScoringHistory | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [weights, setWeights] = useState<ScoringWeights | null>(null);
+  const [weightsLoading, setWeightsLoading] = useState(true);
+  const [weightsSaving, setWeightsSaving] = useState<string | null>(null);
+  const [weightsError, setWeightsError] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
     if (!token) return;
@@ -64,13 +77,45 @@ export function useScoringAdmin() {
     refresh();
   }, [refresh]);
 
+  const refreshWeights = useCallback(() => {
+    if (!token) return;
+    setWeightsLoading(true);
+    api
+      .get<ScoringWeights>("/scoring/weights", token)
+      .then(setWeights)
+      .finally(() => setWeightsLoading(false));
+  }, [token]);
+
+  useEffect(() => {
+    refreshWeights();
+  }, [refreshWeights]);
+
+  async function saveWeights(product: string, criteria: ScoringWeightCriterion[]) {
+    if (!token) return;
+    setWeightsSaving(product);
+    setWeightsError(null);
+    try {
+      await api.put(
+        `/scoring/weights/${product}`,
+        { weights: criteria.map(({ key, weight }) => ({ key, weight })) },
+        token,
+      );
+      refreshWeights();
+    } catch (err) {
+      setWeightsError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement.");
+      throw err;
+    } finally {
+      setWeightsSaving(null);
+    }
+  }
+
   async function launchScoring(fundingRequestId: string) {
     if (!token) return;
     setActionLoading(fundingRequestId);
     try {
       await api.post(`/scoring/compute/${fundingRequestId}`, {}, token);
-      refresh();
     } finally {
+      refresh();
       setActionLoading(null);
     }
   }
@@ -90,5 +135,8 @@ export function useScoringAdmin() {
     }
   }
 
-  return { dossiers, history, isLoading, actionLoading, launchScoring, validateReport, refresh };
+  return {
+    dossiers, history, isLoading, actionLoading, launchScoring, validateReport, refresh,
+    weights, weightsLoading, weightsSaving, weightsError, saveWeights, refreshWeights,
+  };
 }

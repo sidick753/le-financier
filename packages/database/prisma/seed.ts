@@ -11,6 +11,28 @@ function daysAgo(days: number): Date {
 // Hash bcrypt pré-calculé pour "Demo1234!" (mot de passe des comptes analystes de démo)
 const DEMO_PASSWORD_HASH = '$2b$12$kmQ4Djdr0ybrI0yL9YlwHO2IbN/v56JkIJtLXTm1CF/neYtJP4L/a';
 
+// Hash bcrypt pré-calculé pour "motdepasse123" (mot de passe partagé par les comptes de
+// test PME/Investisseur/Banque de la page de login — apps/frontend/src/app/login/page.tsx)
+const TEST_ACCOUNT_PASSWORD_HASH = '$2b$12$D.tHR8uV6ByF5lA2/Cf5FuanqaQ0e2oi3TuDvm9MJ2SkGE7DxVoOi';
+
+async function ensureTestAccount(email: string, role: 'PME_OWNER' | 'INVESTOR' | 'INSTITUTION', firstName: string, lastName: string) {
+  let user = await prisma.user.findUnique({ where: { email } });
+  if (!user) {
+    user = await prisma.user.create({
+      data: {
+        email,
+        passwordHash: TEST_ACCOUNT_PASSWORD_HASH,
+        firstName,
+        lastName,
+        role,
+        kycStatus: 'VERIFIED',
+      },
+    });
+    console.log(`Compte de test créé : ${email} (mot de passe : motdepasse123)`);
+  }
+  return user;
+}
+
 async function ensureInstitutionTeam(ownerId: string) {
   let institutionRecord = await prisma.institution.findFirst({
     where: { members: { some: { userId: ownerId } } },
@@ -132,14 +154,9 @@ async function ensureAmlAlerts(institutionId: string) {
 }
 
 async function main() {
-  const institution = await prisma.user.findUnique({
-    where: { email: 'banque@lefinancier.ci' },
-  });
-  if (!institution) {
-    throw new Error(
-      "Utilisateur banque@lefinancier.ci introuvable — ce seed suppose que le compte de test institution existe déjà.",
-    );
-  }
+  await ensureTestAccount('test@lefinancier.ci', 'PME_OWNER', 'Test', 'PME');
+  await ensureTestAccount('investisseur@lefinancier.ci', 'INVESTOR', 'Test', 'Investisseur');
+  const institution = await ensureTestAccount('banque@lefinancier.ci', 'INSTITUTION', 'Banque', 'Atlantique');
 
   const { institutionId, teammateIds } = await ensureInstitutionTeam(institution.id);
 

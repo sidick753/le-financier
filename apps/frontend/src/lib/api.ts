@@ -40,6 +40,12 @@ export const api = {
       body: JSON.stringify(body),
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     }),
+  put: <T>(path: string, body: unknown, token?: string) =>
+    request<T>(path, {
+      method: "PUT",
+      body: JSON.stringify(body),
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }),
   delete: <T>(path: string, token?: string) =>
     request<T>(path, {
       method: "DELETE",

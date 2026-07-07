@@ -1,6 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ScoringRepository } from './scoring.repository';
-import { BAREME_VERSION, scoreFacture, scorePret, scoreEquity, ScoringResult } from './scoring.engine';
+import {
+  BAREME_VERSION, scoreFacture, scorePret, scoreEquity, ScoringResult,
+  CRITERIA_BY_PRODUCT, WeightCriterion, WeightMap,
+} from './scoring.engine';
 
 @Injectable()
 export class ScoringService {
@@ -19,7 +22,28 @@ export class ScoringService {
   }): Promise<void> {
     const { fundingRequestId, organizationId, product, amountRequested, durationMonths } = params;
 
+    try {
+      await this.computeAndSaveOrThrow({ fundingRequestId, organizationId, product, amountRequested, durationMonths });
+      await this.scoringRepository.clearScoringError(fundingRequestId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erreur inconnue lors du calcul du scoring.';
+      this.logger.error(`Échec du calcul de scoring — ${product} | ${fundingRequestId} : ${message}`);
+      await this.scoringRepository.setScoringError(fundingRequestId, message);
+      throw err;
+    }
+  }
+
+  private async computeAndSaveOrThrow(params: {
+    fundingRequestId: string;
+    organizationId: string;
+    product: string;
+    amountRequested?: number;
+    durationMonths?: number;
+  }): Promise<void> {
+    const { fundingRequestId, organizationId, product, amountRequested, durationMonths } = params;
+
     const input = await this.scoringRepository.findScoringInput(fundingRequestId);
+    const weightMap = await this.getWeightMap(product);
 
     let result: ScoringResult;
 
@@ -41,7 +65,7 @@ export class ScoringService {
         delaiPaiementMenu:   input.delaiPaiementMenu,
         tauxImpaye12m:       input.tauxImpaye12m       ? Number(input.tauxImpaye12m)       : null,
         partPlusGrosClient:  input.partPlusGrosClient  ? Number(input.partPlusGrosClient)  : null,
-      });
+      }, weightMap);
     } else if (product === 'PRET') {
       result = scorePret({
         cashFlowAnnuel:          input.cashFlowAnnuel          ? Number(input.cashFlowAnnuel)          : null,
@@ -60,7 +84,7 @@ export class ScoringService {
         secteurSoutienPublic:    input.secteurSoutienPublic,
         amountRequested,
         durationMonths,
-      });
+      }, weightMap);
     } else if (product === 'EQUITY') {
       result = scoreEquity({
         tcamCa3ans:           input.tcamCa3ans           ? Number(input.tcamCa3ans)           : null,
@@ -75,7 +99,7 @@ export class ScoringService {
         margeBrute:           input.margeBrute            ? Number(input.margeBrute)            : null,
         droitsInvestisseur:   input.droitsInvestisseur,
         transparence:         input.transparence,
-      });
+      }, weightMap);
     } else {
       this.logger.warn(`Produit inconnu pour le scoring : ${product}`);
       return;
@@ -136,7 +160,9 @@ export class ScoringService {
       const completude = Math.min(100, Math.round((docCount / 5) * 100));
 
       let scoringStatus = 'A_SCORER';
-      if (latestReport) {
+      if ((fr as any).scoringError) {
+        scoringStatus = 'ERREUR_CALCUL';
+      } else if (latestReport) {
         scoringStatus = latestReport.status;
       } else if (!(fr as any).scoringInput) {
         scoringStatus = 'A_COMPLETER';
@@ -153,6 +179,7 @@ export class ScoringService {
         grade:         latestReport?.grade ?? null,
         score:         latestReport?.autoScore ? Number(latestReport.autoScore) : null,
         reportId:      latestReport?.id ?? null,
+        scoringError:  (fr as any).scoringError ?? null,
       };
     });
   }
@@ -178,5 +205,56 @@ export class ScoringService {
       },
       reports,
     };
+  }
+
+  // ── Pondérations de scoring configurables ─────────────────────────────────
+
+  async getWeightConfigs(): Promise<Record<string, WeightCriterion[]>> {
+    const rows = await this.scoringRepository.getAllWeightRows();
+    const overrides = new Map(rows.map((r) => [`${r.product}:${r.criterionKey}`, Number(r.weight)]));
+
+    const result: Record<string, WeightCriterion[]> = {};
+    for (const [product, criteria] of Object.entries(CRITERIA_BY_PRODUCT)) {
+      result[product] = criteria.map((c) => ({
+        key:    c.key,
+        label:  c.label,
+        weight: overrides.get(`${product}:${c.key}`) ?? c.weight,
+      }));
+    }
+    return result;
+  }
+
+  async updateWeights(product: string, weights: { key: string; weight: number }[]) {
+    const criteria = CRITERIA_BY_PRODUCT[product];
+    if (!criteria) throw new BadRequestException('Produit de scoring inconnu.');
+
+    const validKeys = new Set(criteria.map((c) => c.key));
+    if (weights.length !== criteria.length || weights.some((w) => !validKeys.has(w.key))) {
+      throw new BadRequestException('Toutes les pondérations du produit doivent être fournies avec des critères valides.');
+    }
+    if (weights.some((w) => !Number.isFinite(w.weight) || w.weight < 1 || w.weight > 100)) {
+      throw new BadRequestException('Chaque pondération doit être un nombre entre 1 et 100.');
+    }
+    const total = weights.reduce((s, w) => s + w.weight, 0);
+    if (total !== 100) {
+      throw new BadRequestException(`La somme des pondérations doit être égale à 100 (actuellement ${total}).`);
+    }
+
+    const labelByKey = new Map(criteria.map((c) => [c.key, c.label]));
+    await this.scoringRepository.saveWeights(
+      product,
+      weights.map((w) => ({ key: w.key, label: labelByKey.get(w.key)!, weight: w.weight })),
+    );
+
+    this.logger.log(`Pondérations de scoring mises à jour — ${product} : ${JSON.stringify(weights)}`);
+  }
+
+  private async getWeightMap(product: string): Promise<WeightMap> {
+    const criteria = CRITERIA_BY_PRODUCT[product];
+    if (!criteria) return {};
+
+    const rows = await this.scoringRepository.getWeightRows(product);
+    const overrides = new Map(rows.map((r) => [r.criterionKey, Number(r.weight)]));
+    return Object.fromEntries(criteria.map((c) => [c.key, overrides.get(c.key) ?? c.weight]));
   }
 }

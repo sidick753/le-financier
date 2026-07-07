@@ -257,6 +257,10 @@ model FundingRequest {
   publishedAt DateTime?
   closesAt    DateTime?
 
+  // Rempli si le dernier calcul de scoring automatique a échoué (visible admin) ;
+  // remis à null dès qu'un calcul aboutit.
+  scoringError String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -512,6 +516,17 @@ model ScoringReport {
   @@map("scoring_reports")
 }
 
+model ScoringWeight {
+  id           String   @id @default(uuid())
+  product      String   // FACTURE | PRET | EQUITY
+  criterionKey String
+  label        String
+  weight       Int
+  updatedAt    DateTime @updatedAt
+
+  @@unique([product, criterionKey])
+  @@map("scoring_weights")
+}
 
 
 

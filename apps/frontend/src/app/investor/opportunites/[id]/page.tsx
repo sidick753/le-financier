@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { useNegotiationSocket } from "@/lib/use-negotiation-socket";
+import { ScoringReportSummary } from "@/lib/use-institution-data";
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,7 @@ interface Opportunity {
   durationMonths: number | null;
   currency: string;
   organization: { legalName: string };
+  scoringReports: ScoringReportSummary[];
 }
 
 interface NegotiationOffer {
@@ -251,6 +253,8 @@ export default function OpportunityDetailPage() {
     : 0;
   const totalEstimate = Number(amount || 0) + gainEstimate;
 
+  const scoreReport = opportunity.scoringReports?.[0] ?? null;
+
   return (
     <div className="min-h-screen bg-slate-50">
 
@@ -302,8 +306,13 @@ export default function OpportunityDetailPage() {
           />
           <StatCard
             label="Score risque"
-            value="Non évalué"
-            valueClass="text-slate-300"
+            value={scoreReport ? `${Math.round(Number(scoreReport.autoScore))}/100 · ${scoreReport.grade}` : "Non évalué"}
+            valueClass={
+              !scoreReport ? "text-slate-300" :
+              scoreReport.grade === "A+" || scoreReport.grade === "A" ? "text-green-600" :
+              scoreReport.grade === "BBB" ? "text-yellow-600" :
+              scoreReport.grade === "BB" ? "text-orange-600" : "text-red-600"
+            }
             icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>}
           />
         </div>

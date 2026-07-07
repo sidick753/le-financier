@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useOpportunities } from "@/lib/use-opportunities";
+import { GRADE_CLASSNAMES } from "@/lib/use-institution-data";
 import { NotifBell } from "@/components/ui/notif-bell";
 
 // ── constants ─────────────────────────────────────────────────────────────────
@@ -61,6 +62,8 @@ function OpportunityCard({ opp }: { opp: import("@/lib/use-opportunities").Oppor
   const badge   = CATEGORY_BADGE[opp.category]  ?? "bg-slate-100 text-slate-600";
   const label   = CATEGORY_LABELS[opp.category] ?? opp.category;
   const closeDate = fmtDate(opp.closesAt);
+  const report = opp.scoringReports?.[0] ?? null;
+  const score = report ? Math.round(Number(report.autoScore)) : null;
 
   return (
     <div className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_2px_8px_rgba(15,23,42,0.04)] transition hover:shadow-[0_4px_20px_rgba(15,23,42,0.08)]">
@@ -98,10 +101,22 @@ function OpportunityCard({ opp }: { opp: import("@/lib/use-opportunities").Oppor
       <div className="mb-4 border-t border-slate-100 pt-4">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-[12px] text-slate-500">Score de risque</span>
-          <span className="text-[12px] font-semibold text-slate-400">Non évalué</span>
+          {report && score !== null ? (
+            <span className="flex items-center gap-1.5">
+              <span className="text-[12px] font-bold text-slate-900">{score}/100</span>
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${GRADE_CLASSNAMES[report.grade ?? ""] ?? "bg-slate-100 text-slate-500"}`}>
+                {report.grade}
+              </span>
+            </span>
+          ) : (
+            <span className="text-[12px] font-semibold text-slate-400">Non évalué</span>
+          )}
         </div>
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-          <div className="h-full w-0 rounded-full bg-slate-300" />
+          <div
+            className={`h-full rounded-full ${score !== null && score >= 70 ? "bg-green-500" : score !== null && score >= 55 ? "bg-yellow-400" : score !== null && score >= 40 ? "bg-orange-400" : score !== null ? "bg-red-400" : "bg-slate-300"}`}
+            style={{ width: `${score ?? 0}%` }}
+          />
         </div>
       </div>
 

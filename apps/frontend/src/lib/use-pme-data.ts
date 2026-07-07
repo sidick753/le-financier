@@ -28,10 +28,16 @@ export interface FundingRequest {
   _count: { investments: number };
 }
 
+export interface ScoringReport {
+  autoScore: string | number;
+  grade: string | null;
+}
+
 export function usePmeData() {
   const { token } = useAuth();
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [fundingRequests, setFundingRequests] = useState<FundingRequest[]>([]);
+  const [scoringReport, setScoringReport] = useState<ScoringReport | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,6 +56,18 @@ export function usePmeData() {
             token!,
           );
           setFundingRequests(requests);
+
+          if (requests.length > 0) {
+            try {
+              const report = await api.get<ScoringReport>(
+                `/funding-requests/${requests[0].id}/scoring`,
+                token!,
+              );
+              setScoringReport(report);
+            } catch {
+              setScoringReport(null); // pas encore scoré
+            }
+          }
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Erreur de chargement.");
@@ -61,5 +79,5 @@ export function usePmeData() {
     load();
   }, [token]);
 
-  return { organization, fundingRequests, isLoading, error };
+  return { organization, fundingRequests, scoringReport, isLoading, error };
 }

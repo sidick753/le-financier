@@ -181,7 +181,7 @@ export default function HomePage() {
               <h2 className="text-[clamp(22px,2.8vw,30px)] font-semibold tracking-[-0.03em] text-slate-900">Opportunités du moment</h2>
               <p className="mt-1.5 text-sm text-slate-500">Découvrez les projets en cours de financement</p>
             </div>
-            <Link href="/login" className="mt-1 inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-[18px] text-sm font-medium text-slate-900 transition hover:border-gray-400 hover:bg-gray-50">
+            <Link href="/opportunites" className="mt-1 inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-[18px] text-sm font-medium text-slate-900 transition hover:border-gray-400 hover:bg-gray-50">
               Voir toutes les opportunités &nbsp;→
             </Link>
           </div>

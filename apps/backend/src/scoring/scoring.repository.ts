@@ -12,6 +12,21 @@ export class ScoringRepository {
     });
   }
 
+  // ── Traçabilité des échecs de calcul (visible dashboard admin) ────────────
+  async setScoringError(fundingRequestId: string, message: string) {
+    await this.prisma.fundingRequest.update({
+      where: { id: fundingRequestId },
+      data: { scoringError: message },
+    });
+  }
+
+  async clearScoringError(fundingRequestId: string) {
+    await this.prisma.fundingRequest.update({
+      where: { id: fundingRequestId },
+      data: { scoringError: null },
+    });
+  }
+
   async createReport(params: {
     organizationId: string;
     fundingRequestId: string;
@@ -114,5 +129,26 @@ export class ScoringRepository {
         validatedAt:     new Date(),
       },
     });
+  }
+
+  // ── Pondérations de scoring configurables ─────────────────────────────────
+  async getAllWeightRows() {
+    return this.prisma.scoringWeight.findMany();
+  }
+
+  async getWeightRows(product: string) {
+    return this.prisma.scoringWeight.findMany({ where: { product } });
+  }
+
+  async saveWeights(product: string, weights: { key: string; label: string; weight: number }[]) {
+    await this.prisma.$transaction(
+      weights.map((c) =>
+        this.prisma.scoringWeight.upsert({
+          where: { product_criterionKey: { product, criterionKey: c.key } },
+          create: { product, criterionKey: c.key, label: c.label, weight: c.weight },
+          update: { weight: c.weight, label: c.label },
+        }),
+      ),
+    );
   }
 }

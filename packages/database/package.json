@@ -9,8 +9,9 @@
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "studio": "prisma studio --port 4555",
-    "seed": "ts-node prisma/seed.ts",
-    "seed:admin": "ts-node prisma/seed-admin.ts"
+    "seed": "DOTENV_CONFIG_PATH=../../.env ts-node -r dotenv/config prisma/seed.ts",
+    "seed:admin": "DOTENV_CONFIG_PATH=../../.env ts-node -r dotenv/config prisma/seed-admin.ts",
+    "db:reset:keep-admin": "DOTENV_CONFIG_PATH=../../.env ts-node -r dotenv/config prisma/reset-keep-admin.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0"

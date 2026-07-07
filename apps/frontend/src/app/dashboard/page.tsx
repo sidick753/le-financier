@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePmeData, FundingRequest } from "@/lib/use-pme-data";
+import { usePmeData, FundingRequest, ScoringReport } from "@/lib/use-pme-data";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { SectionCard } from "@/components/ui/section-card";
 import { NotifBell } from "@/components/ui/notif-bell";
@@ -70,11 +70,26 @@ function buildActivity(requests: FundingRequest[]) {
 
 // ── sub-components ────────────────────────────────────────────────────────────
 
-function ScoreCard({ score = 82, grade = "A" }: { score?: number; grade?: string }) {
+function ScoreCard({ report }: { report: ScoringReport | null }) {
+  if (!report || report.grade === null) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-6">
+        <p className="mb-3.5 text-[11px] font-black uppercase tracking-widest text-slate-400">
+          Score LeFinancier™
+        </p>
+        <p className="text-[13px] text-slate-500">
+          Pas encore de score — soumettez un dossier pour être évalué.
+        </p>
+      </div>
+    );
+  }
+
+  const score = Math.round(Number(report.autoScore));
+  const grade = report.grade;
   const gradeColor =
-    grade === "A" ? "bg-green-100 text-green-700" :
-    grade === "B" ? "bg-cyan-100 text-cyan-700" :
-    grade === "C" ? "bg-amber-100 text-amber-700" :
+    grade === "A+" || grade === "A" ? "bg-green-100 text-green-700" :
+    grade === "BBB" ? "bg-yellow-100 text-yellow-700" :
+    grade === "BB" ? "bg-orange-100 text-orange-700" :
     "bg-red-100 text-red-600";
 
   return (
@@ -165,7 +180,7 @@ function StatusCard({ latestRequest }: { latestRequest: FundingRequest | null })
 // ── page ──────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const { fundingRequests, isLoading, error } = usePmeData();
+  const { fundingRequests, scoringReport, isLoading, error } = usePmeData();
 
   const latestRequest = fundingRequests[0] ?? null;
   const activeRequests = fundingRequests.filter((r) => ["UNDER_REVIEW", "PUBLISHED"].includes(r.status));
@@ -211,7 +226,7 @@ export default function DashboardPage() {
 
         {/* Top row: Score + Status */}
         <div className="mb-5 grid grid-cols-2 gap-4">
-          <ScoreCard />
+          <ScoreCard report={scoringReport} />
           <StatusCard latestRequest={latestRequest} />
         </div>
 

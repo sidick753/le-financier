@@ -43,7 +43,10 @@ export class FundingRepository implements IFundingRepository {
   async findById(id: string) {
     return this.prisma.fundingRequest.findUnique({
       where: { id },
-      include: { organization: true },
+      include: {
+        organization: true,
+        scoringReports: { orderBy: { createdAt: 'desc' }, take: 1 },
+      },
     });
   }
 

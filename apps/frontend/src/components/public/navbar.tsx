@@ -27,7 +27,7 @@ export function Navbar() {
           <div className="hidden items-center gap-8 text-sm font-medium text-gray-700 lg:flex">
             <Link href="/" className="hover:text-blue-700">Accueil</Link>
             <Link href="/comment-ca-marche" className="hover:text-blue-700">Comment ça marche</Link>
-            <Link href="/#opportunites" className="hover:text-blue-700">Opportunités</Link>
+            <Link href="/opportunites" className="hover:text-blue-700">Opportunités</Link>
             <Link href="/tarifs" className="hover:text-blue-700">Tarifs</Link>
             <Link href="/faq" className="hover:text-blue-700">FAQ</Link>
           </div>
@@ -75,7 +75,7 @@ export function Navbar() {
             {[
               { href: "/", label: "Accueil" },
               { href: "/comment-ca-marche", label: "Comment ça marche" },
-              { href: "/#opportunites", label: "Opportunités" },
+              { href: "/opportunites", label: "Opportunités" },
               { href: "/tarifs", label: "Tarifs" },
               { href: "/faq", label: "FAQ" },
             ].map(({ href, label }) => (

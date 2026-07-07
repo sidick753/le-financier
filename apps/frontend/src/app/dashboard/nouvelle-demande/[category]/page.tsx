@@ -25,6 +25,13 @@ const DEBITEUR_TYPES = [
   { value: "particulier", label: "Particulier" },
 ];
 
+const DEBITEUR_SOLVABILITE_OPTIONS = [
+  { value: "solide", label: "Solide — aucun signe de tension" },
+  { value: "neutre", label: "Neutre — pas d'information particulière" },
+  { value: "tension", label: "Tension — retards ou signaux faibles connus" },
+  { value: "incident", label: "Incident — impayé ou litige en cours" },
+];
+
 const DELAI_PAIEMENT_OPTIONS = [
   { value: "a_echeance", label: "À l'échéance (ponctuel)" },
   { value: "leger_retard", label: "Léger retard habituel" },
@@ -178,6 +185,7 @@ export default function NouvelleDemandeFormPage() {
   // Étape 1 — Détails FACTURE
   const [debiteurNom, setDebiteurNom] = useState("");
   const [debiteurType, setDebiteurType] = useState("");
+  const [debiteurSolvabilite, setDebiteurSolvabilite] = useState("");
   const [echeanceDate, setEcheanceDate] = useState("");
   const [anciennete, setAnciennete] = useState("plus_2ans");
   const [partClient, setPartClient] = useState(7.5);
@@ -192,14 +200,16 @@ export default function NouvelleDemandeFormPage() {
   const [secteurCode, setSecteurCode] = useState("");
   const [garantieType, setGarantieType] = useState("");
   const [valeurGarantie, setValeurGarantie] = useState("");
-  // Champs scoring PRET avancés (non affichés dans le formulaire simplifié mais gardés pour compatibilité)
+  // Champs scoring PRET — capacité de remboursement, structure financière, profil dirigeant
   const [cashFlow, setCashFlow] = useState("");
+  const [fluxMobileMoney, setFluxMobileMoney] = useState("");
   const [autonomie, setAutonomie] = useState("");
   const [endettement, setEndettement] = useState("");
   const [liquidite, setLiquidite] = useState("");
   const [garantieCouverture, setGarantieCouverture] = useState("");
   const [dirigeantExp, setDirigeantExp] = useState("");
   const [dirigeantAnt, setDirigeantAnt] = useState("premiere_perenne");
+  const [dirigeantIncidents, setDirigeantIncidents] = useState("aucun");
 
   // Étape 1 — Détails EQUITY
   const [tcam, setTcam] = useState("");
@@ -270,6 +280,7 @@ export default function NouvelleDemandeFormPage() {
           ...(categoryUpper === "FACTURE" && {
             debiteurNom,
             debiteurType,
+            debiteurSolvabilite: debiteurSolvabilite || undefined,
             echeanceFactureDate: echeanceDate || undefined,
             ancienneteRelation: anciennete,
             partPlusGrosClient: partClient / 100,
@@ -283,6 +294,12 @@ export default function NouvelleDemandeFormPage() {
             garantieCouverture: valeurGarantie && amount
               ? Number(valeurGarantie) / Number(amount)
               : undefined,
+            cashFlowAnnuel: cashFlow ? Number(cashFlow) : undefined,
+            fluxMobileMoneyMensuel: fluxMobileMoney ? Number(fluxMobileMoney) : undefined,
+            autonomieFinanciere: autonomie ? Number(autonomie) / 100 : undefined,
+            tauxEndettement: endettement ? Number(endettement) / 100 : undefined,
+            dirigeantExperienceAns: dirigeantExp ? Number(dirigeantExp) : undefined,
+            dirigeantIncidentsLegaux: dirigeantIncidents || undefined,
           }),
           ...(categoryUpper === "EQUITY" && {
             tcamCa3ans: tcam ? Number(tcam) / 100 : undefined,
@@ -528,6 +545,23 @@ export default function NouvelleDemandeFormPage() {
                 </div>
 
                 <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Solvabilité connue du débiteur</label>
+                  <select
+                    value={debiteurSolvabilite}
+                    onChange={(e) => setDebiteurSolvabilite(e.target.value)}
+                    className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                  >
+                    <option value="">Sélectionnez</option>
+                    {DEBITEUR_SOLVABILITE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-400">
+                    Votre appréciation de la situation financière de ce client.
+                  </p>
+                </div>
+
+                <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">Échéance de la facture</label>
                   <input
                     type="date"
@@ -740,6 +774,89 @@ export default function NouvelleDemandeFormPage() {
                         className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
                       />
                       <p className="mt-1 text-xs text-gray-400">Information déclarative — ajoutez une pièce pour renforcer votre dossier.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-gray-100 pt-4">
+                  <p className="mb-3 text-sm font-medium text-gray-700">Capacité financière</p>
+                  <p className="mb-3 text-xs text-gray-400">
+                    Indispensable pour calculer votre capacité de remboursement — renseignez au moins un champ par ligne.
+                  </p>
+
+                  <div className="mb-4 grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Cash-flow annuel (FCFA)</label>
+                      <input
+                        type="number"
+                        placeholder="Ex : 8 000 000"
+                        value={cashFlow}
+                        onChange={(e) => setCashFlow(e.target.value)}
+                        className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                      />
+                      <p className="mt-1 text-xs text-gray-400">D'après vos états financiers, si disponibles.</p>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Flux Mobile Money mensuel (FCFA)</label>
+                      <input
+                        type="number"
+                        placeholder="Ex : 900 000"
+                        value={fluxMobileMoney}
+                        onChange={(e) => setFluxMobileMoney(e.target.value)}
+                        className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                      />
+                      <p className="mt-1 text-xs text-gray-400">À défaut de bilan formel — moyenne des 6 derniers mois.</p>
+                    </div>
+                  </div>
+
+                  <div className="mb-4 grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Autonomie financière (%)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder="Ex : 35"
+                        value={autonomie}
+                        onChange={(e) => setAutonomie(e.target.value)}
+                        className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                      />
+                      <p className="mt-1 text-xs text-gray-400">Fonds propres ÷ total du bilan.</p>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Taux d'endettement (%)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        placeholder="Ex : 40"
+                        value={endettement}
+                        onChange={(e) => setEndettement(e.target.value)}
+                        className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                      />
+                      <p className="mt-1 text-xs text-gray-400">À défaut de connaître votre autonomie financière.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Expérience du dirigeant dans ce secteur (années)</label>
+                      <input
+                        type="number"
+                        placeholder="Ex : 7"
+                        value={dirigeantExp}
+                        onChange={(e) => setDirigeantExp(e.target.value)}
+                        className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Incidents légaux connus</label>
+                      <select
+                        value={dirigeantIncidents}
+                        onChange={(e) => setDirigeantIncidents(e.target.value)}
+                        className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                      >
+                        <option value="aucun">Aucun</option>
+                        <option value="connu">Incident(s) connu(s)</option>
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -997,6 +1114,14 @@ export default function NouvelleDemandeFormPage() {
                         <p className="text-xs text-gray-400">Type débiteur</p>
                         <p className="font-semibold text-gray-900">
                           {DEBITEUR_TYPES.find((t) => t.value === debiteurType)?.label ?? debiteurType}
+                        </p>
+                      </div>
+                    )}
+                    {debiteurSolvabilite && (
+                      <div>
+                        <p className="text-xs text-gray-400">Solvabilité débiteur</p>
+                        <p className="font-semibold text-gray-900">
+                          {DEBITEUR_SOLVABILITE_OPTIONS.find((o) => o.value === debiteurSolvabilite)?.label ?? debiteurSolvabilite}
                         </p>
                       </div>
                     )}
