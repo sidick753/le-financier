@@ -33,6 +33,7 @@ export interface FundingAdminFilters {
 
 export interface FundingAdminStats {
   total: number;
+  underReview: number;
   published: number;
   funded: number;
   closed: number;

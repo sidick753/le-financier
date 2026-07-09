@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useNotifications } from "@/lib/use-notifications";
+import { usePmeOffersBadge } from "@/lib/use-pme-offers-badge";
 
 const NAV_ITEMS = [
   {
@@ -174,6 +175,7 @@ export function Sidebar({
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const { unreadCount } = useNotifications();
+  const offersPending = usePmeOffersBadge();
 
   return (
     <aside className="fixed left-0 top-0 z-20 flex h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-white">
@@ -209,7 +211,11 @@ export function Sidebar({
           const isActive = item.href === "/dashboard"
             ? pathname === "/dashboard"
             : pathname.startsWith(item.href);
-          const showBadge = item.href === "/dashboard/notifications" && unreadCount > 0;
+          const badgeCount = item.href === "/dashboard/notifications"
+            ? unreadCount
+            : item.href === "/dashboard/offres"
+              ? offersPending
+              : 0;
           return (
             <Link
               key={item.href}
@@ -224,9 +230,9 @@ export function Sidebar({
                 {item.icon}
                 {item.label}
               </span>
-              {showBadge && (
+              {badgeCount > 0 && (
                 <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                  {unreadCount}
+                  {badgeCount}
                 </span>
               )}
             </Link>

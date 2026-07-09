@@ -4,11 +4,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { useSidebarBadges, type SidebarBadges } from "@/lib/use-sidebar-badges";
 
 const NAV_ITEMS = [
   {
     href: "/admin",
     label: "Dashboard",
+    badgeKey: null,
     icon: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
         <rect x="3" y="3" width="7" height="7" rx="1.5" />
@@ -21,6 +23,7 @@ const NAV_ITEMS = [
   {
     href: "/admin/pme",
     label: "Gestion PME",
+    badgeKey: "pme" as const,
     icon: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
         <path d="M3 21h18" />
@@ -32,6 +35,7 @@ const NAV_ITEMS = [
   {
     href: "/admin/investisseurs",
     label: "Investisseurs",
+    badgeKey: "investisseurs" as const,
     icon: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -44,6 +48,7 @@ const NAV_ITEMS = [
   {
     href: "/admin/opportunites",
     label: "Opportunités",
+    badgeKey: "opportunites" as const,
     icon: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
         <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
@@ -56,6 +61,7 @@ const NAV_ITEMS = [
   {
     href: "/admin/partenaires",
     label: "Partenaires",
+    badgeKey: "partenaires" as const,
     icon: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
         <rect x="2" y="7" width="20" height="14" rx="2" />
@@ -66,6 +72,7 @@ const NAV_ITEMS = [
   {
     href: "/admin/scoring",
     label: "Moteur scoring",
+    badgeKey: "scoring" as const,
     icon: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
         <circle cx="12" cy="12" r="10" />
@@ -77,6 +84,7 @@ const NAV_ITEMS = [
   {
     href: "/admin/litiges",
     label: "Litiges",
+    badgeKey: null,
     icon: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
         <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
@@ -88,6 +96,7 @@ const NAV_ITEMS = [
   {
     href: "/admin/finances",
     label: "Finances",
+    badgeKey: null,
     icon: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
         <circle cx="12" cy="12" r="10" />
@@ -96,11 +105,12 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
-];
+] satisfies Array<{ href: string; label: string; badgeKey: keyof SidebarBadges | null; icon: React.ReactNode }>;
 
 export function AdminSidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const badges = useSidebarBadges();
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
 
   return (
@@ -143,6 +153,7 @@ export function AdminSidebar() {
           const isActive = item.href === "/admin"
             ? pathname === "/admin"
             : pathname.startsWith(item.href);
+          const badgeCount = item.badgeKey ? badges[item.badgeKey] : 0;
           return (
             <Link
               key={item.href}
@@ -154,7 +165,12 @@ export function AdminSidebar() {
               }`}
             >
               {item.icon}
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {badgeCount > 0 && (
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
+                  {badgeCount}
+                </span>
+              )}
             </Link>
           );
         })}

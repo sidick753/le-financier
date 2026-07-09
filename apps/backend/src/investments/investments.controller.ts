@@ -61,6 +61,14 @@ export class InvestmentsController {
     return this.investmentsService.findMine(req.user.id);
   }
 
+  @ApiOperation({ summary: 'Nombre de négociations en attente de ma réponse' })
+  @ApiResponse({ status: 200, description: '{ count: number }' })
+  @Get('mine/pending-count')
+  async getMyPendingCount(@Request() req) {
+    const count = await this.investmentsService.getMyPendingCount(req.user.id);
+    return { count };
+  }
+
   @ApiOperation({ summary: 'Engagements d\'une demande', description: 'Retourne tous les engagements liés à une demande de financement spécifique.' })
   @ApiParam({ name: 'fundingRequestId', description: 'UUID de la demande de financement' })
   @ApiResponse({ status: 200, description: 'Liste d\'engagements' })
@@ -76,6 +84,15 @@ export class InvestmentsController {
   @Get('organization/:organizationId')
   findAllForOrganization(@Param('organizationId') organizationId: string, @Request() req) {
     return this.investmentsService.findAllForOrganization(organizationId, req.user.id);
+  }
+
+  @ApiOperation({ summary: 'Nombre d\'offres reçues en attente de réponse de la PME' })
+  @ApiParam({ name: 'organizationId', description: 'UUID de l\'organisation' })
+  @ApiResponse({ status: 200, description: '{ count: number }' })
+  @Get('organization/:organizationId/pending-count')
+  async getPendingCountForOrganization(@Param('organizationId') organizationId: string, @Request() req) {
+    const count = await this.investmentsService.getPendingCountForOrganization(organizationId, req.user.id);
+    return { count };
   }
 
   @ApiOperation({

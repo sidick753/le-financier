@@ -45,6 +45,16 @@ export class ScoringController {
     return this.scoringService.getDashboard();
   }
 
+  @ApiOperation({ summary: '[ADMIN] Nombre de dossiers nécessitant une action (à scorer ou en erreur)' })
+  @Get('pending-count')
+  async getPendingCount() {
+    const dossiers = await this.scoringService.getDashboard();
+    const count = dossiers.filter((d) =>
+      ['A_SCORER', 'ERREUR_CALCUL'].includes(d.scoringStatus),
+    ).length;
+    return { count };
+  }
+
   @ApiOperation({ summary: '[ADMIN] Historique des rapports de scoring' })
   @Get('history')
   getHistory() {

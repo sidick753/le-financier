@@ -25,6 +25,7 @@ export interface IUsersRepository {
     total: number;
     institutions: number;
     particuliers: number;
+    pendingKyc: number;
     totalEngaged: number;
   }>;
   create(data: CreateUserData): Promise<User>;

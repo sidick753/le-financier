@@ -154,8 +154,9 @@ export class FundingRepository implements IFundingRepository {
   }
 
   async getAdminStats() {
-    const [total, published, funded, closed, raised] = await Promise.all([
+    const [total, underReview, published, funded, closed, raised] = await Promise.all([
       this.prisma.fundingRequest.count(),
+      this.prisma.fundingRequest.count({ where: { status: 'UNDER_REVIEW' } }),
       this.prisma.fundingRequest.count({ where: { status: 'PUBLISHED' } }),
       this.prisma.fundingRequest.count({ where: { status: 'FUNDED' } }),
       this.prisma.fundingRequest.count({ where: { status: { in: ['CLOSED', 'CANCELLED'] } } }),
@@ -163,6 +164,7 @@ export class FundingRepository implements IFundingRepository {
     ]);
     return {
       total,
+      underReview,
       published,
       funded,
       closed,

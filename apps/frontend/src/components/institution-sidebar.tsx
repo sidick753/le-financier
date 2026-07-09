@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useNotifications } from "@/lib/use-notifications";
+import { useInstitutionSidebarBadges } from "@/lib/use-institution-sidebar-badges";
 
 const NAV_ITEMS = [
   {
@@ -47,7 +48,6 @@ const NAV_ITEMS = [
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
       </svg>
     ),
-    alert: true,
   },
   {
     href: "/institution/equipe",
@@ -77,6 +77,7 @@ export function InstitutionSidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const { unreadCount } = useNotifications();
+  const badges = useInstitutionSidebarBadges();
 
   return (
     <aside className="fixed left-0 top-0 z-20 flex h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-white">
@@ -121,7 +122,13 @@ export function InstitutionSidebar() {
           const isActive = item.href === "/institution"
             ? pathname === "/institution"
             : pathname.startsWith(item.href);
-          const showBadge = item.href === "/institution/notifications" && unreadCount > 0;
+          const badgeCount = item.href === "/institution/notifications"
+            ? unreadCount
+            : item.href === "/institution/portefeuille"
+              ? badges.portefeuille
+              : item.href === "/institution/risques"
+                ? badges.risques
+                : 0;
           return (
             <Link
               key={item.href}
@@ -136,14 +143,9 @@ export function InstitutionSidebar() {
                 {item.icon}
                 {item.label}
               </span>
-              {showBadge && (
+              {badgeCount > 0 && (
                 <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
-                  {unreadCount}
-                </span>
-              )}
-              {item.alert && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
-                  2
+                  {badgeCount}
                 </span>
               )}
             </Link>

@@ -100,10 +100,11 @@ export class UsersRepository implements IUsersRepository {
 
   async getInvestorStats() {
     const investorRoles: Prisma.UserWhereInput = { role: { in: ['INVESTOR', 'INSTITUTION'] } };
-    const [total, institutions, particuliers, committed] = await Promise.all([
+    const [total, institutions, particuliers, pendingKyc, committed] = await Promise.all([
       this.prisma.user.count({ where: investorRoles }),
       this.prisma.user.count({ where: { role: 'INSTITUTION' } }),
       this.prisma.user.count({ where: { role: 'INVESTOR' } }),
+      this.prisma.user.count({ where: { ...investorRoles, kycStatus: 'PENDING' } }),
       this.prisma.investment.aggregate({
         _sum: { amountCommitted: true },
         where: { status: { in: ['COMMITTED', 'SETTLED_OFF_PLATFORM'] } },
@@ -113,6 +114,7 @@ export class UsersRepository implements IUsersRepository {
       total,
       institutions,
       particuliers,
+      pendingKyc,
       totalEngaged: Number(committed._sum.amountCommitted ?? 0),
     };
   }

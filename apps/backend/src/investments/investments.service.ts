@@ -133,6 +133,16 @@ export class InvestmentsService {
     return this.investmentsRepository.findAllByInvestorId(investorId);
   }
 
+  // Nombre d'engagements où la dernière offre vient de la PME et attend une réponse
+  // de l'investisseur — sert de badge "à traiter" côté institution/investisseur.
+  async getMyPendingCount(investorId: string) {
+    const investments = await this.investmentsRepository.findAllByInvestorId(investorId);
+    return investments.filter((inv: any) => {
+      const last = inv.negotiationOffers[0];
+      return last?.proposedBy === 'PME' && last?.status === 'PENDING';
+    }).length;
+  }
+
   async findAllForFundingRequest(fundingRequestId: string) {
     return this.investmentsRepository.findAllByFundingRequestId(fundingRequestId);
   }
@@ -143,6 +153,20 @@ export class InvestmentsService {
       throw new ForbiddenException("Vous n'avez pas accès à cette organisation.");
     }
     return this.investmentsRepository.findAllForOrganization(organizationId);
+  }
+
+  // Nombre d'engagements où la dernière offre vient de l'investisseur et attend une
+  // réponse de la PME — sert de badge "à traiter" côté PME (Offres reçues).
+  async getPendingCountForOrganization(organizationId: string, userId: string) {
+    const isMember = await this.organizationsRepository.isMember(organizationId, userId);
+    if (!isMember) {
+      throw new ForbiddenException("Vous n'avez pas accès à cette organisation.");
+    }
+    const investments = await this.investmentsRepository.findAllForOrganization(organizationId);
+    return investments.filter((inv: any) => {
+      const last = inv.negotiationOffers[0];
+      return last?.proposedBy === 'INVESTOR' && last?.status === 'PENDING';
+    }).length;
   }
 
   async settle(investmentId: string, dto: SettleInvestmentDto, investorId: string) {
