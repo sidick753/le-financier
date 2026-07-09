@@ -174,4 +174,27 @@ export class InstitutionsService {
     }
     return this.institutionsRepository.resolveAmlAlert(alertId);
   }
+
+  // ── Admin (partenaires) ────────────────────────────────────────────────
+
+  async getAllAdmin(filters?: {
+    search?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    return this.institutionsRepository.findAllAdmin(filters);
+  }
+
+  async getAdminStats() {
+    return this.institutionsRepository.countAdminStats();
+  }
+
+  async getOneAdmin(id: string) {
+    const institution = await this.institutionsRepository.findByIdAdmin(id);
+    if (!institution) {
+      throw new NotFoundException('Institution introuvable.');
+    }
+    return this.toProfileDto(institution);
+  }
 }

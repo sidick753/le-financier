@@ -142,6 +142,8 @@ interface FactureInput {
   delaiPaiementMenu?: string | null;
   tauxImpaye12m?: number | null;
   partPlusGrosClient?: number | null;
+  // Informatif — ne pèse pas dans le barème actuel, conservé pour contexte analyste.
+  nbClientsActifs?: number | null;
 }
 
 // Ratios (0–1) de réalisation de chaque critère — multipliés par le poids
@@ -266,11 +268,14 @@ export function scoreFacture(input: FactureInput, weights: WeightMap = {}): Scor
       delaiPaiementMenu: input.delaiPaiementMenu,
       tauxImpaye12m:    input.tauxImpaye12m,
       partPlusGrosClient: input.partPlusGrosClient,
+      nbClientsActifs: input.nbClientsActifs,
       scoreDetail: { dtScore, solvScore, ancScore, dpScore, impScore, concScore },
       weightsUsed: w,
       criteria,
       recommendation: GRADE_ACTIONS[grade] ?? null,
       missingData: criteria.filter((c) => !c.evaluable).map((c) => c.label),
+      // Champs saisis par la PME mais hors barème pondéré — affichés pour contexte uniquement.
+      nonScoredFields: ['nbClientsActifs'],
     },
   };
 }
@@ -423,16 +428,16 @@ export function scorePret(input: PretInput, weights: WeightMap = {}): ScoringRes
   let grade = toGrade(finalScore);
   if (capped && ['A+', 'A'].includes(grade)) grade = 'BBB';
 
-  // Confidence : complétude des champs clés PRET
-  const keyFields = [
-    remboScore !== null,
-    structScore !== null,
-    garantScore !== null,
-    dirigScore !== null,
-    sectScore !== null,
-  ];
-  const filled = keyFields.filter(Boolean).length;
-  const confidence = decimal(filled / keyFields.length, 3);
+  // Confidence : complétude pondérée par le poids réel de chaque critère
+  // (même méthode que FACTURE — un critère à fort poids manquant pèse plus qu'un critère mineur).
+  const totalWeight = Object.values(w).reduce((s, v) => s + v, 0);
+  let filledWeight = 0;
+  if (remboScore !== null) filledWeight += w.capaciteRemboursement;
+  if (structScore !== null) filledWeight += w.structureFinanciere;
+  if (garantScore !== null) filledWeight += w.garantie;
+  if (dirigScore !== null) filledWeight += w.profilDirigeant;
+  if (sectScore !== null) filledWeight += w.secteur;
+  const confidence = decimal(totalWeight > 0 ? filledWeight / totalWeight : 0, 3);
 
   // Coverage = garantieCouverture déclarée, 0 si absente
   const coverage = decimal(clamp(input.garantieCouverture ?? 0, 0, 5), 3);
@@ -485,11 +490,15 @@ export function scorePret(input: PretInput, weights: WeightMap = {}): ScoringRes
       garantieType:   input.garantieType,
       garantieCouverture: input.garantieCouverture,
       secteurCode:    input.secteurCode,
+      ratioLiquidite: input.ratioLiquidite,
+      dirigeantAntecedents: input.dirigeantAntecedents,
       scoreDetail:    { remboScore, structScore, garantScore, dirigScore, sectScore },
       weightsUsed: w,
       criteria,
       recommendation: GRADE_ACTIONS[grade] ?? null,
       missingData: criteria.filter((c) => !c.evaluable).map((c) => c.label),
+      // Champs saisis par la PME mais hors barème pondéré — affichés pour contexte uniquement.
+      nonScoredFields: ['ratioLiquidite', 'dirigeantAntecedents'],
     },
   };
 }
@@ -593,16 +602,17 @@ export function scoreEquity(input: EquityInput, weights: WeightMap = {}): Scorin
   const finalScore = decimal(clamp(score, 0, 100));
   const grade = toGrade(finalScore);
 
-  const keyFields = [
-    tractionScore !== null,
-    marcheScore !== null,
-    scalScore !== null,
-    equipeScore !== null,
-    moatScore !== null,
-    gouvernanceScore !== null,
-  ];
-  const filled = keyFields.filter(Boolean).length;
-  const confidence = decimal(filled / keyFields.length, 3);
+  // Confidence : complétude pondérée par le poids réel de chaque critère
+  // (même méthode que FACTURE/PRET — un critère à fort poids manquant pèse plus qu'un critère mineur).
+  const totalWeight = Object.values(w).reduce((s, v) => s + v, 0);
+  let filledWeight = 0;
+  if (tractionScore !== null) filledWeight += w.tractionCa;
+  if (marcheScore !== null) filledWeight += w.tailleMarche;
+  if (scalScore !== null) filledWeight += w.scalabilite;
+  if (equipeScore !== null) filledWeight += w.equipe;
+  if (moatScore !== null) filledWeight += w.moat;
+  if (gouvernanceScore !== null) filledWeight += w.gouvernance;
+  const confidence = decimal(totalWeight > 0 ? filledWeight / totalWeight : 0, 3);
 
   const criteria: CriterionResult[] = [
     buildCriterion(CRITERIA_EQUITY, 'tractionCa', w, tractionRatio, {
@@ -640,11 +650,15 @@ export function scoreEquity(input: EquityInput, weights: WeightMap = {}): Scorin
       scalabilite: input.scalabilite,
       runwayMois:  input.runwayMois,
       margeBrute:  input.margeBrute,
+      trackRecord: input.trackRecord,
+      partMarcheRelative: input.partMarcheRelative,
       scoreDetail: { tractionScore, marcheScore, scalScore, equipeScore, moatScore, gouvernanceScore },
       weightsUsed: w,
       criteria,
       recommendation: GRADE_ACTIONS[grade] ?? null,
       missingData: criteria.filter((c) => !c.evaluable).map((c) => c.label),
+      // Champs saisis par la PME mais hors barème pondéré — affichés pour contexte uniquement.
+      nonScoredFields: ['margeBrute', 'trackRecord', 'partMarcheRelative'],
     },
   };
 }

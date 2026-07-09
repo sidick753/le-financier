@@ -1,10 +1,12 @@
 import { Body, Controller, Get, Param, Post, Patch, UseGuards, Request, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { FundingService } from './funding.service';
 import { CreateFundingRequestDto } from './dto/create-funding-request.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { RejectionReasonDto } from '../common/dto/rejection-reason.dto';
+import { parsePositiveInt } from '../common/pagination.util';
 
 @ApiTags('Funding Requests')
 @Controller('funding-requests')
@@ -98,8 +100,8 @@ export class FundingController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
   @Patch(':id/reject')
-  reject(@Param('id') id: string) {
-    return this.fundingService.reject(id);
+  reject(@Param('id') id: string, @Body() dto: RejectionReasonDto) {
+    return this.fundingService.reject(id, dto.reason);
   }
 
   @ApiBearerAuth('jwt')
@@ -113,11 +115,48 @@ export class FundingController {
     return this.fundingService.getScoringReport(id);
   }
 
+  @ApiOperation({ summary: '[Admin] Statistiques des opportunités', description: 'Retourne les compteurs globaux : total, publiées, en financement, clôturées, montant total levé.' })
+  @ApiResponse({ status: 200, description: '{ total, published, funded, closed, totalRaised }' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Get('admin/stats')
+  getAdminStats() {
+    return this.fundingService.getAdminStats();
+  }
+
+  @ApiOperation({ summary: '[Admin] Liste toutes les opportunités', description: 'Filtre optionnel par statut et recherche par titre/PME, avec pagination.' })
+  @ApiQuery({ name: 'status', required: false, enum: ['DRAFT', 'UNDER_REVIEW', 'PUBLISHED', 'FUNDED', 'CLOSED', 'REJECTED', 'CANCELLED'] })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'page', required: false, description: 'Numéro de page (retourne tout si absent)' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Taille de page (retourne tout si absent)' })
+  @ApiResponse({ status: 200, description: '{ data: FundingRequest[], total: number }' })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
   @Get('admin/all')
-  findAllAdmin() {
-    return this.fundingService.findAllForAdmin();
+  findAllAdmin(
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.fundingService.findAllForAdmin({
+      status,
+      search,
+      page: parsePositiveInt(page),
+      limit: parsePositiveInt(limit),
+    });
+  }
+
+  @ApiBearerAuth('jwt')
+  @ApiOperation({ summary: '[Admin] Détail complet d\'une demande', description: 'Retourne la demande avec son organisation, ses documents et ses rapports de scoring. Réservé aux rôles ADMIN et SUPER_ADMIN.' })
+  @ApiParam({ name: 'id', description: 'UUID de la demande' })
+  @ApiResponse({ status: 200, description: 'Demande trouvée' })
+  @ApiResponse({ status: 404, description: 'Demande introuvable' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Get('admin/:id')
+  findOneAdmin(@Param('id') id: string) {
+    return this.fundingService.findOneAdmin(id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

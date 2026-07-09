@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { usePmeData } from "@/lib/use-pme-data";
 import { api } from "@/lib/api";
@@ -46,16 +47,6 @@ const GARANTIE_TYPES = [
   { value: "caution_personnelle", label: "Caution personnelle" },
   { value: "caution_morale", label: "Caution morale" },
   { value: "aucune", label: "Aucune garantie" },
-];
-
-const SECTEURS = [
-  { value: "services_essentiels", label: "Services essentiels / Santé / Éducation" },
-  { value: "agro",                label: "Agriculture / Distribution alimentaire" },
-  { value: "commerce_detail",     label: "Commerce de détail" },
-  { value: "btp",                 label: "BTP / Transport & Logistique" },
-  { value: "import_export",       label: "Import / Export" },
-  { value: "commerce_mono",       label: "Commerce mono / Saisonnier" },
-  { value: "volatil",             label: "Secteur volatil" },
 ];
 
 function computeAdvanceRate(debiteurType: string, anciennete: string, partClient: number) {
@@ -182,7 +173,8 @@ export default function NouvelleDemandeFormPage() {
   const [duration, setDuration] = useState("");
   const [expectedReturn, setExpectedReturn] = useState("");
 
-  // Étape 1 — Détails FACTURE
+  // Étape 1 — Détails FACTURE (ce débiteur, cette facture précise — le reste du
+  // profil de l'entreprise vit dans /dashboard/parametres)
   const [debiteurNom, setDebiteurNom] = useState("");
   const [debiteurType, setDebiteurType] = useState("");
   const [debiteurSolvabilite, setDebiteurSolvabilite] = useState("");
@@ -191,39 +183,14 @@ export default function NouvelleDemandeFormPage() {
   const [partClient, setPartClient] = useState(7.5);
   const [delaiPaiement, setDelaiPaiement] = useState("");
   const [tauxImpaye, setTauxImpaye] = useState("");
-  const [nbClients, setNbClients] = useState("");
 
-  // Étape 1 — Détails PRET (nouvelle version simplifiée)
+  // Étape 1 — Détails PRET : objet du prêt + garantie offerte pour ce prêt précis
+  // (secteur, santé financière, profil du dirigeant vivent dans /dashboard/parametres)
   const [durationSlider, setDurationSlider] = useState(9);
   const [objetFinancement, setObjetFinancement] = useState("");
   const [descriptionFonds, setDescriptionFonds] = useState("");
-  const [secteurCode, setSecteurCode] = useState("");
   const [garantieType, setGarantieType] = useState("");
   const [valeurGarantie, setValeurGarantie] = useState("");
-  // Champs scoring PRET — capacité de remboursement, structure financière, profil dirigeant
-  const [cashFlow, setCashFlow] = useState("");
-  const [fluxMobileMoney, setFluxMobileMoney] = useState("");
-  const [autonomie, setAutonomie] = useState("");
-  const [endettement, setEndettement] = useState("");
-  const [liquidite, setLiquidite] = useState("");
-  const [garantieCouverture, setGarantieCouverture] = useState("");
-  const [dirigeantExp, setDirigeantExp] = useState("");
-  const [dirigeantAnt, setDirigeantAnt] = useState("premiere_perenne");
-  const [dirigeantIncidents, setDirigeantIncidents] = useState("aucun");
-
-  // Étape 1 — Détails EQUITY
-  const [tcam, setTcam] = useState("");
-  const [tailleMarche, setTailleMarche] = useState("");
-  const [scalabilite, setScalabilite] = useState("");
-  const [expSecteur, setExpSecteur] = useState("");
-  const [trackRecord, setTrackRecord] = useState("");
-  const [completudeEquipe, setCompletudeEquipe] = useState("");
-  const [moat, setMoat] = useState("");
-  const [partMarche, setPartMarche] = useState("");
-  const [runway, setRunway] = useState("");
-  const [margeBrute, setMargeBrute] = useState("");
-  const [droitsInvestisseur, setDroitsInvestisseur] = useState("");
-  const [transparence, setTransparence] = useState("");
 
   // Étape 2 — Documents (tous produits confondus)
   const [docs, setDocs] = useState<Record<string, boolean>>({
@@ -286,34 +253,12 @@ export default function NouvelleDemandeFormPage() {
             partPlusGrosClient: partClient / 100,
             delaiPaiementMenu: delaiPaiement || undefined,
             tauxImpaye12m: tauxImpaye ? Number(tauxImpaye) / 100 : undefined,
-            nbClientsActifs: nbClients ? Number(nbClients) : undefined,
           }),
           ...(categoryUpper === "PRET" && {
-            secteurCode: secteurCode || undefined,
             garantieType: garantieType || undefined,
             garantieCouverture: valeurGarantie && amount
               ? Number(valeurGarantie) / Number(amount)
               : undefined,
-            cashFlowAnnuel: cashFlow ? Number(cashFlow) : undefined,
-            fluxMobileMoneyMensuel: fluxMobileMoney ? Number(fluxMobileMoney) : undefined,
-            autonomieFinanciere: autonomie ? Number(autonomie) / 100 : undefined,
-            tauxEndettement: endettement ? Number(endettement) / 100 : undefined,
-            dirigeantExperienceAns: dirigeantExp ? Number(dirigeantExp) : undefined,
-            dirigeantIncidentsLegaux: dirigeantIncidents || undefined,
-          }),
-          ...(categoryUpper === "EQUITY" && {
-            tcamCa3ans: tcam ? Number(tcam) / 100 : undefined,
-            tailleMarche: tailleMarche || undefined,
-            scalabilite: scalabilite || undefined,
-            experienceSecteurAns: expSecteur ? Number(expSecteur) : undefined,
-            trackRecord: trackRecord || undefined,
-            completudeEquipe: completudeEquipe || undefined,
-            moat: moat || undefined,
-            partMarcheRelative: partMarche || undefined,
-            runwayMois: runway ? Number(runway) : undefined,
-            margeBrute: margeBrute ? Number(margeBrute) / 100 : undefined,
-            droitsInvestisseur: droitsInvestisseur || undefined,
-            transparence: transparence || undefined,
           }),
         };
 
@@ -638,32 +583,18 @@ export default function NouvelleDemandeFormPage() {
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-700">
-                      Taux d'impayés sur 12 mois (%)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      placeholder="Ex : 2"
-                      value={tauxImpaye}
-                      onChange={(e) => setTauxImpaye(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-700">
-                      Nombre de clients actifs
-                    </label>
-                    <input
-                      type="number"
-                      placeholder="Ex : 12"
-                      value={nbClients}
-                      onChange={(e) => setNbClients(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
-                    />
-                  </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-700">
+                    Taux d'impayés sur 12 mois (%)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="Ex : 2"
+                    value={tauxImpaye}
+                    onChange={(e) => setTauxImpaye(e.target.value)}
+                    className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                  />
                 </div>
               </div>
             )}
@@ -738,19 +669,7 @@ export default function NouvelleDemandeFormPage() {
                 </div>
 
                 <div className="border-t border-gray-100 pt-4">
-                  <p className="mb-3 text-sm font-medium text-gray-700">Secteur & garanties</p>
-
-                  <div className="mb-4">
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Secteur d'activité principal</label>
-                    <select value={secteurCode} onChange={(e) => setSecteurCode(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                      <option value="">Sélectionner</option>
-                      {SECTEURS.map((s) => (
-                        <option key={s.value} value={s.value}>{s.label}</option>
-                      ))}
-                    </select>
-                    <p className="mt-1 text-xs text-gray-400">Le secteur détermine le coefficient de risque appliqué à votre score.</p>
-                  </div>
+                  <p className="mb-3 text-sm font-medium text-gray-700">Garantie pour ce prêt</p>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -778,87 +697,19 @@ export default function NouvelleDemandeFormPage() {
                   </div>
                 </div>
 
-                <div className="border-t border-gray-100 pt-4">
-                  <p className="mb-3 text-sm font-medium text-gray-700">Capacité financière</p>
-                  <p className="mb-3 text-xs text-gray-400">
-                    Indispensable pour calculer votre capacité de remboursement — renseignez au moins un champ par ligne.
+                <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+                  <p className="text-sm font-medium text-blue-800">Secteur & santé financière</p>
+                  <p className="mt-1 text-xs text-blue-600">
+                    Ces informations décrivent votre entreprise (pas cette demande précise) et sont
+                    partagées par toutes vos demandes de financement. Renseignez-les une bonne fois
+                    dans le profil de votre entreprise.
                   </p>
-
-                  <div className="mb-4 grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">Cash-flow annuel (FCFA)</label>
-                      <input
-                        type="number"
-                        placeholder="Ex : 8 000 000"
-                        value={cashFlow}
-                        onChange={(e) => setCashFlow(e.target.value)}
-                        className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
-                      />
-                      <p className="mt-1 text-xs text-gray-400">D'après vos états financiers, si disponibles.</p>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">Flux Mobile Money mensuel (FCFA)</label>
-                      <input
-                        type="number"
-                        placeholder="Ex : 900 000"
-                        value={fluxMobileMoney}
-                        onChange={(e) => setFluxMobileMoney(e.target.value)}
-                        className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
-                      />
-                      <p className="mt-1 text-xs text-gray-400">À défaut de bilan formel — moyenne des 6 derniers mois.</p>
-                    </div>
-                  </div>
-
-                  <div className="mb-4 grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">Autonomie financière (%)</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        placeholder="Ex : 35"
-                        value={autonomie}
-                        onChange={(e) => setAutonomie(e.target.value)}
-                        className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
-                      />
-                      <p className="mt-1 text-xs text-gray-400">Fonds propres ÷ total du bilan.</p>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">Taux d'endettement (%)</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        placeholder="Ex : 40"
-                        value={endettement}
-                        onChange={(e) => setEndettement(e.target.value)}
-                        className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
-                      />
-                      <p className="mt-1 text-xs text-gray-400">À défaut de connaître votre autonomie financière.</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">Expérience du dirigeant dans ce secteur (années)</label>
-                      <input
-                        type="number"
-                        placeholder="Ex : 7"
-                        value={dirigeantExp}
-                        onChange={(e) => setDirigeantExp(e.target.value)}
-                        className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">Incidents légaux connus</label>
-                      <select
-                        value={dirigeantIncidents}
-                        onChange={(e) => setDirigeantIncidents(e.target.value)}
-                        className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
-                      >
-                        <option value="aucun">Aucun</option>
-                        <option value="connu">Incident(s) connu(s)</option>
-                      </select>
-                    </div>
-                  </div>
+                  <Link
+                    href="/dashboard/parametres"
+                    className="mt-2 inline-block text-xs font-medium text-blue-700 hover:underline"
+                  >
+                    Compléter le profil de mon entreprise →
+                  </Link>
                 </div>
               </div>
             )}
@@ -868,134 +719,32 @@ export default function NouvelleDemandeFormPage() {
               <div className="space-y-5">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Votre entreprise & projet</h2>
-                  <p className="text-sm text-gray-500">Ces données évaluent l'attractivité de votre opportunité pour les investisseurs.</p>
+                  <p className="text-sm text-gray-500">
+                    Ces données évaluent l'attractivité de votre opportunité pour les investisseurs.
+                  </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">TCAM CA sur 3 ans (%)</label>
-                    <input type="number" step="0.1" placeholder="Ex : 30" value={tcam} onChange={(e) => setTcam(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
-                    <p className="mt-1 text-xs text-gray-400">Taux de croissance annuel moyen</p>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Runway (mois)</label>
-                    <input type="number" placeholder="Ex : 12" value={runway} onChange={(e) => setRunway(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
-                    <p className="mt-1 text-xs text-gray-400">Mois de trésorerie sans nouveau financement</p>
-                  </div>
+                <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+                  <p className="text-sm font-medium text-blue-800">
+                    Traction, marché, équipe, gouvernance : renseignés dans le profil de votre entreprise
+                  </p>
+                  <p className="mt-1 text-xs text-blue-600">
+                    Ces informations décrivent votre entreprise (pas cette levée précise) et sont
+                    partagées par toutes vos demandes de financement — vous ne les ressaisissez qu'une
+                    seule fois, dans le profil de votre entreprise.
+                  </p>
+                  <Link
+                    href="/dashboard/parametres"
+                    className="mt-2 inline-block text-xs font-medium text-blue-700 hover:underline"
+                  >
+                    Compléter le profil de mon entreprise →
+                  </Link>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Taille du marché</label>
-                    <select value={tailleMarche} onChange={(e) => setTailleMarche(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                      <option value="">Sélectionner</option>
-                      <option value="grand_croissant">Grand marché en croissance</option>
-                      <option value="niche_croissante">Niche en croissance</option>
-                      <option value="grand_mature">Grand marché mature</option>
-                      <option value="niche_mature">Niche mature</option>
-                      <option value="incertain">Incertain</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Scalabilité</label>
-                    <select value={scalabilite} onChange={(e) => setScalabilite(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                      <option value="">Sélectionner</option>
-                      <option value="forte">Forte scalabilité</option>
-                      <option value="moyenne">Scalabilité moyenne</option>
-                      <option value="faible">Faible scalabilité</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Avantage concurrentiel (moat)</label>
-                    <select value={moat} onChange={(e) => setMoat(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                      <option value="">Sélectionner</option>
-                      <option value="fort">Fort (technologie, marque, réseau)</option>
-                      <option value="moderate">Modéré</option>
-                      <option value="faible">Faible</option>
-                      <option value="aucun">Aucun</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Position sur le marché</label>
-                    <select value={partMarche} onChange={(e) => setPartMarche(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                      <option value="">Sélectionner</option>
-                      <option value="leader">Leader</option>
-                      <option value="challenger">Challenger</option>
-                      <option value="suiveur">Suiveur</option>
-                      <option value="marginal">Marginal</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Marge brute (%)</label>
-                  <input type="number" step="0.1" placeholder="Ex : 40" value={margeBrute} onChange={(e) => setMargeBrute(e.target.value)}
-                    className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Track record du dirigeant</label>
-                    <select value={trackRecord} onChange={(e) => setTrackRecord(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                      <option value="">Sélectionner</option>
-                      <option value="succes_anterieur">Succès entrepreneurial antérieur</option>
-                      <option value="operationnel_solide">Opérationnel solide</option>
-                      <option value="premiere_aventure">Première aventure</option>
-                      <option value="signaux_negatifs">Signaux négatifs</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Complétude de l'équipe</label>
-                    <select value={completudeEquipe} onChange={(e) => setCompletudeEquipe(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                      <option value="">Sélectionner</option>
-                      <option value="complete">Équipe complète</option>
-                      <option value="partielle">Équipe partielle</option>
-                      <option value="fondateur_seul">Fondateur seul</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Droits investisseurs</label>
-                    <select value={droitsInvestisseur} onChange={(e) => setDroitsInvestisseur(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                      <option value="">Sélectionner</option>
-                      <option value="solides">Droits solides (pacte d'associés complet)</option>
-                      <option value="standards">Standards</option>
-                      <option value="limites">Limités</option>
-                      <option value="absents">Absents</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Transparence financière</label>
-                    <select value={transparence} onChange={(e) => setTransparence(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                      <option value="">Sélectionner</option>
-                      <option value="audite">Comptes audités</option>
-                      <option value="comptes_formels">Comptes formels</option>
-                      <option value="declaratif">Déclaratif</option>
-                      <option value="opaque">Opaque</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Expérience sectorielle du dirigeant (années)</label>
-                  <input type="number" placeholder="Ex : 10" value={expSecteur} onChange={(e) => setExpSecteur(e.target.value)}
-                    className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
-                </div>
+                <p className="text-xs text-gray-400">
+                  Passez à l'étape suivante pour joindre vos documents — le montant, la durée et le
+                  taux proposé de cette levée ont déjà été renseignés à l'étape précédente.
+                </p>
               </div>
             )}
 
@@ -1085,15 +834,7 @@ export default function NouvelleDemandeFormPage() {
                         <p className="font-semibold text-green-600">{expectedReturn} %</p>
                       </div>
                     )}
-                    {/* Secteur & Garantie — PRET */}
-                    {categoryUpper === "PRET" && secteurCode && (
-                      <div>
-                        <p className="text-xs text-gray-400">Secteur</p>
-                        <p className="font-semibold text-gray-900">
-                          {SECTEURS.find((s) => s.value === secteurCode)?.label ?? secteurCode}
-                        </p>
-                      </div>
-                    )}
+                    {/* Garantie — PRET */}
                     {categoryUpper === "PRET" && garantieType && (
                       <div>
                         <p className="text-xs text-gray-400">Garantie</p>
@@ -1131,13 +872,6 @@ export default function NouvelleDemandeFormPage() {
                         <p className="font-semibold text-gray-900">
                           {new Date(echeanceDate).toLocaleDateString("fr-FR")}
                         </p>
-                      </div>
-                    )}
-                    {/* Champs EQUITY */}
-                    {tcam && (
-                      <div>
-                        <p className="text-xs text-gray-400">TCAM CA</p>
-                        <p className="font-semibold text-gray-900">{tcam} %</p>
                       </div>
                     )}
                   </div>

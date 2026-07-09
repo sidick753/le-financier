@@ -4,6 +4,7 @@ import { FundingRepository } from './funding.repository';
 import { OrganizationsRepository } from '../organizations/organizations.repository';
 import { ScoringService } from '../scoring/scoring.service';
 import { CreateFundingRequestDto } from './dto/create-funding-request.dto';
+import { FundingAdminFilters } from './interfaces/funding-repository.interface';
 
 @Injectable()
 export class FundingService {
@@ -32,7 +33,7 @@ export class FundingService {
       amountRequested: dto.amountRequested,
       expectedReturn: dto.expectedReturn,
       durationMonths: dto.durationMonths,
-      // Scoring FACTURE
+      // Scoring FACTURE — ce débiteur, cette facture précise
       debiteurNom: dto.debiteurNom,
       debiteurType: dto.debiteurType,
       debiteurSolvabilite: dto.debiteurSolvabilite,
@@ -41,35 +42,9 @@ export class FundingService {
       partPlusGrosClient: dto.partPlusGrosClient,
       delaiPaiementMenu: dto.delaiPaiementMenu,
       tauxImpaye12m: dto.tauxImpaye12m,
-      nbClientsActifs: dto.nbClientsActifs,
-      // Scoring PRET MLT
-      cashFlowAnnuel: dto.cashFlowAnnuel,
-      fluxMobileMoneyMensuel: dto.fluxMobileMoneyMensuel,
-      autonomieFinanciere: dto.autonomieFinanciere,
-      tauxEndettement: dto.tauxEndettement,
-      ratioLiquidite: dto.ratioLiquidite,
+      // Scoring PRET MLT — la garantie offerte pour ce prêt précis
       garantieType: dto.garantieType,
       garantieCouverture: dto.garantieCouverture,
-      dirigeantExperienceAns: dto.dirigeantExperienceAns,
-      dirigeantAntecedents: dto.dirigeantAntecedents,
-      dirigeantIncidentsLegaux: dto.dirigeantIncidentsLegaux,
-      secteurCode: dto.secteurCode,
-      secteurSaisonnalite: dto.secteurSaisonnalite,
-      secteurImportDevises: dto.secteurImportDevises,
-      secteurSoutienPublic: dto.secteurSoutienPublic,
-      // Scoring EQUITY
-      tcamCa3ans: dto.tcamCa3ans,
-      tailleMarche: dto.tailleMarche,
-      scalabilite: dto.scalabilite,
-      experienceSecteurAns: dto.experienceSecteurAns,
-      trackRecord: dto.trackRecord,
-      completudeEquipe: dto.completudeEquipe,
-      moat: dto.moat,
-      partMarcheRelative: dto.partMarcheRelative,
-      runwayMois: dto.runwayMois,
-      margeBrute: dto.margeBrute,
-      droitsInvestisseur: dto.droitsInvestisseur,
-      transparence: dto.transparence,
     });
   }
 
@@ -84,6 +59,14 @@ export class FundingService {
 
   async findOneWithDetails(id: string) {
     const fundingRequest = await this.fundingRepository.findById(id);
+    if (!fundingRequest) {
+      throw new NotFoundException('Demande de financement introuvable.');
+    }
+    return fundingRequest;
+  }
+
+  async findOneAdmin(id: string) {
+    const fundingRequest = await this.fundingRepository.findByIdAdmin(id);
     if (!fundingRequest) {
       throw new NotFoundException('Demande de financement introuvable.');
     }
@@ -145,7 +128,7 @@ export class FundingService {
     return this.fundingRepository.updateStatus(fundingRequestId, 'PUBLISHED');
   }
 
-  async reject(fundingRequestId: string) {
+  async reject(fundingRequestId: string, reason: string) {
     const fundingRequest = await this.fundingRepository.findById(fundingRequestId);
     if (!fundingRequest) {
       throw new NotFoundException('Demande de financement introuvable.');
@@ -157,7 +140,7 @@ export class FundingService {
       );
     }
 
-    return this.fundingRepository.updateStatus(fundingRequestId, 'REJECTED');
+    return this.fundingRepository.updateStatus(fundingRequestId, 'REJECTED', reason);
   }
 
   async getScoringReport(fundingRequestId: string) {
@@ -168,8 +151,12 @@ export class FundingService {
     return report;
   }
 
-  async findAllForAdmin() {
-    return this.fundingRepository.findAllForAdmin();
+  async findAllForAdmin(filters?: FundingAdminFilters) {
+    return this.fundingRepository.findAllForAdmin(filters);
+  }
+
+  async getAdminStats() {
+    return this.fundingRepository.getAdminStats();
   }
 
   async cancel(id: string) {

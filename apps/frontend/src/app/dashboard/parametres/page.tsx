@@ -1,0 +1,513 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { usePmeData } from "@/lib/use-pme-data";
+import { api } from "@/lib/api";
+
+const SECTEURS = [
+  { value: "services_essentiels", label: "Services essentiels / Santé / Éducation" },
+  { value: "agro", label: "Agriculture / Distribution alimentaire" },
+  { value: "commerce_detail", label: "Commerce de détail" },
+  { value: "btp", label: "BTP / Transport & Logistique" },
+  { value: "import_export", label: "Import / Export" },
+  { value: "commerce_mono", label: "Commerce mono / Saisonnier" },
+  { value: "volatil", label: "Secteur volatil" },
+];
+
+const TAILLE_MARCHE = [
+  { value: "grand_croissant", label: "Grand marché en croissance" },
+  { value: "niche_croissante", label: "Niche en croissance" },
+  { value: "grand_mature", label: "Grand marché mature" },
+  { value: "niche_mature", label: "Niche mature" },
+  { value: "incertain", label: "Incertain" },
+];
+
+const SCALABILITE = [
+  { value: "forte", label: "Forte scalabilité" },
+  { value: "moyenne", label: "Scalabilité moyenne" },
+  { value: "faible", label: "Faible scalabilité" },
+];
+
+const MOAT = [
+  { value: "fort", label: "Fort (technologie, marque, réseau)" },
+  { value: "moderate", label: "Modéré" },
+  { value: "faible", label: "Faible" },
+];
+
+const PART_MARCHE = [
+  { value: "leader", label: "Leader" },
+  { value: "challenger", label: "Challenger" },
+  { value: "suiveur", label: "Suiveur" },
+  { value: "marginal", label: "Marginal" },
+];
+
+const TRACK_RECORD = [
+  { value: "succes_anterieur", label: "Succès entrepreneurial antérieur" },
+  { value: "operationnel_solide", label: "Opérationnel solide" },
+  { value: "premiere_aventure", label: "Première aventure" },
+  { value: "signaux_negatifs", label: "Signaux négatifs" },
+];
+
+const COMPLETUDE_EQUIPE = [
+  { value: "complete", label: "Équipe complète" },
+  { value: "presque", label: "Presque complète" },
+  { value: "incomplete", label: "Incomplète" },
+  { value: "solo", label: "Fondateur seul" },
+];
+
+const DROITS_INVESTISSEUR = [
+  { value: "solides", label: "Solides (pacte d'associés complet)" },
+  { value: "standards", label: "Standards" },
+  { value: "limites", label: "Limités" },
+  { value: "absents", label: "Absents" },
+];
+
+const TRANSPARENCE = [
+  { value: "audite", label: "Comptes audités" },
+  { value: "comptes_formels", label: "Comptes formels" },
+  { value: "declaratif", label: "Déclaratif" },
+  { value: "opaque", label: "Opaque" },
+];
+
+interface CreditProfile {
+  secteurCode: string | null;
+  secteurSaisonnalite: boolean | null;
+  secteurImportDevises: boolean | null;
+  secteurSoutienPublic: boolean | null;
+  cashFlowAnnuel: string | null;
+  fluxMobileMoneyMensuel: string | null;
+  autonomieFinanciere: string | null;
+  tauxEndettement: string | null;
+  ratioLiquidite: string | null;
+  tcamCa3ans: string | null;
+  margeBrute: string | null;
+  runwayMois: number | null;
+  nbClientsActifs: number | null;
+  dirigeantExperienceAns: number | null;
+  dirigeantAntecedents: string | null;
+  dirigeantIncidentsLegaux: string | null;
+  experienceSecteurAns: number | null;
+  trackRecord: string | null;
+  completudeEquipe: string | null;
+  droitsInvestisseur: string | null;
+  transparence: string | null;
+  tailleMarche: string | null;
+  scalabilite: string | null;
+  moat: string | null;
+  partMarcheRelative: string | null;
+}
+
+// Champs 0–1 en base, affichés/saisis en % dans ce formulaire.
+const PERCENT_FIELDS = [
+  "autonomieFinanciere", "tauxEndettement", "ratioLiquidite", "tcamCa3ans", "margeBrute",
+] as const;
+
+function toPercentString(v: string | null): string {
+  if (v === null || v === undefined) return "";
+  return String(Number(v) * 100);
+}
+
+function fromPercentInput(v: string): number | undefined {
+  return v === "" ? undefined : Number(v) / 100;
+}
+
+export default function ParametresPage() {
+  const { token } = useAuth();
+  const { organization, isLoading: orgLoading } = usePmeData();
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [secteurCode, setSecteurCode] = useState("");
+  const [secteurSaisonnalite, setSecteurSaisonnalite] = useState(false);
+  const [secteurImportDevises, setSecteurImportDevises] = useState(false);
+  const [secteurSoutienPublic, setSecteurSoutienPublic] = useState(false);
+
+  const [cashFlowAnnuel, setCashFlowAnnuel] = useState("");
+  const [fluxMobileMoneyMensuel, setFluxMobileMoneyMensuel] = useState("");
+  const [autonomieFinanciere, setAutonomieFinanciere] = useState("");
+  const [tauxEndettement, setTauxEndettement] = useState("");
+  const [ratioLiquidite, setRatioLiquidite] = useState("");
+  const [tcamCa3ans, setTcamCa3ans] = useState("");
+  const [margeBrute, setMargeBrute] = useState("");
+  const [runwayMois, setRunwayMois] = useState("");
+  const [nbClientsActifs, setNbClientsActifs] = useState("");
+
+  const [dirigeantExperienceAns, setDirigeantExperienceAns] = useState("");
+  const [dirigeantAntecedents, setDirigeantAntecedents] = useState("");
+  const [dirigeantIncidentsLegaux, setDirigeantIncidentsLegaux] = useState("aucun");
+  const [experienceSecteurAns, setExperienceSecteurAns] = useState("");
+  const [trackRecord, setTrackRecord] = useState("");
+
+  const [completudeEquipe, setCompletudeEquipe] = useState("");
+  const [droitsInvestisseur, setDroitsInvestisseur] = useState("");
+  const [transparence, setTransparence] = useState("");
+  const [tailleMarche, setTailleMarche] = useState("");
+  const [scalabilite, setScalabilite] = useState("");
+  const [moat, setMoat] = useState("");
+  const [partMarcheRelative, setPartMarcheRelative] = useState("");
+
+  useEffect(() => {
+    if (!token || !organization) return;
+    setIsLoading(true);
+    api
+      .get<CreditProfile>(`/organizations/${organization.id}`, token)
+      .then((p) => {
+        setSecteurCode(p.secteurCode ?? "");
+        setSecteurSaisonnalite(p.secteurSaisonnalite ?? false);
+        setSecteurImportDevises(p.secteurImportDevises ?? false);
+        setSecteurSoutienPublic(p.secteurSoutienPublic ?? false);
+        setCashFlowAnnuel(p.cashFlowAnnuel ? String(Number(p.cashFlowAnnuel)) : "");
+        setFluxMobileMoneyMensuel(p.fluxMobileMoneyMensuel ? String(Number(p.fluxMobileMoneyMensuel)) : "");
+        setAutonomieFinanciere(toPercentString(p.autonomieFinanciere));
+        setTauxEndettement(toPercentString(p.tauxEndettement));
+        setRatioLiquidite(toPercentString(p.ratioLiquidite));
+        setTcamCa3ans(toPercentString(p.tcamCa3ans));
+        setMargeBrute(toPercentString(p.margeBrute));
+        setRunwayMois(p.runwayMois != null ? String(p.runwayMois) : "");
+        setNbClientsActifs(p.nbClientsActifs != null ? String(p.nbClientsActifs) : "");
+        setDirigeantExperienceAns(p.dirigeantExperienceAns != null ? String(p.dirigeantExperienceAns) : "");
+        setDirigeantAntecedents(p.dirigeantAntecedents ?? "");
+        setDirigeantIncidentsLegaux(p.dirigeantIncidentsLegaux ?? "aucun");
+        setExperienceSecteurAns(p.experienceSecteurAns != null ? String(p.experienceSecteurAns) : "");
+        setTrackRecord(p.trackRecord ?? "");
+        setCompletudeEquipe(p.completudeEquipe ?? "");
+        setDroitsInvestisseur(p.droitsInvestisseur ?? "");
+        setTransparence(p.transparence ?? "");
+        setTailleMarche(p.tailleMarche ?? "");
+        setScalabilite(p.scalabilite ?? "");
+        setMoat(p.moat ?? "");
+        setPartMarcheRelative(p.partMarcheRelative ?? "");
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Erreur de chargement."))
+      .finally(() => setIsLoading(false));
+  }, [token, organization]);
+
+  async function handleSave() {
+    if (!token || !organization) return;
+    setIsSaving(true);
+    setSaved(false);
+    setError(null);
+    try {
+      await api.patch(
+        `/organizations/${organization.id}/credit-profile`,
+        {
+          secteurCode: secteurCode || undefined,
+          secteurSaisonnalite,
+          secteurImportDevises,
+          secteurSoutienPublic,
+          cashFlowAnnuel: cashFlowAnnuel ? Number(cashFlowAnnuel) : undefined,
+          fluxMobileMoneyMensuel: fluxMobileMoneyMensuel ? Number(fluxMobileMoneyMensuel) : undefined,
+          autonomieFinanciere: fromPercentInput(autonomieFinanciere),
+          tauxEndettement: fromPercentInput(tauxEndettement),
+          ratioLiquidite: fromPercentInput(ratioLiquidite),
+          tcamCa3ans: fromPercentInput(tcamCa3ans),
+          margeBrute: fromPercentInput(margeBrute),
+          runwayMois: runwayMois ? Number(runwayMois) : undefined,
+          nbClientsActifs: nbClientsActifs ? Number(nbClientsActifs) : undefined,
+          dirigeantExperienceAns: dirigeantExperienceAns ? Number(dirigeantExperienceAns) : undefined,
+          dirigeantAntecedents: dirigeantAntecedents || undefined,
+          dirigeantIncidentsLegaux,
+          experienceSecteurAns: experienceSecteurAns ? Number(experienceSecteurAns) : undefined,
+          trackRecord: trackRecord || undefined,
+          completudeEquipe: completudeEquipe || undefined,
+          droitsInvestisseur: droitsInvestisseur || undefined,
+          transparence: transparence || undefined,
+          tailleMarche: tailleMarche || undefined,
+          scalabilite: scalabilite || undefined,
+          moat: moat || undefined,
+          partMarcheRelative: partMarcheRelative || undefined,
+        },
+        token,
+      );
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  if (orgLoading || isLoading) {
+    return <div className="p-8 text-sm text-gray-400">Chargement...</div>;
+  }
+
+  if (!organization) {
+    return <div className="p-8 text-sm text-gray-400">Aucune entreprise associée à votre compte.</div>;
+  }
+
+  return (
+    <div className="p-8">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold text-gray-900">Profil de mon entreprise</h1>
+        <p className="text-sm text-gray-500">
+          {organization.legalName} — ces informations sont partagées par toutes vos demandes de
+          financement (Prêt MLT et Equity) : vous ne les ressaisissez qu'une seule fois ici.
+        </p>
+      </div>
+
+      {error && (
+        <div className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
+      {saved && (
+        <div className="mb-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-700">
+          Profil enregistré.
+        </div>
+      )}
+
+      <div className="space-y-6">
+        {/* Secteur & structure */}
+        <section className="rounded-xl border border-gray-200 bg-white p-6">
+          <h2 className="mb-1 text-sm font-semibold text-gray-900">Secteur & structure</h2>
+          <p className="mb-4 text-xs text-gray-500">Utilisé par le moteur de scoring Prêt MLT.</p>
+
+          <div className="mb-4">
+            <label className="mb-1 block text-sm font-medium text-gray-700">Secteur d'activité principal</label>
+            <select
+              value={secteurCode}
+              onChange={(e) => setSecteurCode(e.target.value)}
+              className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+            >
+              <option value="">Sélectionner</option>
+              {SECTEURS.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-wrap gap-4">
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={secteurSaisonnalite} onChange={(e) => setSecteurSaisonnalite(e.target.checked)} />
+              Activité saisonnière
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={secteurImportDevises} onChange={(e) => setSecteurImportDevises(e.target.checked)} />
+              Import en devises
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={secteurSoutienPublic} onChange={(e) => setSecteurSoutienPublic(e.target.checked)} />
+              Soutien public au secteur
+            </label>
+          </div>
+        </section>
+
+        {/* Santé financière */}
+        <section className="rounded-xl border border-gray-200 bg-white p-6">
+          <h2 className="mb-1 text-sm font-semibold text-gray-900">Santé financière</h2>
+          <p className="mb-4 text-xs text-gray-500">Utilisé par les moteurs Prêt MLT et Equity.</p>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Cash-flow annuel (FCFA)</label>
+              <input type="number" placeholder="Ex : 8 000 000" value={cashFlowAnnuel} onChange={(e) => setCashFlowAnnuel(e.target.value)}
+                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+              <p className="mt-1 text-xs text-gray-400">D'après vos états financiers, si disponibles.</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Flux Mobile Money mensuel (FCFA)</label>
+              <input type="number" placeholder="Ex : 900 000" value={fluxMobileMoneyMensuel} onChange={(e) => setFluxMobileMoneyMensuel(e.target.value)}
+                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+              <p className="mt-1 text-xs text-gray-400">À défaut de bilan formel — moyenne des 6 derniers mois.</p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Autonomie financière (%)</label>
+              <input type="number" step="0.1" placeholder="Ex : 35" value={autonomieFinanciere} onChange={(e) => setAutonomieFinanciere(e.target.value)}
+                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+              <p className="mt-1 text-xs text-gray-400">Fonds propres ÷ total du bilan.</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Taux d'endettement (%)</label>
+              <input type="number" step="0.1" placeholder="Ex : 40" value={tauxEndettement} onChange={(e) => setTauxEndettement(e.target.value)}
+                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+              <p className="mt-1 text-xs text-gray-400">À défaut de connaître votre autonomie financière.</p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Ratio de liquidité</label>
+              <input type="number" step="0.01" placeholder="Ex : 1.2" value={ratioLiquidite ? String(Number(ratioLiquidite) / 100) : ""}
+                onChange={(e) => setRatioLiquidite(e.target.value ? String(Number(e.target.value) * 100) : "")}
+                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+              <p className="mt-1 text-xs text-gray-400">Actifs court terme ÷ passifs court terme.</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Nombre de clients actifs</label>
+              <input type="number" placeholder="Ex : 12" value={nbClientsActifs} onChange={(e) => setNbClientsActifs(e.target.value)}
+                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">TCAM CA sur 3 ans (%)</label>
+              <input type="number" step="0.1" placeholder="Ex : 30" value={tcamCa3ans} onChange={(e) => setTcamCa3ans(e.target.value)}
+                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+              <p className="mt-1 text-xs text-gray-400">Equity — taux de croissance annuel moyen.</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Marge brute (%)</label>
+              <input type="number" step="0.1" placeholder="Ex : 40" value={margeBrute} onChange={(e) => setMargeBrute(e.target.value)}
+                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Runway (mois)</label>
+              <input type="number" placeholder="Ex : 12" value={runwayMois} onChange={(e) => setRunwayMois(e.target.value)}
+                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+              <p className="mt-1 text-xs text-gray-400">Mois de trésorerie sans nouveau financement.</p>
+            </div>
+          </div>
+        </section>
+
+        {/* Profil du dirigeant */}
+        <section className="rounded-xl border border-gray-200 bg-white p-6">
+          <h2 className="mb-1 text-sm font-semibold text-gray-900">Profil du dirigeant</h2>
+          <p className="mb-4 text-xs text-gray-500">Utilisé par les moteurs Prêt MLT et Equity.</p>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Expérience du dirigeant (années)</label>
+              <input type="number" placeholder="Ex : 7" value={dirigeantExperienceAns} onChange={(e) => setDirigeantExperienceAns(e.target.value)}
+                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Incidents légaux connus</label>
+              <select value={dirigeantIncidentsLegaux} onChange={(e) => setDirigeantIncidentsLegaux(e.target.value)}
+                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
+                <option value="aucun">Aucun</option>
+                <option value="connu">Incident(s) connu(s)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Expérience sectorielle (années)</label>
+              <input type="number" placeholder="Ex : 10" value={experienceSecteurAns} onChange={(e) => setExperienceSecteurAns(e.target.value)}
+                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+              <p className="mt-1 text-xs text-gray-400">Equity — expérience du dirigeant dans ce secteur.</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Track record du dirigeant</label>
+              <select value={trackRecord} onChange={(e) => setTrackRecord(e.target.value)}
+                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
+                <option value="">Sélectionner</option>
+                {TRACK_RECORD.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <label className="mb-1 block text-sm font-medium text-gray-700">Antécédents du dirigeant</label>
+            <input type="text" placeholder="Notes libres sur le parcours du dirigeant" value={dirigeantAntecedents} onChange={(e) => setDirigeantAntecedents(e.target.value)}
+              className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+          </div>
+        </section>
+
+        {/* Équipe, gouvernance & marché — Equity */}
+        <section className="rounded-xl border border-gray-200 bg-white p-6">
+          <h2 className="mb-1 text-sm font-semibold text-gray-900">Équipe, gouvernance & marché</h2>
+          <p className="mb-4 text-xs text-gray-500">Utilisé par le moteur de scoring Equity.</p>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Taille du marché</label>
+              <select value={tailleMarche} onChange={(e) => setTailleMarche(e.target.value)}
+                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
+                <option value="">Sélectionner</option>
+                {TAILLE_MARCHE.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Scalabilité</label>
+              <select value={scalabilite} onChange={(e) => setScalabilite(e.target.value)}
+                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
+                <option value="">Sélectionner</option>
+                {SCALABILITE.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Avantage concurrentiel (moat)</label>
+              <select value={moat} onChange={(e) => setMoat(e.target.value)}
+                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
+                <option value="">Sélectionner</option>
+                {MOAT.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Position sur le marché</label>
+              <select value={partMarcheRelative} onChange={(e) => setPartMarcheRelative(e.target.value)}
+                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
+                <option value="">Sélectionner</option>
+                {PART_MARCHE.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Complétude de l'équipe</label>
+              <select value={completudeEquipe} onChange={(e) => setCompletudeEquipe(e.target.value)}
+                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
+                <option value="">Sélectionner</option>
+                {COMPLETUDE_EQUIPE.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Droits investisseurs</label>
+              <select value={droitsInvestisseur} onChange={(e) => setDroitsInvestisseur(e.target.value)}
+                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
+                <option value="">Sélectionner</option>
+                {DROITS_INVESTISSEUR.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <label className="mb-1 block text-sm font-medium text-gray-700">Transparence financière</label>
+            <select value={transparence} onChange={(e) => setTransparence(e.target.value)}
+              className="w-full max-w-xs rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
+              <option value="">Sélectionner</option>
+              {TRANSPARENCE.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+        </section>
+
+        <div className="flex justify-end">
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="rounded-md bg-brand-700 px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-50"
+          >
+            {isSaving ? "Enregistrement…" : "Enregistrer les modifications"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -35,4 +35,13 @@ export class CreateOrganizationDto {
   @IsOptional()
   @IsString()
   city?: string;
+
+  @ApiProperty({
+    example: 'commerce_detail',
+    required: false,
+    description: "Classification sectorielle utilisée par le moteur de scoring PRET (distincte du champ `sector` descriptif) : services_essentiels | agro | commerce_detail | btp | import_export | commerce_mono | volatil",
+  })
+  @IsOptional()
+  @IsString()
+  secteurCode?: string;
 }

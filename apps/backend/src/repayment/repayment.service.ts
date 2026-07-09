@@ -33,7 +33,21 @@ export class RepaymentService {
     return this.repaymentRepository.confirmPayment(scheduleId, userId, dto.proofDocumentId);
   }
 
-  async getAllCommissions() {
-    return this.repaymentRepository.findAllCommissions();
+  async getAllCommissions(filters?: {
+    type?: string;
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    return this.repaymentRepository.findAllCommissions(filters);
+  }
+
+  async getCommissionStats() {
+    return this.repaymentRepository.getCommissionStats();
+  }
+
+  async getTopOrganizations() {
+    return this.repaymentRepository.getTopOrganizations();
   }
 }

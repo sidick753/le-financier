@@ -1,83 +1,112 @@
 "use client";
 
-import { useState } from "react";
-import { useAdminData } from "@/lib/use-admin-data";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import type { AdminOrganization } from "@/lib/use-admin-data";
+import { ORG_STATUS_CONFIG, formatAdminDate, formatCompactAmount } from "@/lib/admin-ui";
 
-const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
-  VERIFIED: { label: "Vérifié", className: "bg-green-100 text-green-700" },
-  PENDING: {
-    label: "En attente KYC",
-    className: "bg-yellow-100 text-yellow-700",
-  },
-  REJECTED: { label: "Suspendu", className: "bg-red-100 text-red-700" },
+const FILTERS = ["Tous", "Vérifié", "En attente", "Suspendu"] as const;
+const FILTER_TO_STATUS: Record<string, string | undefined> = {
+  Tous: undefined,
+  Vérifié: "VERIFIED",
+  "En attente": "PENDING",
+  Suspendu: "REJECTED",
 };
+const PAGE_SIZE = 10;
+const SEARCH_DEBOUNCE_MS = 300;
 
-function formatDate(dateString: string) {
-  return new Date(dateString).toLocaleDateString("fr-FR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function formatAmount(value: number) {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(0)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(0)}K`;
-  return value.toLocaleString("fr-FR");
+interface AdminStats {
+  total: number;
+  verified: number;
+  pending: number;
+  rejected: number;
+  totalFinanced: number;
 }
 
 export default function AdminPmePage() {
-  const { organizations, isLoading, refresh } = useAdminData();
-  const { token } = useAuth();
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("Tous");
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-
-  const FILTERS = ["Tous", "Vérifié", "En attente", "Suspendu"];
-
-  const filtered = organizations.filter((org) => {
-    const matchSearch = org.legalName
-      .toLowerCase()
-      .includes(search.toLowerCase());
-    const matchFilter =
-      filter === "Tous" ||
-      (filter === "Vérifié" && org.verificationStatus === "VERIFIED") ||
-      (filter === "En attente" && org.verificationStatus === "PENDING") ||
-      (filter === "Suspendu" && org.verificationStatus === "REJECTED");
-    return matchSearch && matchFilter;
-  });
-
-  const verified = organizations.filter(
-    (o) => o.verificationStatus === "VERIFIED",
-  ).length;
-  const pending = organizations.filter(
-    (o) => o.verificationStatus === "PENDING",
-  ).length;
-  const totalFinanced = organizations.reduce(
-    (sum, org) =>
-      sum +
-      org.fundingRequests.reduce(
-        (s, fr) => s + Number(fr.amountRaised ?? 0),
-        0,
-      ),
-    0,
+  return (
+    <Suspense fallback={null}>
+      <AdminPmePageContent />
+    </Suspense>
   );
+}
 
-  async function handleAction(id: string, action: "verify" | "reject") {
-    setActionLoading(id);
-    try {
-      await api.patch(
-        `/organizations/admin/${id}/${action}`,
-        {},
-        token!,
-      );
-      refresh();
-    } finally {
-      setActionLoading(null);
-    }
-  }
+function AdminPmePageContent() {
+  const searchParams = useSearchParams();
+  const { token } = useAuth();
+
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState(
+    searchParams.get("status") === "PENDING" ? "En attente" : "Tous",
+  );
+  const [page, setPage] = useState(1);
+
+  const [organizations, setOrganizations] = useState<AdminOrganization[]>([]);
+  const [total, setTotal] = useState(0);
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const latestRequestId = useRef(0);
+
+  // Debounce la recherche pour éviter une requête à chaque frappe.
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timeout);
+  }, [searchInput]);
+
+  const fetchOrganizations = useCallback(() => {
+    if (!token) return;
+    setIsLoading(true);
+    const requestId = ++latestRequestId.current;
+    const params = new URLSearchParams();
+    const status = FILTER_TO_STATUS[filter];
+    if (status) params.set("status", status);
+    if (search) params.set("search", search);
+    params.set("page", String(page));
+    params.set("limit", String(PAGE_SIZE));
+
+    api
+      .get<{ data: AdminOrganization[]; total: number }>(
+        `/organizations/admin/all?${params.toString()}`,
+        token,
+      )
+      .then((res) => {
+        // Ignore les réponses obsolètes (une requête plus récente est déjà partie).
+        if (requestId !== latestRequestId.current) return;
+        setOrganizations(res.data);
+        setTotal(res.total);
+        setIsLoading(false);
+        // Si l'action courante a vidé la page affichée, on saute directement à la bonne page.
+        const lastPage = Math.max(1, Math.ceil(res.total / PAGE_SIZE));
+        if (res.data.length === 0 && page > lastPage) {
+          setPage(lastPage);
+        }
+      })
+      .catch(() => {
+        if (requestId === latestRequestId.current) setIsLoading(false);
+      });
+  }, [token, filter, search, page]);
+
+  const fetchStats = useCallback(() => {
+    if (!token) return;
+    api.get<AdminStats>("/organizations/admin/stats", token).then(setStats);
+  }, [token]);
+
+  useEffect(() => {
+    fetchOrganizations();
+  }, [fetchOrganizations]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div className="p-8">
@@ -90,12 +119,20 @@ export default function AdminPmePage() {
 
       {/* Stats */}
       <div className="mb-6 grid grid-cols-4 gap-4">
-        <StatCard label="PMEs inscrites" value={organizations.length} />
-        <StatCard label="Vérifiées" value={verified} green />
-        <StatCard label="En attente KYC" value={pending} orange />
+        <StatCard label="PMEs inscrites" value={stats ? stats.total : "…"} />
+        <StatCard
+          label="Vérifiées"
+          value={stats ? stats.verified : "…"}
+          green
+        />
+        <StatCard
+          label="En attente KYC"
+          value={stats ? stats.pending : "…"}
+          orange
+        />
         <StatCard
           label="Financés ce mois"
-          value={`${formatAmount(totalFinanced)} FCFA`}
+          value={stats ? `${formatCompactAmount(stats.totalFinanced)} FCFA` : "…"}
         />
       </div>
 
@@ -104,15 +141,18 @@ export default function AdminPmePage() {
         <input
           type="text"
           placeholder="Rechercher une PME..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
           className="flex-1 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
         />
         <div className="flex gap-2">
           {FILTERS.map((f) => (
             <button
               key={f}
-              onClick={() => setFilter(f)}
+              onClick={() => {
+                setFilter(f);
+                setPage(1);
+              }}
               className={`rounded-full px-4 py-1.5 text-xs font-medium transition ${
                 filter === f
                   ? "bg-brand-700 text-white"
@@ -130,10 +170,10 @@ export default function AdminPmePage() {
         {isLoading && (
           <p className="p-5 text-sm text-gray-400">Chargement...</p>
         )}
-        {!isLoading && filtered.length === 0 && (
+        {!isLoading && organizations.length === 0 && (
           <p className="p-5 text-sm text-gray-400">Aucune PME trouvée.</p>
         )}
-        {filtered.length > 0 && (
+        {organizations.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -148,10 +188,10 @@ export default function AdminPmePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filtered.map((org) => {
+                {organizations.map((org) => {
                   const config =
-                    STATUS_CONFIG[org.verificationStatus] ??
-                    STATUS_CONFIG.PENDING;
+                    ORG_STATUS_CONFIG[org.verificationStatus] ??
+                    ORG_STATUS_CONFIG.PENDING;
                   const owner = org.members[0]?.user;
                   const orgFinanced = org.fundingRequests.reduce(
                     (s, fr) => s + Number(fr.amountRaised ?? 0),
@@ -183,57 +223,51 @@ export default function AdminPmePage() {
                       </td>
                       <td className="px-5 py-3 text-right text-xs font-medium text-gray-900">
                         {orgFinanced > 0
-                          ? `${formatAmount(orgFinanced)} FCFA`
+                          ? `${formatCompactAmount(orgFinanced)} FCFA`
                           : "—"}
                       </td>
                       <td className="px-5 py-3 text-xs text-gray-500">
-                        {formatDate(org.createdAt)}
+                        {formatAdminDate(org.createdAt)}
                       </td>
                       <td className="px-5 py-3">
-                        <div className="flex gap-2">
-                          {org.verificationStatus === "PENDING" && (
-                            <>
-                              <button
-                                onClick={() => handleAction(org.id, "verify")}
-                                disabled={actionLoading === org.id}
-                                className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
-                              >
-                                Valider KYC
-                              </button>
-                              <button
-                                onClick={() => handleAction(org.id, "reject")}
-                                disabled={actionLoading === org.id}
-                                className="rounded-md border border-red-200 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-                              >
-                                Rejeter
-                              </button>
-                            </>
-                          )}
-                          {org.verificationStatus === "VERIFIED" && (
-                            <button
-                              onClick={() => handleAction(org.id, "reject")}
-                              disabled={actionLoading === org.id}
-                              className="rounded-md border border-orange-200 px-3 py-1 text-xs font-medium text-orange-600 hover:bg-orange-50 disabled:opacity-50"
-                            >
-                              Suspendre
-                            </button>
-                          )}
-                          {org.verificationStatus === "REJECTED" && (
-                            <button
-                              onClick={() => handleAction(org.id, "verify")}
-                              disabled={actionLoading === org.id}
-                              className="rounded-md bg-brand-700 px-3 py-1 text-xs font-medium text-white hover:bg-brand-800 disabled:opacity-50"
-                            >
-                              Réactiver
-                            </button>
-                          )}
-                        </div>
+                        <Link
+                          href={`/admin/pme/${org.id}`}
+                          className="rounded-md border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                          Voir le dossier →
+                        </Link>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+        {total > 0 && (
+          <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3 text-xs text-gray-500">
+            <p>
+              {total} PME{total !== 1 ? "s" : ""} au total
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="rounded-md border border-gray-200 px-3 py-1 font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+              >
+                Précédent
+              </button>
+              <span>
+                Page {page} / {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="rounded-md border border-gray-200 px-3 py-1 font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+              >
+                Suivant
+              </button>
+            </div>
           </div>
         )}
       </div>

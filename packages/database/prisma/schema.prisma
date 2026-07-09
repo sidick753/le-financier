@@ -96,6 +96,43 @@ model Organization {
   city                 String?
   country              String                          @default("CI")
   verificationStatus   OrganizationVerificationStatus  @default(PENDING)
+  rejectionReason      String?
+
+  // ── Profil de crédit — attributs de l'entité (pas de la demande), utilisés
+  // par le moteur de scoring pour toutes les demandes de financement de cette PME.
+
+  // Secteur & structure (PRET)
+  secteurCode          String?
+  secteurSaisonnalite  Boolean?  @default(false)
+  secteurImportDevises Boolean?  @default(false)
+  secteurSoutienPublic Boolean?  @default(false)
+
+  // Santé financière (PRET + EQUITY)
+  cashFlowAnnuel         Decimal? @db.Decimal(14, 2)
+  fluxMobileMoneyMensuel Decimal? @db.Decimal(14, 2)
+  autonomieFinanciere    Decimal? @db.Decimal(5, 4)
+  tauxEndettement        Decimal? @db.Decimal(5, 4)
+  ratioLiquidite         Decimal? @db.Decimal(5, 4)
+  tcamCa3ans             Decimal? @db.Decimal(5, 4)
+  margeBrute             Decimal? @db.Decimal(5, 4)
+  runwayMois             Int?
+  nbClientsActifs        Int?
+
+  // Profil du dirigeant (PRET + EQUITY)
+  dirigeantExperienceAns   Int?
+  dirigeantAntecedents     String?
+  dirigeantIncidentsLegaux String?
+  experienceSecteurAns     Int?
+  trackRecord              String?
+
+  // Équipe, gouvernance & marché (EQUITY)
+  completudeEquipe   String?
+  droitsInvestisseur String?
+  transparence       String?
+  tailleMarche       String?
+  scalabilite        String?
+  moat               String?
+  partMarcheRelative String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -253,6 +290,7 @@ model FundingRequest {
   expectedReturn  Decimal?              @db.Decimal(5, 2) // taux/rendement attendu en %
   durationMonths  Int?
   status          FundingRequestStatus  @default(DRAFT)
+  rejectionReason String?
 
   publishedAt DateTime?
   closesAt    DateTime?
@@ -435,7 +473,9 @@ model ScoringInput {
 
   product          String         // FACTURE | PRET | EQUITY
 
-  // Données FACTURE
+  // Données propres à CETTE demande (le reste — profil PME/dirigeant — vit sur Organization).
+
+  // FACTURE : ce débiteur, cette facture
   debiteurNom             String?
   debiteurType            String?   // grande_entreprise | multinationale | public_solvable | pme_etablie | petite_structure | particulier
   debiteurSolvabilite     String?   // solide | neutre | tension | incident
@@ -444,33 +484,10 @@ model ScoringInput {
   partPlusGrosClient      Decimal?  @db.Decimal(5, 4)
   delaiPaiementMenu       String?   // a_echeance | leger_retard | souvent_retard
   tauxImpaye12m           Decimal?  @db.Decimal(5, 4)
-  nbClientsActifs         Int?
 
-  // Données PRET MLT
-  cashFlowAnnuel          Decimal?  @db.Decimal(14, 2)
-  fluxMobileMoneyMensuel  Decimal?  @db.Decimal(14, 2)
-  autonomieFinanciere     Decimal?  @db.Decimal(5, 4)
-  tauxEndettement         Decimal?  @db.Decimal(5, 4)
-  ratioLiquidite          Decimal?  @db.Decimal(5, 4)
+  // PRET : la garantie offerte pour ce prêt précis
   garantieType            String?
   garantieCouverture      Decimal?  @db.Decimal(5, 4)
-  dirigeantExperienceAns  Int?
-  dirigeantAntecedents    String?
-  dirigeantIncidentsLegaux String?
-  secteurCode             String?
-  secteurSaisonnalite     Boolean?  @default(false)
-  secteurImportDevises    Boolean?  @default(false)
-  secteurSoutienPublic    Boolean?  @default(false)
-
-  // Données EQUITY
-  tcamCa3ans              Decimal?  @db.Decimal(5, 4)
-  tailleMarche            String?
-  scalabilite             String?
-  experienceSecteurAns    Int?
-  trackRecord             String?
-  completudeEquipe        String?
-  moat                    String?
-  partMarcheRelative      String?
   runwayMois              Int?
   margeBrute              Decimal?  @db.Decimal(5, 4)
   droitsInvestisseur      String?

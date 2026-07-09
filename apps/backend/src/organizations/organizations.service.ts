@@ -1,6 +1,7 @@
 import { Injectable, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { OrganizationsRepository } from './organizations.repository';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
+import { UpdateCreditProfileDto } from './dto/update-credit-profile.dto';
 
 @Injectable()
 export class OrganizationsService {
@@ -42,15 +43,46 @@ export class OrganizationsService {
     return this.organizationsRepository.countByStatus();
   }
 
-  async getAllOrganizations(filters?: { status?: string; search?: string }) {
+  async getAllOrganizations(filters?: {
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
     return this.organizationsRepository.findAll(filters);
   }
 
-  async updateVerificationStatus(id: string, status: 'VERIFIED' | 'REJECTED') {
+  async findOneAdmin(id: string) {
+    const organization = await this.organizationsRepository.findByIdAdmin(id);
+    if (!organization) {
+      throw new NotFoundException('Organisation introuvable.');
+    }
+    return organization;
+  }
+
+  async updateVerificationStatus(
+    id: string,
+    status: 'VERIFIED' | 'REJECTED',
+    rejectionReason?: string,
+  ) {
     const organization = await this.organizationsRepository.findById(id);
     if (!organization) {
       throw new NotFoundException('Organisation introuvable.');
     }
-    return this.organizationsRepository.updateVerificationStatus(id, status);
+    return this.organizationsRepository.updateVerificationStatus(id, status, rejectionReason);
+  }
+
+  async updateCreditProfile(id: string, userId: string, dto: UpdateCreditProfileDto) {
+    const organization = await this.organizationsRepository.findById(id);
+    if (!organization) {
+      throw new NotFoundException('Organisation introuvable.');
+    }
+
+    const isMember = await this.organizationsRepository.isMember(id, userId);
+    if (!isMember) {
+      throw new ForbiddenException("Vous n'avez pas accès à cette organisation.");
+    }
+
+    return this.organizationsRepository.updateCreditProfile(id, dto);
   }
 }

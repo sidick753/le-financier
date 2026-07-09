@@ -2,6 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { PrismaClient, Prisma } from '@le-financier/database';
 
 const ACTIVE_INVESTMENT_STATUSES = ['NEGOTIATING', 'COMMITTED', 'SETTLED_OFF_PLATFORM'] as const;
+// "Volume engagé" affiché aux admins ne compte que le capital réellement engagé,
+// pas les négociations en cours — cohérent avec les pages Investisseurs/PME/Dashboard.
+const ENGAGED_INVESTMENT_STATUSES = ['COMMITTED', 'SETTLED_OFF_PLATFORM'] as const;
 
 @Injectable()
 export class InstitutionsRepository {
@@ -94,7 +97,7 @@ export class InstitutionsRepository {
   async findMembersWithStats(institutionId: string) {
     const members = await this.prisma.institutionMember.findMany({
       where: { institutionId },
-      include: { user: { select: { firstName: true, lastName: true, email: true } } },
+      include: { user: { select: { firstName: true, lastName: true, email: true, kycStatus: true } } },
       orderBy: { createdAt: 'asc' },
     });
 
@@ -112,6 +115,7 @@ export class InstitutionsRepository {
         firstName: member.user.firstName,
         lastName: member.user.lastName,
         email: member.user.email,
+        kycStatus: member.user.kycStatus,
         role: member.role,
         status: member.status,
         specialty: member.specialty,
@@ -119,6 +123,125 @@ export class InstitutionsRepository {
         encoursGere: own.reduce((sum, i) => sum + Number(i.amountCommitted), 0),
       };
     });
+  }
+
+  // ── Admin (partenaires) ────────────────────────────────────────────────
+
+  async findAllAdmin(filters?: {
+    search?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const where: Prisma.InstitutionWhereInput = {
+      ...(filters?.search
+        ? { name: { contains: filters.search, mode: 'insensitive' as const } }
+        : {}),
+      ...(filters?.status
+        ? { members: { some: { role: 'OWNER', user: { kycStatus: filters.status as any } } } }
+        : {}),
+    };
+    const { page, limit } = filters ?? {};
+    const hasPagination = page !== undefined && limit !== undefined;
+
+    const [institutions, total] = await Promise.all([
+      this.prisma.institution.findMany({
+        where,
+        include: {
+          members: {
+            where: { role: 'OWNER' },
+            take: 1,
+            include: { user: { select: { firstName: true, lastName: true, email: true, kycStatus: true } } },
+          },
+          _count: { select: { members: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: hasPagination ? (page - 1) * limit : undefined,
+        take: hasPagination ? limit : undefined,
+      }),
+      this.prisma.institution.count({ where }),
+    ]);
+
+    const memberships = await this.prisma.institutionMember.findMany({
+      where: { institutionId: { in: institutions.map((i) => i.id) } },
+      select: { institutionId: true, userId: true },
+    });
+    const engagedByUser = await this.aggregateEngagedByUser(memberships.map((m) => m.userId));
+
+    const data = institutions.map((inst) => {
+      const memberUserIds = memberships
+        .filter((m) => m.institutionId === inst.id)
+        .map((m) => m.userId);
+      return {
+        id: inst.id,
+        name: inst.name,
+        type: inst.type,
+        bceaoApprovalNumber: inst.bceaoApprovalNumber,
+        envelopeMax: inst.envelopeMax,
+        createdAt: inst.createdAt,
+        memberCount: inst._count.members,
+        owner: inst.members[0]?.user ?? null,
+        totalEngaged: memberUserIds.reduce((sum, uid) => sum + (engagedByUser.get(uid) ?? 0), 0),
+      };
+    });
+
+    return { data, total };
+  }
+
+  async countAdminStats() {
+    const institutions = await this.prisma.institution.findMany({
+      select: {
+        members: {
+          where: { role: 'OWNER' },
+          take: 1,
+          select: { user: { select: { kycStatus: true } } },
+        },
+      },
+    });
+    const total = institutions.length;
+    const verified = institutions.filter((i) => i.members[0]?.user.kycStatus === 'VERIFIED').length;
+    const pending = institutions.filter((i) => i.members[0]?.user.kycStatus === 'PENDING').length;
+
+    const allMemberUserIds = (
+      await this.prisma.institutionMember.findMany({ select: { userId: true } })
+    ).map((m) => m.userId);
+    const totalEngagedAgg = await this.prisma.investment.aggregate({
+      where: { investorId: { in: allMemberUserIds }, status: { in: [...ENGAGED_INVESTMENT_STATUSES] } },
+      _sum: { amountCommitted: true },
+    });
+
+    return {
+      total,
+      verified,
+      pending,
+      rejected: total - verified - pending,
+      totalEngaged: Number(totalEngagedAgg._sum.amountCommitted ?? 0),
+    };
+  }
+
+  async findByIdAdmin(id: string) {
+    const institution = await this.prisma.institution.findUnique({ where: { id } });
+    if (!institution) return null;
+
+    const members = await this.findMembersWithStats(id);
+    const engagedByUser = await this.aggregateEngagedByUser(members.map((m) => m.userId));
+    return {
+      ...institution,
+      members,
+      totalEngaged: members.reduce((sum, m) => sum + (engagedByUser.get(m.userId) ?? 0), 0),
+    };
+  }
+
+  private async aggregateEngagedByUser(userIds: string[]) {
+    const investments = await this.prisma.investment.findMany({
+      where: { investorId: { in: userIds }, status: { in: [...ENGAGED_INVESTMENT_STATUSES] } },
+      select: { investorId: true, amountCommitted: true },
+    });
+    const byUser = new Map<string, number>();
+    for (const inv of investments) {
+      byUser.set(inv.investorId, (byUser.get(inv.investorId) ?? 0) + Number(inv.amountCommitted));
+    }
+    return byUser;
   }
 
   async computeRiskIndicators(institutionId: string) {

@@ -1,5 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Request, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Request, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -96,5 +96,49 @@ export class InstitutionsController {
   @Patch('mine/aml-alerts/:alertId/resolve')
   resolveAmlAlert(@Param('alertId') alertId: string, @Request() req) {
     return this.institutionsService.resolveAmlAlert(req.user.id, alertId);
+  }
+
+  // ── Admin (partenaires) ────────────────────────────────────────────────
+  // Ces routes ciblent l'ADMIN plateforme, pas un membre d'institution —
+  // le rôle requis surcharge donc le `@Roles('INSTITUTION')` de la classe.
+
+  @ApiOperation({ summary: '[Admin] Liste tous les partenaires institutionnels', description: 'Filtre optionnel par recherche sur le nom et par statut KYC du propriétaire, avec pagination.' })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'status', required: false, enum: ['PENDING', 'VERIFIED', 'REJECTED'] })
+  @ApiQuery({ name: 'page', required: false, description: 'Numéro de page (retourne tout si absent)' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Taille de page (retourne tout si absent)' })
+  @ApiResponse({ status: 200, description: '{ data: Institution[], total: number }' })
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Get('admin/all')
+  getAllAdmin(
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.institutionsService.getAllAdmin({
+      search,
+      status,
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+    });
+  }
+
+  @ApiOperation({ summary: '[Admin] Statistiques partenaires', description: 'Retourne les compteurs globaux : total, vérifiés, en attente, rejetés, volume engagé.' })
+  @ApiResponse({ status: 200, description: '{ total, verified, pending, rejected, totalEngaged }' })
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Get('admin/stats')
+  getAdminStats() {
+    return this.institutionsService.getAdminStats();
+  }
+
+  @ApiOperation({ summary: '[Admin] Détail complet d\'un partenaire institutionnel', description: 'Retourne l\'institution avec tous ses membres et leurs statistiques d\'engagement.' })
+  @ApiParam({ name: 'id', description: 'UUID de l\'institution' })
+  @ApiResponse({ status: 200, description: 'Institution trouvée' })
+  @ApiResponse({ status: 404, description: 'Institution introuvable' })
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Get('admin/:id')
+  getOneAdmin(@Param('id') id: string) {
+    return this.institutionsService.getOneAdmin(id);
   }
 }

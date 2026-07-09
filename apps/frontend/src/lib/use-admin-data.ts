@@ -43,14 +43,17 @@ export function useAdminData() {
     if (!token) return;
     setIsLoading(true);
     Promise.all([
-      api.get<AdminOrganization[]>("/organizations/admin/all", token),
-      api.get<AdminUser[]>("/auth/admin/users", token),
-      api.get<any[]>("/funding-requests/admin/all", token),
+      api.get<{ data: AdminOrganization[]; total: number }>(
+        "/organizations/admin/all",
+        token,
+      ),
+      api.get<{ data: AdminUser[]; total: number }>("/auth/admin/users", token),
+      api.get<{ data: any[]; total: number }>("/funding-requests/admin/all", token),
     ])
       .then(([orgs, usrs, funding]) => {
-        setOrganizations(orgs);
-        setUsers(usrs);
-        setFundingRequests(funding);
+        setOrganizations(orgs.data);
+        setUsers(usrs.data);
+        setFundingRequests(funding.data);
       })
       .finally(() => setIsLoading(false));
   }, [token]);

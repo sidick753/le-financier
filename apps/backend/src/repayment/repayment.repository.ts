@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient } from '@le-financier/database';
+import { PrismaClient, Prisma } from '@le-financier/database';
 import { generateSchedule } from './repayment-schedule.generator';
 import { IRepaymentRepository } from './interfaces/repayment-repository.interface';
 
@@ -33,7 +33,8 @@ export class RepaymentRepository implements IRepaymentRepository {
           baseAmount: params.amountCommitted,
           rate: FUNDING_FEE_RATE,
           commissionAmount: fundingCommission,
-          status: 'PENDING',
+          // Prélevée immédiatement sur les fonds réglés, pas de flux de collecte séparé.
+          status: 'COLLECTED',
         },
       });
     });
@@ -112,7 +113,8 @@ export class RepaymentRepository implements IRepaymentRepository {
             baseAmount: interestAmount,
             rate: INTEREST_FEE_RATE,
             commissionAmount: interestCommission,
-            status: 'PENDING',
+            // Prélevée immédiatement sur l'échéance confirmée, pas de flux de collecte séparé.
+            status: 'COLLECTED',
           },
         });
       }
@@ -145,14 +147,122 @@ export class RepaymentRepository implements IRepaymentRepository {
     });
   }
 
-  async findAllCommissions() {
-    return this.prisma.commission.findMany({
-      include: {
-        fundingRequest: {
-          include: { organization: { select: { legalName: true } } },
+  async findAllCommissions(filters?: {
+    type?: string;
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const where: Prisma.CommissionWhereInput = {
+      ...(filters?.type ? { type: filters.type as any } : {}),
+      ...(filters?.status ? { status: filters.status as any } : {}),
+      ...(filters?.search
+        ? {
+            fundingRequest: {
+              OR: [
+                { title: { contains: filters.search, mode: 'insensitive' } },
+                { organization: { legalName: { contains: filters.search, mode: 'insensitive' } } },
+              ],
+            },
+          }
+        : {}),
+    };
+    const { page, limit } = filters ?? {};
+    const hasPagination = page !== undefined && limit !== undefined;
+
+    const [data, count] = await Promise.all([
+      this.prisma.commission.findMany({
+        where,
+        include: {
+          fundingRequest: {
+            include: { organization: { select: { legalName: true } } },
+          },
         },
-      },
-      orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: 'desc' },
+        skip: hasPagination ? (page - 1) * limit : undefined,
+        take: hasPagination ? limit : undefined,
+      }),
+      hasPagination ? this.prisma.commission.count({ where }) : Promise.resolve(undefined),
+    ]);
+
+    return { data, total: count ?? data.length };
+  }
+
+  async getCommissionStats() {
+    const now = new Date();
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [totalAgg, fundingAgg, interestAgg, thisMonthAgg, thisMonthVolumeAgg, recentCommissions] =
+      await Promise.all([
+        this.prisma.commission.aggregate({ _sum: { commissionAmount: true } }),
+        this.prisma.commission.aggregate({
+          _sum: { commissionAmount: true },
+          where: { type: 'FUNDING_FEE' },
+        }),
+        this.prisma.commission.aggregate({
+          _sum: { commissionAmount: true },
+          where: { type: 'INTEREST_FEE' },
+        }),
+        this.prisma.commission.aggregate({
+          _sum: { commissionAmount: true },
+          where: { createdAt: { gte: startOfMonth } },
+        }),
+        this.prisma.commission.aggregate({
+          _sum: { baseAmount: true },
+          where: { createdAt: { gte: startOfMonth } },
+        }),
+        this.prisma.commission.findMany({
+          where: { createdAt: { gte: sixMonthsAgo } },
+          select: { commissionAmount: true, baseAmount: true, createdAt: true },
+        }),
+      ]);
+
+    const monthly = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const inMonth = recentCommissions.filter(
+        (c) => c.createdAt.getFullYear() === d.getFullYear() && c.createdAt.getMonth() === d.getMonth(),
+      );
+      return {
+        label: d.toLocaleDateString('fr-FR', { month: 'short' }),
+        commissions: inMonth.reduce((s, c) => s + Number(c.commissionAmount), 0),
+        volume: inMonth.reduce((s, c) => s + Number(c.baseAmount), 0),
+      };
     });
+
+    return {
+      total: Number(totalAgg._sum.commissionAmount ?? 0),
+      fundingFees: Number(fundingAgg._sum.commissionAmount ?? 0),
+      interestFees: Number(interestAgg._sum.commissionAmount ?? 0),
+      thisMonth: Number(thisMonthAgg._sum.commissionAmount ?? 0),
+      thisMonthVolume: Number(thisMonthVolumeAgg._sum.baseAmount ?? 0),
+      monthly,
+    };
+  }
+
+  async getTopOrganizations(take = 10) {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ id: string; legalName: string; volume: Prisma.Decimal; commissions: Prisma.Decimal; operations: number }>
+    >(Prisma.sql`
+      SELECT o.id, o."legalName",
+        SUM(c."baseAmount") AS volume,
+        SUM(c."commissionAmount") AS commissions,
+        COUNT(*)::int AS operations
+      FROM commissions c
+      JOIN funding_requests fr ON fr.id = c."fundingRequestId"
+      JOIN organizations o ON o.id = fr."organizationId"
+      GROUP BY o.id, o."legalName"
+      ORDER BY SUM(c."commissionAmount") DESC
+      LIMIT ${take}
+    `);
+
+    return rows.map((r) => ({
+      id: r.id,
+      legalName: r.legalName,
+      volume: Number(r.volume),
+      commissions: Number(r.commissions),
+      operations: r.operations,
+    }));
   }
 }

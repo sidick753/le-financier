@@ -20,7 +20,8 @@ export interface ScoringDossier {
 
 export interface ScoringHistoryReport {
   id: string;
-  autoScore: number;
+  // Décimal Prisma sérialisé en string sur le fil JSON.
+  autoScore: string;
   grade: string | null;
   bareme_version: string;
   status: string;

@@ -1,19 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { useAdminData } from "@/lib/use-admin-data";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
-
-const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
-  DRAFT: { label: "Brouillon", className: "bg-gray-100 text-gray-600" },
-  UNDER_REVIEW: { label: "En attente", className: "bg-yellow-100 text-yellow-700" },
-  PUBLISHED: { label: "Publiée", className: "bg-blue-100 text-blue-700" },
-  FUNDED: { label: "En financement", className: "bg-purple-100 text-purple-700" },
-  CLOSED: { label: "Clôturée", className: "bg-gray-100 text-gray-600" },
-  REJECTED: { label: "Rejetée", className: "bg-red-100 text-red-700" },
-  CANCELLED: { label: "Suspendue", className: "bg-orange-100 text-orange-700" },
-};
+import { FUNDING_STATUS_CONFIG, formatAdminDate, formatCompactAmount } from "@/lib/admin-ui";
 
 const CATEGORY_LABELS: Record<string, string> = {
   FACTURE: "Affacturage",
@@ -21,58 +13,137 @@ const CATEGORY_LABELS: Record<string, string> = {
   EQUITY: "Equity",
 };
 
-function formatDate(d: string) {
-  return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
+const FILTERS = [
+  "Tous",
+  "En attente",
+  "Publiée",
+  "En financement",
+  "Clôturée",
+  "Suspendue",
+] as const;
+const FILTER_TO_STATUS: Record<string, string | undefined> = {
+  Tous: undefined,
+  "En attente": "UNDER_REVIEW",
+  Publiée: "PUBLISHED",
+  "En financement": "FUNDED",
+  Clôturée: "CLOSED",
+  Suspendue: "CANCELLED",
+};
+const PAGE_SIZE = 10;
+const SEARCH_DEBOUNCE_MS = 300;
+
+interface AdminFundingRequest {
+  id: string;
+  title: string;
+  category: string;
+  amountRequested: string;
+  amountRaised: string;
+  status: string;
+  createdAt: string;
+  organization?: { legalName: string };
 }
 
-function formatAmount(v: number) {
-  if (v >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(1)} Md`;
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(0)} M`;
-  return `${(v / 1_000).toFixed(0)} K`;
+interface FundingAdminStats {
+  total: number;
+  published: number;
+  funded: number;
+  closed: number;
+  totalRaised: number;
 }
 
 export default function AdminOpportunitesPage() {
-  const { fundingRequests, isLoading, refresh } = useAdminData();
+  return (
+    <Suspense fallback={null}>
+      <AdminOpportunitesPageContent />
+    </Suspense>
+  );
+}
+
+function AdminOpportunitesPageContent() {
+  const searchParams = useSearchParams();
   const { token } = useAuth();
-  const [filter, setFilter] = useState("Tous");
+
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState(
+    searchParams.get("status") === "UNDER_REVIEW" ? "En attente" : "Tous",
+  );
+  const [page, setPage] = useState(1);
+
+  const [fundingRequests, setFundingRequests] = useState<AdminFundingRequest[]>([]);
+  const [total, setTotal] = useState(0);
+  const [stats, setStats] = useState<FundingAdminStats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const latestRequestId = useRef(0);
 
-  const FILTERS = ["Tous", "Publiée", "En financement", "Clôturée", "Suspendue"];
+  // Debounce la recherche pour éviter une requête à chaque frappe.
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timeout);
+  }, [searchInput]);
 
-  const published = fundingRequests.filter((f) => f.status === "PUBLISHED").length;
-  const funded = fundingRequests.filter((f) => f.status === "FUNDED").length;
-  const closed = fundingRequests.filter((f) =>
-    ["CLOSED", "CANCELLED"].includes(f.status),
-  ).length;
-  const totalRaised = fundingRequests.reduce((s, f) => s + Number(f.amountRaised ?? 0), 0);
+  const fetchFundingRequests = useCallback(() => {
+    if (!token) return;
+    setIsLoading(true);
+    const requestId = ++latestRequestId.current;
+    const params = new URLSearchParams();
+    const status = FILTER_TO_STATUS[filter];
+    if (status) params.set("status", status);
+    if (search) params.set("search", search);
+    params.set("page", String(page));
+    params.set("limit", String(PAGE_SIZE));
 
-  const filtered = fundingRequests.filter((f) => {
-    if (filter === "Publiée") return f.status === "PUBLISHED";
-    if (filter === "En financement") return f.status === "FUNDED";
-    if (filter === "Clôturée") return f.status === "CLOSED";
-    if (filter === "Suspendue") return f.status === "CANCELLED";
-    return true;
-  });
+    api
+      .get<{ data: AdminFundingRequest[]; total: number }>(
+        `/funding-requests/admin/all?${params.toString()}`,
+        token,
+      )
+      .then((res) => {
+        // Ignore les réponses obsolètes (une requête plus récente est déjà partie).
+        if (requestId !== latestRequestId.current) return;
+        setFundingRequests(res.data);
+        setTotal(res.total);
+        setIsLoading(false);
+        // Si l'action courante a vidé la page affichée, on saute directement à la bonne page.
+        const lastPage = Math.max(1, Math.ceil(res.total / PAGE_SIZE));
+        if (res.data.length === 0 && page > lastPage) {
+          setPage(lastPage);
+        }
+      })
+      .catch(() => {
+        if (requestId === latestRequestId.current) setIsLoading(false);
+      });
+  }, [token, filter, search, page]);
 
-  async function handleApprove(id: string) {
-    setActionLoading(id);
-    try {
-      await api.patch(`/funding-requests/${id}/approve`, {}, token!);
-      refresh();
-    } finally {
-      setActionLoading(null);
-    }
-  }
+  const fetchStats = useCallback(() => {
+    if (!token) return;
+    api.get<FundingAdminStats>("/funding-requests/admin/stats", token).then(setStats);
+  }, [token]);
+
+  useEffect(() => {
+    fetchFundingRequests();
+  }, [fetchFundingRequests]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
 
   async function handleCancel(id: string) {
     setActionLoading(id);
     try {
       await api.patch(`/funding-requests/${id}/cancel`, {}, token!);
-      refresh();
+      fetchFundingRequests();
+      fetchStats();
     } finally {
       setActionLoading(null);
     }
   }
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div className="p-8">
@@ -84,10 +155,13 @@ export default function AdminOpportunitesPage() {
       {/* Stats */}
       <div className="mb-6 grid grid-cols-4 gap-4">
         {[
-          { label: "Opportunités publiées", value: published },
-          { label: "En cours de financement", value: funded },
-          { label: "Clôturées ce mois", value: closed },
-          { label: "Levés ce mois", value: `${formatAmount(totalRaised)} FCFA` },
+          { label: "Opportunités publiées", value: stats ? stats.published : "…" },
+          { label: "En cours de financement", value: stats ? stats.funded : "…" },
+          { label: "Clôturées ce mois", value: stats ? stats.closed : "…" },
+          {
+            label: "Levés ce mois",
+            value: stats ? `${formatCompactAmount(stats.totalRaised)} FCFA` : "…",
+          },
         ].map((s) => (
           <div key={s.label} className="rounded-xl border border-gray-200 bg-white p-5">
             <p className="text-xs text-gray-500">{s.label}</p>
@@ -96,25 +170,40 @@ export default function AdminOpportunitesPage() {
         ))}
       </div>
 
-      {/* Filtres */}
-      <div className="mb-4 flex gap-2">
-        {FILTERS.map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`rounded-full px-4 py-1.5 text-xs font-medium transition ${
-              filter === f ? "bg-brand-700 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            {f}
-          </button>
-        ))}
+      {/* Filtres + recherche */}
+      <div className="mb-4 flex items-center gap-3">
+        <input
+          type="text"
+          placeholder="Rechercher une opportunité..."
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          className="flex-1 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+        />
+        <div className="flex gap-2">
+          {FILTERS.map((f) => (
+            <button
+              key={f}
+              onClick={() => {
+                setFilter(f);
+                setPage(1);
+              }}
+              className={`rounded-full px-4 py-1.5 text-xs font-medium transition ${
+                filter === f ? "bg-brand-700 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Tableau */}
       <div className="rounded-xl border border-gray-200 bg-white">
         {isLoading && <p className="p-5 text-sm text-gray-400">Chargement...</p>}
-        {filtered.length > 0 && (
+        {!isLoading && fundingRequests.length === 0 && (
+          <p className="p-5 text-sm text-gray-400">Aucune opportunité trouvée.</p>
+        )}
+        {fundingRequests.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -129,8 +218,8 @@ export default function AdminOpportunitesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filtered.map((fr) => {
-                  const config = STATUS_CONFIG[fr.status] ?? STATUS_CONFIG.DRAFT;
+                {fundingRequests.map((fr) => {
+                  const config = FUNDING_STATUS_CONFIG[fr.status] ?? FUNDING_STATUS_CONFIG.DRAFT;
                   const requested = Number(fr.amountRequested);
                   const raised = Number(fr.amountRaised ?? 0);
                   const progress = requested > 0 ? Math.min(100, (raised / requested) * 100) : 0;
@@ -146,7 +235,7 @@ export default function AdminOpportunitesPage() {
                         {CATEGORY_LABELS[fr.category] ?? fr.category}
                       </td>
                       <td className="px-5 py-3 text-right text-xs font-medium text-gray-900">
-                        {formatAmount(requested)} FCFA
+                        {formatCompactAmount(requested)} FCFA
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-2">
@@ -165,19 +254,16 @@ export default function AdminOpportunitesPage() {
                         </span>
                       </td>
                       <td className="px-5 py-3 text-xs text-gray-500">
-                        {formatDate(fr.createdAt)}
+                        {formatAdminDate(fr.createdAt)}
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex gap-2">
-                          {fr.status === "UNDER_REVIEW" && (
-                            <button
-                              onClick={() => handleApprove(fr.id)}
-                              disabled={actionLoading === fr.id}
-                              className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
-                            >
-                              Approuver
-                            </button>
-                          )}
+                          <Link
+                            href={`/admin/opportunites/${fr.id}`}
+                            className="rounded-md border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                          >
+                            Voir le dossier →
+                          </Link>
                           {["PUBLISHED", "FUNDED"].includes(fr.status) && (
                             <button
                               onClick={() => handleCancel(fr.id)}
@@ -187,9 +273,6 @@ export default function AdminOpportunitesPage() {
                               Suspendre
                             </button>
                           )}
-                          <span className="text-xs text-gray-400 cursor-pointer hover:text-brand-700">
-                            Voir
-                          </span>
                         </div>
                       </td>
                     </tr>
@@ -197,6 +280,32 @@ export default function AdminOpportunitesPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+        {total > 0 && (
+          <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3 text-xs text-gray-500">
+            <p>
+              {total} opportunité{total !== 1 ? "s" : ""} au total
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="rounded-md border border-gray-200 px-3 py-1 font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+              >
+                Précédent
+              </button>
+              <span>
+                Page {page} / {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="rounded-md border border-gray-200 px-3 py-1 font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+              >
+                Suivant
+              </button>
+            </div>
           </div>
         )}
       </div>

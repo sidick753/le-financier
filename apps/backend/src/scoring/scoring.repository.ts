@@ -12,6 +12,14 @@ export class ScoringRepository {
     });
   }
 
+  // Profil de crédit de la PME — secteur, santé financière, dirigeant, équipe/gouvernance/
+  // marché — partagé par toutes ses demandes de financement.
+  async findOrganizationProfile(organizationId: string) {
+    return this.prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
+  }
+
   // ── Traçabilité des échecs de calcul (visible dashboard admin) ────────────
   async setScoringError(fundingRequestId: string, message: string) {
     await this.prisma.fundingRequest.update({
@@ -88,13 +96,12 @@ export class ScoringRepository {
     return this.prisma.fundingRequest.findMany({
       where: { status: { in: ['UNDER_REVIEW', 'PUBLISHED', 'FUNDED'] as any[] } },
       include: {
-        organization: { select: { legalName: true } },
-        scoringInput:  { select: { product: true } },
+        organization: true,
+        scoringInput:  true,
         scoringReports: {
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
-        documents: { select: { id: true } },
       },
       orderBy: { createdAt: 'desc' },
     });

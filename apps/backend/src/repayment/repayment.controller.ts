@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, Post, UseGuards, Request } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards, Request } from '@nestjs/common';
 import { RepaymentService } from './repayment.service';
 import { ConfirmPaymentDto } from './dto/confirm-payment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { parsePositiveInt } from '../common/pagination.util';
 
 @UseGuards(JwtAuthGuard)
 @Controller('repayments')
@@ -37,7 +38,33 @@ export class RepaymentController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
   @Get('admin/commissions')
-  getAllCommissions() {
-    return this.repaymentService.getAllCommissions();
+  getAllCommissions(
+    @Query('type') type?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.repaymentService.getAllCommissions({
+      type,
+      status,
+      search,
+      page: parsePositiveInt(page),
+      limit: parsePositiveInt(limit),
+    });
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Get('admin/commissions/stats')
+  getCommissionStats() {
+    return this.repaymentService.getCommissionStats();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Get('admin/commissions/top-organizations')
+  getTopOrganizations() {
+    return this.repaymentService.getTopOrganizations();
   }
 }

@@ -1,66 +1,117 @@
 "use client";
 
-import { useState } from "react";
-import { useAdminData } from "@/lib/use-admin-data";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import type { AdminUser } from "@/lib/use-admin-data";
+import { USER_ROLE_CONFIG, KYC_STATUS_CONFIG, formatAdminDate, formatCompactAmount } from "@/lib/admin-ui";
 
-const ROLE_CONFIG: Record<string, { label: string; className: string }> = {
-  INVESTOR: { label: "Particulier", className: "bg-blue-50 text-blue-700" },
-  INSTITUTION: { label: "Institution", className: "bg-purple-50 text-purple-700" },
+const FILTERS = ["Tous", "Particuliers", "Institutions/Banques"] as const;
+const FILTER_TO_ROLE: Record<string, string> = {
+  Tous: "INVESTOR,INSTITUTION",
+  Particuliers: "INVESTOR",
+  "Institutions/Banques": "INSTITUTION",
 };
+const PAGE_SIZE = 10;
+const SEARCH_DEBOUNCE_MS = 300;
 
-const KYC_CONFIG: Record<string, { label: string; className: string }> = {
-  VERIFIED: { label: "Vérifié", className: "bg-green-100 text-green-700" },
-  PENDING: { label: "En attente KYC", className: "bg-yellow-100 text-yellow-700" },
-  REJECTED: { label: "Rejeté", className: "bg-red-100 text-red-700" },
-};
-
-function formatDate(d: string) {
-  return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
-}
-
-function formatAmount(v: number) {
-  if (v >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(1)} Md`;
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(0)} M`;
-  if (v >= 1_000) return `${(v / 1_000).toFixed(0)} K`;
-  return v.toLocaleString("fr-FR");
+interface AdminStats {
+  total: number;
+  institutions: number;
+  particuliers: number;
+  totalEngaged: number;
 }
 
 export default function AdminInvestisseursPage() {
-  const { users, isLoading, refresh } = useAdminData();
-  const { token } = useAuth();
-  const [filter, setFilter] = useState("Tous");
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-
-  const investors = users.filter((u) => ["INVESTOR", "INSTITUTION"].includes(u.role));
-  const particuliers = investors.filter((u) => u.role === "INVESTOR");
-  const institutions = investors.filter((u) => u.role === "INSTITUTION");
-  const totalEngaged = investors.reduce(
-    (sum, u) =>
-      sum +
-      u.investments
-        .filter((i) => ["COMMITTED", "SETTLED_OFF_PLATFORM"].includes(i.status))
-        .reduce((s, i) => s + Number(i.amountCommitted), 0),
-    0,
+  return (
+    <Suspense fallback={null}>
+      <AdminInvestisseursPageContent />
+    </Suspense>
   );
+}
 
-  const FILTERS = ["Tous", "Particuliers", "Institutions/Banques"];
-  const filtered = investors.filter((u) => {
-    if (filter === "Particuliers") return u.role === "INVESTOR";
-    if (filter === "Institutions/Banques") return u.role === "INSTITUTION";
-    return true;
-  });
+function AdminInvestisseursPageContent() {
+  const searchParams = useSearchParams();
+  const { token } = useAuth();
+
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState(
+    searchParams.get("role") === "INSTITUTION" ? "Institutions/Banques" : "Tous",
+  );
+  const [page, setPage] = useState(1);
+
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [total, setTotal] = useState(0);
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const latestRequestId = useRef(0);
+
+  // Debounce la recherche pour éviter une requête à chaque frappe.
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timeout);
+  }, [searchInput]);
+
+  const fetchUsers = useCallback(() => {
+    if (!token) return;
+    setIsLoading(true);
+    const requestId = ++latestRequestId.current;
+    const params = new URLSearchParams();
+    params.set("role", FILTER_TO_ROLE[filter]);
+    if (search) params.set("search", search);
+    params.set("page", String(page));
+    params.set("limit", String(PAGE_SIZE));
+
+    api
+      .get<{ data: AdminUser[]; total: number }>(`/auth/admin/users?${params.toString()}`, token)
+      .then((res) => {
+        // Ignore les réponses obsolètes (une requête plus récente est déjà partie).
+        if (requestId !== latestRequestId.current) return;
+        setUsers(res.data);
+        setTotal(res.total);
+        setIsLoading(false);
+        // Si l'action courante a vidé la page affichée, on saute directement à la bonne page.
+        const lastPage = Math.max(1, Math.ceil(res.total / PAGE_SIZE));
+        if (res.data.length === 0 && page > lastPage) {
+          setPage(lastPage);
+        }
+      })
+      .catch(() => {
+        if (requestId === latestRequestId.current) setIsLoading(false);
+      });
+  }, [token, filter, search, page]);
+
+  const fetchStats = useCallback(() => {
+    if (!token) return;
+    api.get<AdminStats>("/auth/admin/users/investor-stats", token).then(setStats);
+  }, [token]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
 
   async function handleAction(id: string, action: "verify-kyc" | "reject-kyc") {
     setActionLoading(id);
     try {
       await api.patch(`/auth/admin/users/${id}/${action}`, {}, token!);
-      refresh();
+      fetchUsers();
     } finally {
       setActionLoading(null);
     }
   }
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div className="p-8">
@@ -71,41 +122,49 @@ export default function AdminInvestisseursPage() {
 
       {/* Stats */}
       <div className="mb-6 grid grid-cols-4 gap-4">
-        {[
-          { label: "Total investisseurs", value: investors.length },
-          { label: "Institutions", value: institutions.length },
-          { label: "Particuliers", value: particuliers.length },
-          { label: "Engagements totaux", value: `${formatAmount(totalEngaged)} FCFA` },
-        ].map((s) => (
-          <div key={s.label} className="rounded-xl border border-gray-200 bg-white p-5">
-            <p className="text-xs text-gray-500">{s.label}</p>
-            <p className="mt-2 text-2xl font-bold text-gray-900">{s.value}</p>
-          </div>
-        ))}
+        <StatCard label="Total investisseurs" value={stats ? stats.total : "…"} />
+        <StatCard label="Institutions" value={stats ? stats.institutions : "…"} />
+        <StatCard label="Particuliers" value={stats ? stats.particuliers : "…"} />
+        <StatCard
+          label="Engagements totaux"
+          value={stats ? `${formatCompactAmount(stats.totalEngaged)} FCFA` : "…"}
+        />
       </div>
 
-      {/* Filtres */}
-      <div className="mb-4 flex gap-2">
-        {FILTERS.map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`rounded-full px-4 py-1.5 text-xs font-medium transition ${
-              filter === f ? "bg-brand-700 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            {f}
-          </button>
-        ))}
+      {/* Filtres + recherche */}
+      <div className="mb-4 flex items-center gap-3">
+        <input
+          type="text"
+          placeholder="Rechercher un investisseur..."
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          className="flex-1 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+        />
+        <div className="flex gap-2">
+          {FILTERS.map((f) => (
+            <button
+              key={f}
+              onClick={() => {
+                setFilter(f);
+                setPage(1);
+              }}
+              className={`rounded-full px-4 py-1.5 text-xs font-medium transition ${
+                filter === f ? "bg-brand-700 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Tableau */}
       <div className="rounded-xl border border-gray-200 bg-white">
         {isLoading && <p className="p-5 text-sm text-gray-400">Chargement...</p>}
-        {!isLoading && filtered.length === 0 && (
+        {!isLoading && users.length === 0 && (
           <p className="p-5 text-sm text-gray-400">Aucun investisseur trouvé.</p>
         )}
-        {filtered.length > 0 && (
+        {users.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -120,9 +179,9 @@ export default function AdminInvestisseursPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filtered.map((u) => {
-                  const roleConfig = ROLE_CONFIG[u.role] ?? ROLE_CONFIG.INVESTOR;
-                  const kycConfig = KYC_CONFIG[u.kycStatus] ?? KYC_CONFIG.PENDING;
+                {users.map((u) => {
+                  const roleConfig = USER_ROLE_CONFIG[u.role] ?? USER_ROLE_CONFIG.INVESTOR;
+                  const kycConfig = KYC_STATUS_CONFIG[u.kycStatus] ?? KYC_STATUS_CONFIG.PENDING;
                   const activeInv = u.investments.filter((i) =>
                     ["COMMITTED", "SETTLED_OFF_PLATFORM"].includes(i.status),
                   );
@@ -152,13 +211,19 @@ export default function AdminInvestisseursPage() {
                         {activeInv.length} inv.
                       </td>
                       <td className="px-5 py-3 text-right text-xs font-medium text-gray-900">
-                        {totalEngaged > 0 ? `${formatAmount(totalEngaged)} FCFA` : "—"}
+                        {totalEngaged > 0 ? `${formatCompactAmount(totalEngaged)} FCFA` : "—"}
                       </td>
                       <td className="px-5 py-3 text-xs text-gray-500">
-                        {formatDate(u.createdAt)}
+                        {formatAdminDate(u.createdAt)}
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex gap-2">
+                          <Link
+                            href={`/admin/investisseurs/${u.id}`}
+                            className="rounded-md border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                          >
+                            Voir le dossier →
+                          </Link>
                           {u.kycStatus === "PENDING" && (
                             <>
                               <button
@@ -177,9 +242,6 @@ export default function AdminInvestisseursPage() {
                               </button>
                             </>
                           )}
-                          {u.kycStatus === "VERIFIED" && (
-                            <span className="text-xs text-gray-400">Voir</span>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -189,7 +251,42 @@ export default function AdminInvestisseursPage() {
             </table>
           </div>
         )}
+        {total > 0 && (
+          <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3 text-xs text-gray-500">
+            <p>
+              {total} investisseur{total !== 1 ? "s" : ""} au total
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="rounded-md border border-gray-200 px-3 py-1 font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+              >
+                Précédent
+              </button>
+              <span>
+                Page {page} / {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="rounded-md border border-gray-200 px-3 py-1 font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+              >
+                Suivant
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-5">
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className="mt-2 text-2xl font-bold text-gray-900">{value}</p>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, Min, IsUUID, IsEnum, IsBoolean, IsDateString } from 'class-validator';
+import { IsString, IsNumber, IsOptional, Min, IsUUID, IsEnum, IsDateString } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum FundingCategoryDto {
@@ -41,7 +41,9 @@ export class CreateFundingRequestDto {
   @Min(1)
   durationMonths?: number;
 
-  // --- Données FACTURE ---
+  // --- FACTURE : ce débiteur, cette facture précise ---
+  // (le profil de la PME elle-même — secteur, santé financière, dirigeant, équipe —
+  // vit sur Organization et n'est plus redemandé à chaque demande de financement)
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -84,38 +86,7 @@ export class CreateFundingRequestDto {
   @Min(0)
   tauxImpaye12m?: number;
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  nbClientsActifs?: number;
-
-  // --- Données PRET MLT ---
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsNumber()
-  cashFlowAnnuel?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsNumber()
-  fluxMobileMoneyMensuel?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsNumber()
-  autonomieFinanciere?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsNumber()
-  tauxEndettement?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsNumber()
-  ratioLiquidite?: number;
-
+  // --- PRET : la garantie offerte pour ce prêt précis ---
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -125,101 +96,4 @@ export class CreateFundingRequestDto {
   @IsOptional()
   @IsNumber()
   garantieCouverture?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsNumber()
-  dirigeantExperienceAns?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  dirigeantAntecedents?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  dirigeantIncidentsLegaux?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  secteurCode?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsBoolean()
-  secteurSaisonnalite?: boolean;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsBoolean()
-  secteurImportDevises?: boolean;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsBoolean()
-  secteurSoutienPublic?: boolean;
-
-  // --- Données EQUITY ---
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsNumber()
-  tcamCa3ans?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  tailleMarche?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  scalabilite?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsNumber()
-  experienceSecteurAns?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  trackRecord?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  completudeEquipe?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  moat?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  partMarcheRelative?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  runwayMois?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsNumber()
-  margeBrute?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  droitsInvestisseur?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  transparence?: string;
 }

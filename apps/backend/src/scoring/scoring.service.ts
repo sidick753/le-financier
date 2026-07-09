@@ -4,6 +4,7 @@ import {
   BAREME_VERSION, scoreFacture, scorePret, scoreEquity, ScoringResult,
   CRITERIA_BY_PRODUCT, WeightCriterion, WeightMap,
 } from './scoring.engine';
+import { SCORING_FIELDS_BY_PRODUCT, ORG_PROFILE_FIELDS_BY_PRODUCT } from './scoring-fields';
 
 @Injectable()
 export class ScoringService {
@@ -42,63 +43,63 @@ export class ScoringService {
   }): Promise<void> {
     const { fundingRequestId, organizationId, product, amountRequested, durationMonths } = params;
 
-    const input = await this.scoringRepository.findScoringInput(fundingRequestId);
+    // `input` = données propres à CETTE demande (ScoringInput) ; `organization` = profil de
+    // crédit de la PME (secteur, santé financière, dirigeant, équipe/gouvernance/marché),
+    // partagé par toutes ses demandes. Les deux sont fusionnés pour construire l'input du moteur.
+    const [input, organization] = await Promise.all([
+      this.scoringRepository.findScoringInput(fundingRequestId),
+      this.scoringRepository.findOrganizationProfile(organizationId),
+    ]);
     const weightMap = await this.getWeightMap(product);
 
     let result: ScoringResult;
 
-    if (!input) {
-      result = {
-        autoScore:   0,
-        grade:       'B',
-        gradeCapped: false,
-        coverage:    0,
-        confidence:  0,
-        advanceRate: product === 'FACTURE' ? 0.40 : null,
-        kpiSnapshot: { note: 'Aucune donnée de scoring soumise' },
-      };
-    } else if (product === 'FACTURE') {
+    // Champs absents des deux sources → ratio non évaluable pour chaque critère, donc
+    // score 0 / grade B / confidence 0 : le moteur dégrade déjà gracieusement, pas besoin
+    // de cas particulier ici.
+    if (product === 'FACTURE') {
       result = scoreFacture({
-        debiteurType:        input.debiteurType,
-        debiteurSolvabilite: input.debiteurSolvabilite,
-        ancienneteRelation:  input.ancienneteRelation,
-        delaiPaiementMenu:   input.delaiPaiementMenu,
-        tauxImpaye12m:       input.tauxImpaye12m       ? Number(input.tauxImpaye12m)       : null,
-        partPlusGrosClient:  input.partPlusGrosClient  ? Number(input.partPlusGrosClient)  : null,
+        debiteurType:        input?.debiteurType ?? null,
+        debiteurSolvabilite: input?.debiteurSolvabilite ?? null,
+        ancienneteRelation:  input?.ancienneteRelation ?? null,
+        delaiPaiementMenu:   input?.delaiPaiementMenu ?? null,
+        tauxImpaye12m:       input?.tauxImpaye12m       ? Number(input.tauxImpaye12m)       : null,
+        partPlusGrosClient:  input?.partPlusGrosClient  ? Number(input.partPlusGrosClient)  : null,
+        nbClientsActifs:     organization?.nbClientsActifs ?? null,
       }, weightMap);
     } else if (product === 'PRET') {
       result = scorePret({
-        cashFlowAnnuel:          input.cashFlowAnnuel          ? Number(input.cashFlowAnnuel)          : null,
-        fluxMobileMoneyMensuel:  input.fluxMobileMoneyMensuel  ? Number(input.fluxMobileMoneyMensuel)  : null,
-        autonomieFinanciere:     input.autonomieFinanciere      ? Number(input.autonomieFinanciere)      : null,
-        tauxEndettement:         input.tauxEndettement          ? Number(input.tauxEndettement)          : null,
-        ratioLiquidite:          input.ratioLiquidite           ? Number(input.ratioLiquidite)           : null,
-        garantieType:            input.garantieType,
-        garantieCouverture:      input.garantieCouverture       ? Number(input.garantieCouverture)       : null,
-        dirigeantExperienceAns:  input.dirigeantExperienceAns,
-        dirigeantAntecedents:    input.dirigeantAntecedents,
-        dirigeantIncidentsLegaux: input.dirigeantIncidentsLegaux,
-        secteurCode:             input.secteurCode,
-        secteurSaisonnalite:     input.secteurSaisonnalite,
-        secteurImportDevises:    input.secteurImportDevises,
-        secteurSoutienPublic:    input.secteurSoutienPublic,
+        cashFlowAnnuel:          organization?.cashFlowAnnuel          ? Number(organization.cashFlowAnnuel)          : null,
+        fluxMobileMoneyMensuel:  organization?.fluxMobileMoneyMensuel  ? Number(organization.fluxMobileMoneyMensuel)  : null,
+        autonomieFinanciere:     organization?.autonomieFinanciere      ? Number(organization.autonomieFinanciere)      : null,
+        tauxEndettement:         organization?.tauxEndettement          ? Number(organization.tauxEndettement)          : null,
+        ratioLiquidite:          organization?.ratioLiquidite           ? Number(organization.ratioLiquidite)           : null,
+        garantieType:            input?.garantieType ?? null,
+        garantieCouverture:      input?.garantieCouverture       ? Number(input.garantieCouverture)       : null,
+        dirigeantExperienceAns:  organization?.dirigeantExperienceAns ?? null,
+        dirigeantAntecedents:    organization?.dirigeantAntecedents ?? null,
+        dirigeantIncidentsLegaux: organization?.dirigeantIncidentsLegaux ?? null,
+        secteurCode:             organization?.secteurCode ?? null,
+        secteurSaisonnalite:     organization?.secteurSaisonnalite ?? null,
+        secteurImportDevises:    organization?.secteurImportDevises ?? null,
+        secteurSoutienPublic:    organization?.secteurSoutienPublic ?? null,
         amountRequested,
         durationMonths,
       }, weightMap);
     } else if (product === 'EQUITY') {
       result = scoreEquity({
-        tcamCa3ans:           input.tcamCa3ans           ? Number(input.tcamCa3ans)           : null,
-        tailleMarche:         input.tailleMarche,
-        scalabilite:          input.scalabilite,
-        experienceSecteurAns: input.experienceSecteurAns,
-        trackRecord:          input.trackRecord,
-        completudeEquipe:     input.completudeEquipe,
-        moat:                 input.moat,
-        partMarcheRelative:   input.partMarcheRelative,
-        runwayMois:           input.runwayMois,
-        margeBrute:           input.margeBrute            ? Number(input.margeBrute)            : null,
-        droitsInvestisseur:   input.droitsInvestisseur,
-        transparence:         input.transparence,
+        tcamCa3ans:           organization?.tcamCa3ans           ? Number(organization.tcamCa3ans)           : null,
+        tailleMarche:         organization?.tailleMarche ?? null,
+        scalabilite:          organization?.scalabilite ?? null,
+        experienceSecteurAns: organization?.experienceSecteurAns ?? null,
+        trackRecord:          organization?.trackRecord ?? null,
+        completudeEquipe:     organization?.completudeEquipe ?? null,
+        moat:                 organization?.moat ?? null,
+        partMarcheRelative:   organization?.partMarcheRelative ?? null,
+        runwayMois:           organization?.runwayMois ?? null,
+        margeBrute:           organization?.margeBrute            ? Number(organization.margeBrute)            : null,
+        droitsInvestisseur:   organization?.droitsInvestisseur ?? null,
+        transparence:         organization?.transparence ?? null,
       }, weightMap);
     } else {
       this.logger.warn(`Produit inconnu pour le scoring : ${product}`);
@@ -156,15 +157,16 @@ export class ScoringService {
 
     return fundingRequests.map((fr) => {
       const latestReport = (fr as any).scoringReports?.[0];
-      const docCount = (fr as any).documents?.length ?? 0;
-      const completude = Math.min(100, Math.round((docCount / 5) * 100));
+      const completude = this.computeCompletude(fr, latestReport);
 
       let scoringStatus = 'A_SCORER';
       if ((fr as any).scoringError) {
         scoringStatus = 'ERREUR_CALCUL';
       } else if (latestReport) {
         scoringStatus = latestReport.status;
-      } else if (!(fr as any).scoringInput) {
+      } else if (completude === 0) {
+        // Ni la demande (ScoringInput) ni le profil de crédit de la PME (Organization)
+        // n'ont de donnée exploitable pour ce produit.
         scoringStatus = 'A_COMPLETER';
       }
 
@@ -182,6 +184,31 @@ export class ScoringService {
         scoringError:  (fr as any).scoringError ?? null,
       };
     });
+  }
+
+  // Complétude d'un dossier : une fois scoré, on reprend la confiance pondérée
+  // du moteur (plus fine — un champ à fort poids manquant pèse plus qu'un champ
+  // secondaire). Avant le premier calcul, on retombe sur un simple ratio de champs
+  // renseignés parmi ceux pertinents pour la catégorie — à la fois sur la demande
+  // (ScoringInput) et sur le profil de crédit de la PME (Organization).
+  private computeCompletude(fr: any, latestReport: any): number {
+    if (latestReport?.confidence != null) {
+      return Math.round(Number(latestReport.confidence) * 100);
+    }
+
+    const requestFields = SCORING_FIELDS_BY_PRODUCT[fr.category] ?? [];
+    const orgFields = ORG_PROFILE_FIELDS_BY_PRODUCT[fr.category] ?? [];
+    const relevantFields = requestFields.length + orgFields.length;
+    if (relevantFields === 0) return 0;
+
+    const scoringInput = fr.scoringInput ?? {};
+    const organization = fr.organization ?? {};
+
+    const filledCount =
+      requestFields.filter((f) => scoringInput[f] !== null && scoringInput[f] !== undefined).length +
+      orgFields.filter((f) => organization[f] !== null && organization[f] !== undefined).length;
+
+    return Math.round((filledCount / relevantFields) * 100);
   }
 
   // ── Historique admin ──────────────────────────────────────────────────────

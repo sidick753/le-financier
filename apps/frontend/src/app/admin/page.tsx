@@ -1,9 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useAdminData } from "@/lib/use-admin-data";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
-import { useState } from "react";
 
 function formatAmount(value: number) {
   if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}Md`;
@@ -21,10 +22,17 @@ function formatDate(dateString: string) {
 }
 
 export default function AdminDashboardPage() {
-  const { organizations, users, fundingRequests, isLoading, refresh } =
-    useAdminData();
+  const { organizations, users, fundingRequests, isLoading } = useAdminData();
   const { token } = useAuth();
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [institutionsTotal, setInstitutionsTotal] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    api
+      .get<{ total: number }>("/institutions/admin/stats", token)
+      .then((stats) => setInstitutionsTotal(stats.total))
+      .catch(() => {});
+  }, [token]);
 
   const pendingOrgs = organizations.filter(
     (o) => o.verificationStatus === "PENDING",
@@ -49,36 +57,6 @@ export default function AdminDashboardPage() {
       )
     );
   }, 0);
-
-  async function handleVerifyOrg(id: string) {
-    setActionLoading(id);
-    try {
-      await api.patch(`/organizations/admin/${id}/verify`, {}, token!);
-      refresh();
-    } finally {
-      setActionLoading(null);
-    }
-  }
-
-  async function handleRejectOrg(id: string) {
-    setActionLoading(id);
-    try {
-      await api.patch(`/organizations/admin/${id}/reject`, {}, token!);
-      refresh();
-    } finally {
-      setActionLoading(null);
-    }
-  }
-
-  async function handleApproveFunding(id: string) {
-    setActionLoading(id);
-    try {
-      await api.patch(`/funding-requests/${id}/approve`, {}, token!);
-      refresh();
-    } finally {
-      setActionLoading(null);
-    }
-  }
 
   return (
     <div className="p-8">
@@ -124,11 +102,7 @@ export default function AdminDashboardPage() {
         />
         <StatCard
           label="Institutions"
-          value={
-            isLoading
-              ? "…"
-              : users.filter((u) => u.role === "INSTITUTION").length.toString()
-          }
+          value={institutionsTotal === null ? "…" : institutionsTotal.toString()}
           hint="partenaires actifs"
           icon="🏛️"
         />
@@ -136,7 +110,7 @@ export default function AdminDashboardPage() {
 
       <div className="grid grid-cols-2 gap-4">
         {/* Vérifications en attente */}
-        <div className="rounded-xl border border-gray-200 bg-white">
+        <div className="flex flex-col rounded-xl border border-gray-200 bg-white">
           <div className="flex items-center justify-between border-b border-gray-100 p-5">
             <p className="text-sm font-semibold text-gray-900">
               Vérifications en attente
@@ -147,7 +121,7 @@ export default function AdminDashboardPage() {
               </span>
             )}
           </div>
-          <div className="divide-y divide-gray-100">
+          <div className="flex-1 divide-y divide-gray-100">
             {isLoading && (
               <p className="p-5 text-sm text-gray-400">Chargement...</p>
             )}
@@ -157,7 +131,11 @@ export default function AdminDashboardPage() {
               </p>
             )}
             {pendingOrgs.slice(0, 5).map((org) => (
-              <div key={org.id} className="flex items-center justify-between p-4">
+              <Link
+                key={org.id}
+                href={`/admin/pme/${org.id}`}
+                className="flex items-center justify-between p-4 hover:bg-gray-50"
+              >
                 <div>
                   <p className="text-sm font-medium text-gray-900">
                     {org.legalName}
@@ -166,39 +144,26 @@ export default function AdminDashboardPage() {
                     PME · {formatDate(org.createdAt)}
                   </p>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleVerifyOrg(org.id)}
-                    disabled={actionLoading === org.id}
-                    className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
-                  >
-                    ✓
-                  </button>
-                  <button
-                    onClick={() => handleRejectOrg(org.id)}
-                    disabled={actionLoading === org.id}
-                    className="rounded-md bg-red-100 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-200 disabled:opacity-50"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
+                <span className="text-xs font-medium text-brand-700">
+                  Voir le dossier →
+                </span>
+              </Link>
             ))}
-            {pendingOrgs.length > 5 && (
-              <div className="p-3 text-center">
-                <a
-                  href="/admin/pme"
-                  className="text-xs text-brand-700 hover:underline"
-                >
-                  Voir toutes les vérifications →
-                </a>
-              </div>
-            )}
           </div>
+          {!isLoading && pendingOrgs.length > 0 && (
+            <div className="border-t border-gray-100 p-3 text-center">
+              <Link
+                href="/admin/pme?status=PENDING"
+                className="text-xs text-brand-700 hover:underline"
+              >
+                Voir plus →
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Opportunités à modérer */}
-        <div className="rounded-xl border border-gray-200 bg-white">
+        <div className="flex flex-col rounded-xl border border-gray-200 bg-white">
           <div className="flex items-center justify-between border-b border-gray-100 p-5">
             <p className="text-sm font-semibold text-gray-900">
               Opportunités à modérer
@@ -209,7 +174,7 @@ export default function AdminDashboardPage() {
               </span>
             )}
           </div>
-          <div className="divide-y divide-gray-100">
+          <div className="flex-1 divide-y divide-gray-100">
             {isLoading && (
               <p className="p-5 text-sm text-gray-400">Chargement...</p>
             )}
@@ -219,31 +184,36 @@ export default function AdminDashboardPage() {
               </p>
             )}
             {pendingFunding.slice(0, 4).map((fr) => (
-              <div key={fr.id} className="p-4">
-                <div className="mb-2 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      {fr.organization?.legalName ?? "—"}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {fr.title} ·{" "}
-                      {Number(fr.amountRequested).toLocaleString("fr-FR")} F CFA
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
-                    En attente
-                  </span>
+              <Link
+                key={fr.id}
+                href={`/admin/opportunites/${fr.id}`}
+                className="flex items-center justify-between p-4 hover:bg-gray-50"
+              >
+                <div>
+                  <p className="text-sm font-medium text-gray-900">
+                    {fr.organization?.legalName ?? "—"}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {fr.title} ·{" "}
+                    {Number(fr.amountRequested).toLocaleString("fr-FR")} F CFA
+                  </p>
                 </div>
-                <button
-                  onClick={() => handleApproveFunding(fr.id)}
-                  disabled={actionLoading === fr.id}
-                  className="w-full rounded-md bg-brand-700 py-1.5 text-xs font-medium text-white hover:bg-brand-800 disabled:opacity-50"
-                >
-                  {actionLoading === fr.id ? "En cours..." : "Approuver"}
-                </button>
-              </div>
+                <span className="text-xs font-medium text-brand-700">
+                  Voir le dossier →
+                </span>
+              </Link>
             ))}
           </div>
+          {!isLoading && pendingFunding.length > 0 && (
+            <div className="border-t border-gray-100 p-3 text-center">
+              <Link
+                href="/admin/opportunites?status=UNDER_REVIEW"
+                className="text-xs text-brand-700 hover:underline"
+              >
+                Voir plus →
+              </Link>
+            </div>
+          )}
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 import {
   Injectable,
   ConflictException,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -113,8 +114,25 @@ export class AuthService {
     return { message: 'Mot de passe mis à jour.' };
   }
 
-  async getAllUsers(filters?: { role?: string }) {
+  async getAllUsers(filters?: {
+    role?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
     return this.usersRepository.findAll(filters);
+  }
+
+  async getInvestorStats() {
+    return this.usersRepository.getInvestorStats();
+  }
+
+  async getUserAdminDetail(id: string) {
+    const user = await this.usersRepository.findByIdAdmin(id);
+    if (!user) {
+      throw new NotFoundException('Utilisateur introuvable.');
+    }
+    return user;
   }
 
   async updateUserKyc(id: string, status: 'VERIFIED' | 'REJECTED') {

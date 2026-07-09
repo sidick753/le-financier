@@ -29,16 +29,19 @@ interface SnapshotData {
   criteria?: CriterionResult[];
   missingData?: string[];
   blockingReason?: string | null;
+  // Champs saisis par la PME mais qui ne pèsent pas dans le barème pondéré — contexte analyste uniquement.
+  nonScoredFields?: string[];
   [key: string]: unknown;
 }
 
 interface Report {
   id: string;
-  autoScore: number;
+  // Décimaux Prisma sérialisés en string sur le fil JSON.
+  autoScore: string;
   grade: string | null;
   gradeCapped: boolean;
-  coverage: number;
-  confidence: number;
+  coverage: string;
+  confidence: string;
   bareme_version: string;
   product: string;
   status: string;
@@ -48,6 +51,15 @@ interface Report {
   fundingRequest: { title: string; category: string } | null;
   validatedBy: { firstName: string; lastName: string } | null;
 }
+
+const NON_SCORED_FIELD_LABELS: Record<string, string> = {
+  nbClientsActifs: "Nombre de clients actifs",
+  ratioLiquidite: "Ratio de liquidité",
+  dirigeantAntecedents: "Antécédents du dirigeant",
+  trackRecord: "Track record",
+  partMarcheRelative: "Part de marché relative",
+  margeBrute: "Marge brute",
+};
 
 const GRADE_COLORS: Record<string, string> = {
   "A+": "text-green-700 bg-green-100",
@@ -153,16 +165,24 @@ export function ScoringSnapshotModal({ reportId, onClose }: Props) {
           )}
 
           {/* SYNTHÈSE */}
-          {!isLoading && activeTab === "synthese" && report && snapshot && (
+          {!isLoading && activeTab === "synthese" && report && snapshot && (() => {
+            // "Couverture" n'a pas le même sens selon le moteur : quotité d'avance pour
+            // FACTURE (déjà affichée dans le bloc vert ci-dessous — on évite le doublon),
+            // ratio garantie/prêt pouvant dépasser 100% pour PRET, valeur constante et
+            // non significative pour EQUITY (on la masque plutôt que d'afficher un faux 100%).
+            const kpis = [
+              { label: "Score", value: `${Number(report.autoScore).toFixed(1)}/100`, highlight: true },
+              ...(report.product === "PRET"
+                ? [{ label: "Couverture garantie", value: `${Number(report.coverage).toFixed(2)}×` }]
+                : []),
+              { label: "Confiance", value: `${(Number(report.confidence) * 100).toFixed(0)}%` },
+              { label: "Grade plafonné", value: report.gradeCapped ? "Oui" : "Non" },
+            ];
+            return (
             <div className="space-y-5">
               {/* Note globale */}
-              <div className="grid grid-cols-4 gap-3">
-                {[
-                  { label: "Score", value: `${Number(report.autoScore).toFixed(1)}/100`, highlight: true },
-                  { label: "Couverture", value: `${(report.coverage * 100).toFixed(0)}%` },
-                  { label: "Confiance", value: `${(report.confidence * 100).toFixed(0)}%` },
-                  { label: "Grade plafonné", value: report.gradeCapped ? "Oui" : "Non" },
-                ].map((kpi) => (
+              <div className={`grid gap-3 ${kpis.length === 4 ? "grid-cols-4" : "grid-cols-3"}`}>
+                {kpis.map((kpi) => (
                   <div key={kpi.label} className="rounded-lg border border-gray-200 p-3 text-center">
                     <p className="text-xs text-gray-400">{kpi.label}</p>
                     <p className={`mt-1 text-lg font-bold ${kpi.highlight ? "text-brand-700" : "text-gray-900"}`}>
@@ -204,6 +224,29 @@ export function ScoringSnapshotModal({ reportId, onClose }: Props) {
                 </div>
               )}
 
+              {/* Données déclarées non scorées */}
+              {snapshot.nonScoredFields && snapshot.nonScoredFields.length > 0 && (() => {
+                const entries = snapshot.nonScoredFields
+                  .map((key) => [key, snapshot[key]] as const)
+                  .filter(([, value]) => value !== null && value !== undefined && value !== "");
+                if (entries.length === 0) return null;
+                return (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <p className="mb-2 text-xs font-medium text-gray-600">
+                      Données déclarées — hors barème pondéré (contexte analyste)
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {entries.map(([key, value]) => (
+                        <div key={key} className="rounded-md bg-white p-2 text-center">
+                          <p className="text-xs text-gray-400">{NON_SCORED_FIELD_LABELS[key] ?? key}</p>
+                          <p className="text-xs font-medium text-gray-900">{String(value)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Analyste */}
               {report.validatedBy && (
                 <div className="flex items-center gap-3 rounded-lg border border-gray-200 p-3">
@@ -219,7 +262,8 @@ export function ScoringSnapshotModal({ reportId, onClose }: Props) {
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
 
           {/* CRITÈRES */}
           {!isLoading && activeTab === "criteres" && (

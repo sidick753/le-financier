@@ -7,6 +7,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
+import { parsePositiveInt } from '../common/pagination.util';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -82,14 +83,49 @@ export class AuthController {
   }
 
   @ApiBearerAuth('jwt')
-  @ApiOperation({ summary: '[Admin] Liste tous les utilisateurs', description: 'Filtre optionnel par rôle.' })
-  @ApiQuery({ name: 'role', required: false, enum: ['PME_OWNER', 'INVESTOR', 'INSTITUTION', 'ADMIN', 'SUPER_ADMIN'] })
-  @ApiResponse({ status: 200, description: 'Liste des utilisateurs' })
+  @ApiOperation({ summary: '[Admin] Liste tous les utilisateurs', description: 'Filtre optionnel par rôle (CSV, ex: INVESTOR,INSTITUTION), recherche par nom/email, avec pagination.' })
+  @ApiQuery({ name: 'role', required: false, description: 'Rôle(s), séparés par une virgule' })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'page', required: false, description: 'Numéro de page (retourne tout si absent)' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Taille de page (retourne tout si absent)' })
+  @ApiResponse({ status: 200, description: '{ data: User[], total: number }' })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
   @Get('admin/users')
-  getAllUsers(@Query('role') role?: string) {
-    return this.authService.getAllUsers({ role });
+  getAllUsers(
+    @Query('role') role?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.authService.getAllUsers({
+      role,
+      search,
+      page: parsePositiveInt(page),
+      limit: parsePositiveInt(limit),
+    });
+  }
+
+  @ApiBearerAuth('jwt')
+  @ApiOperation({ summary: '[Admin] Stats investisseurs', description: 'Retourne les compteurs globaux : total, institutions, particuliers, engagements totaux.' })
+  @ApiResponse({ status: 200, description: '{ total, institutions, particuliers, totalEngaged }' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Get('admin/users/investor-stats')
+  getInvestorStats() {
+    return this.authService.getInvestorStats();
+  }
+
+  @ApiBearerAuth('jwt')
+  @ApiOperation({ summary: '[Admin] Détail complet d\'un utilisateur', description: 'Retourne l\'utilisateur avec ses investissements et, pour une institution, son rattachement.' })
+  @ApiParam({ name: 'id', description: 'UUID de l\'utilisateur' })
+  @ApiResponse({ status: 200, description: 'Utilisateur trouvé' })
+  @ApiResponse({ status: 404, description: 'Utilisateur introuvable' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Get('admin/users/:id')
+  getUserDetail(@Param('id') id: string) {
+    return this.authService.getUserAdminDetail(id);
   }
 
   @ApiBearerAuth('jwt')
