@@ -152,38 +152,57 @@ export class ScoringService {
 
   // ── Dashboard admin ────────────────────────────────────────────────────────
 
-  async getDashboard() {
-    const fundingRequests = await this.scoringRepository.findDashboard();
+  async getDashboard(filters?: {
+    search?: string;
+    product?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const { data, total } = await this.scoringRepository.findDashboard(filters);
+    return { data: data.map((fr) => this.deriveDossier(fr)), total };
+  }
 
-    return fundingRequests.map((fr) => {
-      const latestReport = (fr as any).scoringReports?.[0];
-      const completude = this.computeCompletude(fr, latestReport);
+  async getDashboardStats() {
+    const { data } = await this.scoringRepository.findDashboard();
+    const dossiers = data.map((fr) => this.deriveDossier(fr));
+    return {
+      aScorer: dossiers.filter((d) => d.scoringStatus === 'A_SCORER').length,
+      enAnalyse: dossiers.filter((d) => d.scoringStatus === 'EXTRACTION').length,
+      scored: dossiers.filter((d) =>
+        ['CALCULATED', 'PENDING_VALIDATION', 'VALIDATED'].includes(d.scoringStatus),
+      ).length,
+      aCompleter: dossiers.filter((d) => d.scoringStatus === 'A_COMPLETER').length,
+    };
+  }
 
-      let scoringStatus = 'A_SCORER';
-      if ((fr as any).scoringError) {
-        scoringStatus = 'ERREUR_CALCUL';
-      } else if (latestReport) {
-        scoringStatus = latestReport.status;
-      } else if (completude === 0) {
-        // Ni la demande (ScoringInput) ni le profil de crédit de la PME (Organization)
-        // n'ont de donnée exploitable pour ce produit.
-        scoringStatus = 'A_COMPLETER';
-      }
+  private deriveDossier(fr: any) {
+    const latestReport = fr.scoringReports?.[0];
+    const completude = this.computeCompletude(fr, latestReport);
 
-      return {
-        id:            fr.id,
-        pme:           (fr as any).organization.legalName,
-        product:       fr.category,
-        amount:        fr.amountRequested,
-        submittedAt:   fr.createdAt,
-        completude,
-        scoringStatus,
-        grade:         latestReport?.grade ?? null,
-        score:         latestReport?.autoScore ? Number(latestReport.autoScore) : null,
-        reportId:      latestReport?.id ?? null,
-        scoringError:  (fr as any).scoringError ?? null,
-      };
-    });
+    let scoringStatus = 'A_SCORER';
+    if (fr.scoringError) {
+      scoringStatus = 'ERREUR_CALCUL';
+    } else if (latestReport) {
+      scoringStatus = latestReport.status;
+    } else if (completude === 0) {
+      // Ni la demande (ScoringInput) ni le profil de crédit de la PME (Organization)
+      // n'ont de donnée exploitable pour ce produit.
+      scoringStatus = 'A_COMPLETER';
+    }
+
+    return {
+      id:            fr.id,
+      pme:           fr.organization.legalName,
+      product:       fr.category,
+      amount:        fr.amountRequested,
+      submittedAt:   fr.createdAt,
+      completude,
+      scoringStatus,
+      grade:         latestReport?.grade ?? null,
+      score:         latestReport?.autoScore ? Number(latestReport.autoScore) : null,
+      reportId:      latestReport?.id ?? null,
+      scoringError:  fr.scoringError ?? null,
+    };
   }
 
   // Complétude d'un dossier : une fois scoré, on reprend la confiance pondérée
@@ -213,25 +232,12 @@ export class ScoringService {
 
   // ── Historique admin ──────────────────────────────────────────────────────
 
-  async getHistory() {
-    const reports = await this.scoringRepository.findHistory();
+  async getHistory(filters?: { search?: string; page?: number; limit?: number }) {
+    return this.scoringRepository.findHistory(filters);
+  }
 
-    const total = reports.length;
-    const published = reports.filter((r) => r.status === 'VALIDATED').length;
-    const avgScore =
-      total > 0
-        ? reports.reduce((sum, r) => sum + Number(r.autoScore), 0) / total
-        : 0;
-
-    return {
-      stats: {
-        total,
-        published,
-        avgScore: Math.round(avgScore * 10) / 10,
-        baremeVersions: [...new Set(reports.map((r) => r.bareme_version))],
-      },
-      reports,
-    };
+  async getHistoryStats() {
+    return this.scoringRepository.getHistoryStats();
   }
 
   // ── Pondérations de scoring configurables ─────────────────────────────────

@@ -1,13 +1,14 @@
 import {
-  Controller, Get, Post, Put, Patch, Param, Body, UseGuards, Request,
+  Controller, Get, Post, Put, Patch, Param, Query, Body, UseGuards, Request,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsArray, IsInt, IsString, Max, Min, ValidateNested } from 'class-validator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ScoringService } from './scoring.service';
+import { parsePositiveInt } from '../common/pagination.util';
 
 class ValidateReportDto {
   validatedScore?: number;
@@ -39,26 +40,63 @@ class UpdateWeightsDto {
 export class ScoringController {
   constructor(private scoringService: ScoringService) {}
 
-  @ApiOperation({ summary: '[ADMIN] Dashboard scoring — dossiers à traiter' })
+  @ApiOperation({ summary: '[ADMIN] Dashboard scoring — dossiers à traiter', description: 'Recherche par PME, filtre par produit, avec pagination.' })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'product', required: false, enum: ['FACTURE', 'PRET', 'EQUITY'] })
+  @ApiQuery({ name: 'page', required: false, description: 'Numéro de page (retourne tout si absent)' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Taille de page (retourne tout si absent)' })
   @Get('dashboard')
-  getDashboard() {
-    return this.scoringService.getDashboard();
+  getDashboard(
+    @Query('search') search?: string,
+    @Query('product') product?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.scoringService.getDashboard({
+      search,
+      product,
+      page: parsePositiveInt(page),
+      limit: parsePositiveInt(limit),
+    });
+  }
+
+  @ApiOperation({ summary: '[ADMIN] Stats du dashboard scoring (à scorer, en analyse, scoré, à compléter)' })
+  @Get('dashboard/stats')
+  getDashboardStats() {
+    return this.scoringService.getDashboardStats();
   }
 
   @ApiOperation({ summary: '[ADMIN] Nombre de dossiers nécessitant une action (à scorer ou en erreur)' })
   @Get('pending-count')
   async getPendingCount() {
-    const dossiers = await this.scoringService.getDashboard();
-    const count = dossiers.filter((d) =>
+    const { data } = await this.scoringService.getDashboard();
+    const count = data.filter((d) =>
       ['A_SCORER', 'ERREUR_CALCUL'].includes(d.scoringStatus),
     ).length;
     return { count };
   }
 
-  @ApiOperation({ summary: '[ADMIN] Historique des rapports de scoring' })
+  @ApiOperation({ summary: '[ADMIN] Historique des rapports de scoring', description: 'Recherche par PME, avec pagination.' })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'page', required: false, description: 'Numéro de page (retourne tout si absent)' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Taille de page (retourne tout si absent)' })
   @Get('history')
-  getHistory() {
-    return this.scoringService.getHistory();
+  getHistory(
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.scoringService.getHistory({
+      search,
+      page: parsePositiveInt(page),
+      limit: parsePositiveInt(limit),
+    });
+  }
+
+  @ApiOperation({ summary: '[ADMIN] Stats de l\'historique de scoring' })
+  @Get('history/stats')
+  getHistoryStats() {
+    return this.scoringService.getHistoryStats();
   }
 
   @ApiOperation({ summary: '[ADMIN] Déclencher manuellement le scoring d\'une demande' })

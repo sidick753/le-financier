@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient } from '@le-financier/database';
+import { PrismaClient, Prisma } from '@le-financier/database';
 import { ScoringResult } from './scoring.engine';
 
 @Injectable()
@@ -92,32 +92,87 @@ export class ScoringRepository {
   }
 
   // ── Dashboard admin : toutes les demandes à scorer ─────────────────────────
-  async findDashboard() {
-    return this.prisma.fundingRequest.findMany({
-      where: { status: { in: ['UNDER_REVIEW', 'PUBLISHED', 'FUNDED'] as any[] } },
-      include: {
-        organization: true,
-        scoringInput:  true,
-        scoringReports: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
+  async findDashboard(filters?: {
+    search?: string;
+    product?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const where: Prisma.FundingRequestWhereInput = {
+      status: { in: ['UNDER_REVIEW', 'PUBLISHED', 'FUNDED'] as any[] },
+      ...(filters?.product ? { category: filters.product as any } : {}),
+      ...(filters?.search
+        ? { organization: { legalName: { contains: filters.search, mode: 'insensitive' } } }
+        : {}),
+    };
+    const { page, limit } = filters ?? {};
+    const hasPagination = page !== undefined && limit !== undefined;
+
+    const [data, count] = await Promise.all([
+      this.prisma.fundingRequest.findMany({
+        where,
+        include: {
+          organization: true,
+          scoringInput:  true,
+          scoringReports: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+        skip: hasPagination ? (page - 1) * limit : undefined,
+        take: hasPagination ? limit : undefined,
+      }),
+      hasPagination ? this.prisma.fundingRequest.count({ where }) : Promise.resolve(undefined),
+    ]);
+
+    return { data, total: count ?? data.length };
   }
 
-  // ── Historique scoring (100 derniers rapports) ─────────────────────────────
-  async findHistory() {
-    return this.prisma.scoringReport.findMany({
-      include: {
-        organization: { select: { legalName: true } },
-        fundingRequest: { select: { title: true, category: true } },
-        validatedBy:   { select: { firstName: true, lastName: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
+  // ── Historique scoring ──────────────────────────────────────────────────────
+  async findHistory(filters?: { search?: string; page?: number; limit?: number }) {
+    const where: Prisma.ScoringReportWhereInput = {
+      ...(filters?.search
+        ? { organization: { legalName: { contains: filters.search, mode: 'insensitive' } } }
+        : {}),
+    };
+    const { page, limit } = filters ?? {};
+    const hasPagination = page !== undefined && limit !== undefined;
+
+    const [data, count] = await Promise.all([
+      this.prisma.scoringReport.findMany({
+        where,
+        include: {
+          organization: { select: { legalName: true } },
+          fundingRequest: { select: { title: true, category: true } },
+          validatedBy:   { select: { firstName: true, lastName: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: hasPagination ? (page - 1) * limit : undefined,
+        take: hasPagination ? limit : undefined,
+      }),
+      hasPagination ? this.prisma.scoringReport.count({ where }) : Promise.resolve(undefined),
+    ]);
+
+    return { data, total: count ?? data.length };
+  }
+
+  async getHistoryStats() {
+    const [total, published, avgAgg, versions] = await Promise.all([
+      this.prisma.scoringReport.count(),
+      this.prisma.scoringReport.count({ where: { status: 'VALIDATED' } }),
+      this.prisma.scoringReport.aggregate({ _avg: { autoScore: true } }),
+      this.prisma.scoringReport.findMany({
+        select: { bareme_version: true },
+        distinct: ['bareme_version'],
+      }),
+    ]);
+    return {
+      total,
+      published,
+      avgScore: Math.round(Number(avgAgg._avg.autoScore ?? 0) * 10) / 10,
+      baremeVersions: versions.map((v) => v.bareme_version),
+    };
   }
 
   // ── Validation d'un rapport ────────────────────────────────────────────────

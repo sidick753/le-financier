@@ -1,10 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useScoringAdmin, ScoringWeightCriterion } from "@/lib/use-scoring-admin";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { api } from "@/lib/api";
+import { useScoringWeights, ScoringWeightCriterion } from "@/lib/use-scoring-weights";
 import { ScoringSnapshotModal } from "@/components/scoring-snapshot-modal";
 
 type Tab = "automatise" | "configuration" | "historique";
+
+const PAGE_SIZE = 10;
+const SEARCH_DEBOUNCE_MS = 300;
 
 const PRODUCT_LABELS: Record<string, { label: string; className: string }> = {
   FACTURE: { label: "Affacturage",  className: "bg-blue-50 text-blue-700" },
@@ -47,34 +52,207 @@ const BAREME = [
   { grade: "B",   min:  0, max:  39, action: "Refuser",                            color: "bg-red-500" },
 ];
 
+interface ScoringDossier {
+  id: string;
+  pme: string;
+  product: string;
+  amount: string;
+  submittedAt: string;
+  completude: number;
+  scoringStatus: string;
+  grade: string | null;
+  score: number | null;
+  reportId: string | null;
+  scoringError: string | null;
+}
+
+interface DashboardStats {
+  aScorer: number;
+  enAnalyse: number;
+  scored: number;
+  aCompleter: number;
+}
+
+interface ScoringHistoryReport {
+  id: string;
+  // Décimal Prisma sérialisé en string sur le fil JSON.
+  autoScore: string;
+  grade: string | null;
+  bareme_version: string;
+  status: string;
+  createdAt: string;
+  organization: { legalName: string };
+  fundingRequest: { title: string; category: string } | null;
+  validatedBy: { firstName: string; lastName: string } | null;
+}
+
+interface HistoryStats {
+  total: number;
+  published: number;
+  avgScore: number;
+  baremeVersions: string[];
+}
+
 export default function AdminScoringPage() {
+  const { token } = useAuth();
   const {
-    dossiers, history, isLoading, actionLoading, launchScoring, validateReport,
     weights, weightsLoading, weightsSaving, weightsError, saveWeights,
-  } = useScoringAdmin();
+  } = useScoringWeights();
+
   const [tab, setTab] = useState<Tab>("automatise");
-  const [search, setSearch] = useState("");
-  const [productFilter, setProductFilter] = useState("Tous");
   const [draftWeights, setDraftWeights] = useState<Record<string, ScoringWeightCriterion[]>>({});
   const [snapshotReportId, setSnapshotReportId] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
     if (weights) setDraftWeights(weights);
   }, [weights]);
 
-  const aScorer    = dossiers.filter((d) => d.scoringStatus === "A_SCORER").length;
-  const enAnalyse  = dossiers.filter((d) => d.scoringStatus === "EXTRACTION").length;
-  const scored     = dossiers.filter((d) =>
-    ["CALCULATED", "PENDING_VALIDATION", "VALIDATED"].includes(d.scoringStatus),
-  ).length;
-  const aCompleter = dossiers.filter((d) => d.scoringStatus === "A_COMPLETER").length;
+  // ── Tab 1 : dossiers (scoring automatisé) ──────────────────────────────────
+  const [dossierSearchInput, setDossierSearchInput] = useState("");
+  const [dossierSearch, setDossierSearch] = useState("");
+  const [productFilter, setProductFilter] = useState("Tous");
+  const [dossierPage, setDossierPage] = useState(1);
+  const [dossiers, setDossiers] = useState<ScoringDossier[]>([]);
+  const [dossierTotal, setDossierTotal] = useState(0);
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const latestDossierRequestId = useRef(0);
 
-  const filteredDossiers = dossiers.filter((d) => {
-    const q = search.toLowerCase();
-    const matchSearch  = d.pme.toLowerCase().includes(q) || d.id.toLowerCase().includes(q);
-    const matchProduct = productFilter === "Tous" || d.product === productFilter;
-    return matchSearch && matchProduct;
-  });
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDossierSearch(dossierSearchInput);
+      setDossierPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timeout);
+  }, [dossierSearchInput]);
+
+  const fetchDossiers = useCallback(() => {
+    if (!token) return;
+    setIsLoading(true);
+    const requestId = ++latestDossierRequestId.current;
+    const params = new URLSearchParams();
+    if (dossierSearch) params.set("search", dossierSearch);
+    if (productFilter !== "Tous") params.set("product", productFilter);
+    params.set("page", String(dossierPage));
+    params.set("limit", String(PAGE_SIZE));
+
+    api
+      .get<{ data: ScoringDossier[]; total: number }>(`/scoring/dashboard?${params.toString()}`, token)
+      .then((res) => {
+        if (requestId !== latestDossierRequestId.current) return;
+        setDossiers(res.data);
+        setDossierTotal(res.total);
+        setIsLoading(false);
+        const lastPage = Math.max(1, Math.ceil(res.total / PAGE_SIZE));
+        if (res.data.length === 0 && dossierPage > lastPage) {
+          setDossierPage(lastPage);
+        }
+      })
+      .catch(() => {
+        if (requestId === latestDossierRequestId.current) setIsLoading(false);
+      });
+  }, [token, dossierSearch, productFilter, dossierPage]);
+
+  const fetchDashboardStats = useCallback(() => {
+    if (!token) return;
+    api.get<DashboardStats>("/scoring/dashboard/stats", token).then(setDashboardStats);
+  }, [token]);
+
+  useEffect(() => {
+    fetchDossiers();
+  }, [fetchDossiers]);
+
+  useEffect(() => {
+    fetchDashboardStats();
+  }, [fetchDashboardStats]);
+
+  // ── Tab 3 : historique ──────────────────────────────────────────────────────
+  const [historySearchInput, setHistorySearchInput] = useState("");
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyReports, setHistoryReports] = useState<ScoringHistoryReport[]>([]);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyStats, setHistoryStats] = useState<HistoryStats | null>(null);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+  const latestHistoryRequestId = useRef(0);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setHistorySearch(historySearchInput);
+      setHistoryPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timeout);
+  }, [historySearchInput]);
+
+  const fetchHistory = useCallback(() => {
+    if (!token) return;
+    setIsHistoryLoading(true);
+    const requestId = ++latestHistoryRequestId.current;
+    const params = new URLSearchParams();
+    if (historySearch) params.set("search", historySearch);
+    params.set("page", String(historyPage));
+    params.set("limit", String(PAGE_SIZE));
+
+    api
+      .get<{ data: ScoringHistoryReport[]; total: number }>(`/scoring/history?${params.toString()}`, token)
+      .then((res) => {
+        if (requestId !== latestHistoryRequestId.current) return;
+        setHistoryReports(res.data);
+        setHistoryTotal(res.total);
+        setIsHistoryLoading(false);
+        const lastPage = Math.max(1, Math.ceil(res.total / PAGE_SIZE));
+        if (res.data.length === 0 && historyPage > lastPage) {
+          setHistoryPage(lastPage);
+        }
+      })
+      .catch(() => {
+        if (requestId === latestHistoryRequestId.current) setIsHistoryLoading(false);
+      });
+  }, [token, historySearch, historyPage]);
+
+  const fetchHistoryStats = useCallback(() => {
+    if (!token) return;
+    api.get<HistoryStats>("/scoring/history/stats", token).then(setHistoryStats);
+  }, [token]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
+
+  useEffect(() => {
+    fetchHistoryStats();
+  }, [fetchHistoryStats]);
+
+  // ── Actions ──────────────────────────────────────────────────────────────
+  async function launchScoring(fundingRequestId: string) {
+    if (!token) return;
+    setActionLoading(fundingRequestId);
+    try {
+      await api.post(`/scoring/compute/${fundingRequestId}`, {}, token);
+    } finally {
+      fetchDossiers();
+      fetchDashboardStats();
+      setActionLoading(null);
+    }
+  }
+
+  async function validateReport(reportId: string, score?: number, notes?: string) {
+    if (!token) return;
+    setActionLoading(reportId);
+    try {
+      await api.patch(`/scoring/report/${reportId}/validate`, { validatedScore: score, notes }, token);
+      fetchDossiers();
+      fetchDashboardStats();
+      fetchHistory();
+      fetchHistoryStats();
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  const dossierTotalPages = Math.max(1, Math.ceil(dossierTotal / PAGE_SIZE));
+  const historyTotalPages = Math.max(1, Math.ceil(historyTotal / PAGE_SIZE));
 
   return (
     <div className="p-8">
@@ -120,10 +298,10 @@ export default function AdminScoringPage() {
 
           <div className="mb-6 grid grid-cols-4 gap-4">
             {[
-              { icon: "⚡", value: aScorer,    label: "À scorer",    color: "text-blue-600" },
-              { icon: "⏱", value: enAnalyse,  label: "En analyse",  color: "text-yellow-600" },
-              { icon: "✓", value: scored,      label: "Scoré",       color: "text-green-600" },
-              { icon: "⚠", value: aCompleter, label: "À compléter", color: "text-orange-600" },
+              { icon: "⚡", value: dashboardStats ? dashboardStats.aScorer : "…",    label: "À scorer",    color: "text-blue-600" },
+              { icon: "⏱", value: dashboardStats ? dashboardStats.enAnalyse : "…",  label: "En analyse",  color: "text-yellow-600" },
+              { icon: "✓", value: dashboardStats ? dashboardStats.scored : "…",      label: "Scoré",       color: "text-green-600" },
+              { icon: "⚠", value: dashboardStats ? dashboardStats.aCompleter : "…", label: "À compléter", color: "text-orange-600" },
             ].map((s) => (
               <div key={s.label} className="rounded-xl border border-gray-200 bg-white p-5">
                 <p className={`text-2xl font-bold ${s.color}`}>{s.icon} {s.value}</p>
@@ -135,16 +313,19 @@ export default function AdminScoringPage() {
           <div className="mb-4 flex items-center gap-3">
             <input
               type="text"
-              placeholder="Rechercher une PME, un identifiant…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Rechercher une PME…"
+              value={dossierSearchInput}
+              onChange={(e) => setDossierSearchInput(e.target.value)}
               className="flex-1 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
             />
             <div className="flex gap-2">
               {["Tous", "FACTURE", "PRET", "EQUITY"].map((p) => (
                 <button
                   key={p}
-                  onClick={() => setProductFilter(p)}
+                  onClick={() => {
+                    setProductFilter(p);
+                    setDossierPage(1);
+                  }}
                   className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
                     productFilter === p
                       ? "bg-brand-700 text-white"
@@ -159,10 +340,10 @@ export default function AdminScoringPage() {
 
           <div className="rounded-xl border border-gray-200 bg-white">
             {isLoading && <p className="p-5 text-sm text-gray-400">Chargement…</p>}
-            {!isLoading && filteredDossiers.length === 0 && (
+            {!isLoading && dossiers.length === 0 && (
               <p className="p-5 text-sm text-gray-400">Aucun dossier trouvé.</p>
             )}
-            {filteredDossiers.length > 0 && (
+            {dossiers.length > 0 && (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -177,7 +358,7 @@ export default function AdminScoringPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {filteredDossiers.map((d) => {
+                    {dossiers.map((d) => {
                       const productCfg = PRODUCT_LABELS[d.product];
                       const statusCfg  = STATUS_CONFIG[d.scoringStatus] ?? STATUS_CONFIG.A_SCORER;
                       const canScore   = d.scoringStatus === "A_SCORER" || d.scoringStatus === "ERREUR_CALCUL";
@@ -264,9 +445,32 @@ export default function AdminScoringPage() {
                     })}
                   </tbody>
                 </table>
-                <p className="border-t border-gray-100 p-3 text-center text-xs text-gray-400">
-                  {filteredDossiers.length} dossier{filteredDossiers.length !== 1 ? "s" : ""} affiché{filteredDossiers.length !== 1 ? "s" : ""}
+              </div>
+            )}
+            {dossierTotal > 0 && (
+              <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3 text-xs text-gray-500">
+                <p>
+                  {dossierTotal} dossier{dossierTotal !== 1 ? "s" : ""} au total
                 </p>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setDossierPage((p) => Math.max(1, p - 1))}
+                    disabled={dossierPage <= 1}
+                    className="rounded-md border border-gray-200 px-3 py-1 font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                  >
+                    Précédent
+                  </button>
+                  <span>
+                    Page {dossierPage} / {dossierTotalPages}
+                  </span>
+                  <button
+                    onClick={() => setDossierPage((p) => Math.min(dossierTotalPages, p + 1))}
+                    disabled={dossierPage >= dossierTotalPages}
+                    className="rounded-md border border-gray-200 px-3 py-1 font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                  >
+                    Suivant
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -382,7 +586,7 @@ export default function AdminScoringPage() {
               ))}
             </div>
             <p className="mt-3 text-xs italic text-gray-400">
-              Pour l'Equity, les actions sont réinterprétées en termes d'attractivité et aucune quotité d'avance n'est affichée.
+              Pour l&apos;Equity, les actions sont réinterprétées en termes d&apos;attractivité et aucune quotité d&apos;avance n&apos;est affichée.
             </p>
           </div>
         </div>
@@ -391,22 +595,22 @@ export default function AdminScoringPage() {
       {/* ═══ ONGLET 3 — HISTORIQUE ═══ */}
       {tab === "historique" && (
         <div>
-          {history && (
+          {historyStats && (
             <div className="mb-6 grid grid-cols-4 gap-4">
               {[
-                { label: "Scorings totaux",    value: history.stats.total,     hint: "Toutes périodes" },
+                { label: "Scorings totaux",    value: historyStats.total,     hint: "Toutes périodes" },
                 {
                   label: "Publiés",
-                  value: history.stats.published,
-                  hint: `${history.stats.total > 0
-                    ? Math.round((history.stats.published / history.stats.total) * 100)
+                  value: historyStats.published,
+                  hint: `${historyStats.total > 0
+                    ? Math.round((historyStats.published / historyStats.total) * 100)
                     : 0}% du total`,
                 },
-                { label: "Score moyen",        value: history.stats.avgScore,              hint: "/100" },
+                { label: "Score moyen",        value: historyStats.avgScore,              hint: "/100" },
                 {
                   label: "Versions de barème",
-                  value: history.stats.baremeVersions.length,
-                  hint: history.stats.baremeVersions.join(" · ") || "—",
+                  value: historyStats.baremeVersions.length,
+                  hint: historyStats.baremeVersions.join(" · ") || "—",
                 },
               ].map((s) => (
                 <div key={s.label} className="rounded-xl border border-gray-200 bg-white p-5">
@@ -418,17 +622,27 @@ export default function AdminScoringPage() {
             </div>
           )}
 
+          <div className="mb-4">
+            <input
+              type="text"
+              placeholder="Rechercher une PME…"
+              value={historySearchInput}
+              onChange={(e) => setHistorySearchInput(e.target.value)}
+              className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+            />
+          </div>
+
           <div className="rounded-xl border border-gray-200 bg-white">
-            {isLoading && <p className="p-5 text-sm text-gray-400">Chargement…</p>}
-            {!isLoading && (!history || history.reports.length === 0) && (
+            {isHistoryLoading && <p className="p-5 text-sm text-gray-400">Chargement…</p>}
+            {!isHistoryLoading && historyReports.length === 0 && (
               <div className="p-10 text-center">
                 <p className="text-sm text-gray-400">Aucun scoring calculé pour le moment.</p>
                 <p className="mt-1 text-xs text-gray-400">
-                  Lancez un scoring depuis l'onglet "Scoring automatisé".
+                  Lancez un scoring depuis l&apos;onglet &quot;Scoring automatisé&quot;.
                 </p>
               </div>
             )}
-            {history && history.reports.length > 0 && (
+            {historyReports.length > 0 && (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -445,7 +659,7 @@ export default function AdminScoringPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {history.reports.map((report) => {
+                    {historyReports.map((report) => {
                       const cat        = report.fundingRequest?.category ?? "";
                       const productCfg = PRODUCT_LABELS[cat] ?? { label: "—", className: "bg-gray-100 text-gray-500" };
                       const decisionCfg = DECISION_CONFIG[report.status] ?? { label: report.status, className: "text-gray-400" };
@@ -506,9 +720,32 @@ export default function AdminScoringPage() {
                     })}
                   </tbody>
                 </table>
-                <p className="border-t border-gray-100 p-3 text-center text-xs text-gray-400">
-                  {history.reports.length} scoring{history.reports.length !== 1 ? "s" : ""} · Chaque enregistrement est immuable
+              </div>
+            )}
+            {historyTotal > 0 && (
+              <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3 text-xs text-gray-500">
+                <p>
+                  {historyTotal} scoring{historyTotal !== 1 ? "s" : ""} au total · Chaque enregistrement est immuable
                 </p>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                    disabled={historyPage <= 1}
+                    className="rounded-md border border-gray-200 px-3 py-1 font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                  >
+                    Précédent
+                  </button>
+                  <span>
+                    Page {historyPage} / {historyTotalPages}
+                  </span>
+                  <button
+                    onClick={() => setHistoryPage((p) => Math.min(historyTotalPages, p + 1))}
+                    disabled={historyPage >= historyTotalPages}
+                    className="rounded-md border border-gray-200 px-3 py-1 font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                  >
+                    Suivant
+                  </button>
+                </div>
               </div>
             )}
           </div>
