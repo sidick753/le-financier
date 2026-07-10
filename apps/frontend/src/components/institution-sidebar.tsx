@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useNotifications } from "@/lib/use-notifications";
-import { useInstitutionSidebarBadges } from "@/lib/use-institution-sidebar-badges";
+import { useInstitutionBadges } from "@/lib/institution-badges-context";
 
 const NAV_ITEMS = [
   {
@@ -77,7 +77,7 @@ export function InstitutionSidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const { unreadCount } = useNotifications();
-  const badges = useInstitutionSidebarBadges();
+  const { badges } = useInstitutionBadges();
 
   return (
     <aside className="fixed left-0 top-0 z-20 flex h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-white">

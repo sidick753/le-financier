@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import { useAdminBadges } from "@/lib/admin-badges-context";
 import { FUNDING_STATUS_CONFIG, formatAdminDate, formatCompactAmount } from "@/lib/admin-ui";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -62,6 +63,7 @@ export default function AdminOpportunitesPage() {
 function AdminOpportunitesPageContent() {
   const searchParams = useSearchParams();
   const { token } = useAuth();
+  const { refreshBadges } = useAdminBadges();
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -138,6 +140,19 @@ function AdminOpportunitesPageContent() {
       await api.patch(`/funding-requests/${id}/cancel`, {}, token!);
       fetchFundingRequests();
       fetchStats();
+      refreshBadges();
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleReactivate(id: string) {
+    setActionLoading(id);
+    try {
+      await api.patch(`/funding-requests/${id}/reactivate`, {}, token!);
+      fetchFundingRequests();
+      fetchStats();
+      refreshBadges();
     } finally {
       setActionLoading(null);
     }
@@ -271,6 +286,15 @@ function AdminOpportunitesPageContent() {
                               className="rounded-md border border-orange-200 px-3 py-1 text-xs font-medium text-orange-600 hover:bg-orange-50 disabled:opacity-50"
                             >
                               Suspendre
+                            </button>
+                          )}
+                          {fr.status === "CANCELLED" && (
+                            <button
+                              onClick={() => handleReactivate(fr.id)}
+                              disabled={actionLoading === fr.id}
+                              className="rounded-md bg-brand-700 px-3 py-1 text-xs font-medium text-white hover:bg-brand-800 disabled:opacity-50"
+                            >
+                              Réactiver
                             </button>
                           )}
                         </div>

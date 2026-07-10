@@ -164,4 +164,13 @@ export class FundingService {
     if (!fr) throw new NotFoundException('Demande introuvable.');
     return this.fundingRepository.updateStatus(id, 'CANCELLED');
   }
+
+  async reactivate(id: string) {
+    const fr = await this.fundingRepository.findById(id);
+    if (!fr) throw new NotFoundException('Demande introuvable.');
+    if (fr.status !== 'CANCELLED') {
+      throw new BadRequestException('Seule une demande suspendue peut être réactivée.');
+    }
+    return this.fundingRepository.updateStatus(id, 'PUBLISHED');
+  }
 }

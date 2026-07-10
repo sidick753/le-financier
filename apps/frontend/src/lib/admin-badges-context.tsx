@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
 import { useAuth } from "./auth-context";
 import { api } from "./api";
 
@@ -20,11 +20,18 @@ const EMPTY_BADGES: SidebarBadges = {
   scoring: 0,
 };
 
-export function useSidebarBadges() {
+interface AdminBadgesContextValue {
+  badges: SidebarBadges;
+  refreshBadges: () => void;
+}
+
+const AdminBadgesContext = createContext<AdminBadgesContextValue | null>(null);
+
+export function AdminBadgesProvider({ children }: { children: ReactNode }) {
   const { token } = useAuth();
   const [badges, setBadges] = useState<SidebarBadges>(EMPTY_BADGES);
 
-  const refresh = useCallback(() => {
+  const refreshBadges = useCallback(() => {
     if (!token) return;
     Promise.all([
       api.get<{ pending: number }>("/organizations/admin/stats", token),
@@ -46,8 +53,18 @@ export function useSidebarBadges() {
   }, [token]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    refreshBadges();
+  }, [refreshBadges]);
 
-  return badges;
+  return (
+    <AdminBadgesContext.Provider value={{ badges, refreshBadges }}>
+      {children}
+    </AdminBadgesContext.Provider>
+  );
+}
+
+export function useAdminBadges() {
+  const ctx = useContext(AdminBadgesContext);
+  if (!ctx) throw new Error("useAdminBadges doit être utilisé dans un AdminBadgesProvider.");
+  return ctx;
 }

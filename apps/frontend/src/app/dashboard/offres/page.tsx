@@ -5,6 +5,7 @@ import { useOffers } from "@/lib/use-offers";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { useNegotiationSocket } from "@/lib/use-negotiation-socket";
+import { usePmeBadges } from "@/lib/pme-badges-context";
 
 const STATUS_LABELS: Record<string, { label: string; className: string }> = {
   INTERESTED: { label: "Intéressé", className: "bg-gray-100 text-gray-600" },
@@ -28,13 +29,17 @@ function formatDate(dateString: string) {
 export default function OffresPage() {
   const { offers, isLoading, refresh } = useOffers();
   const { token } = useAuth();
+  const { refreshBadges } = usePmeBadges();
   const [selectedOffer, setSelectedOffer] = useState<string | null>(null);
   const [counterReturn, setCounterReturn] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  useNegotiationSocket(refresh);
+  useNegotiationSocket(() => {
+    refresh();
+    refreshBadges();
+  });
 
   const negotiatingOffers = offers.filter((o) => o.status === "NEGOTIATING");
   const otherOffers = offers.filter((o) => o.status !== "NEGOTIATING");
@@ -57,6 +62,7 @@ export default function OffresPage() {
       setCounterReturn("");
       setSelectedOffer(null);
       refresh();
+      refreshBadges();
     } catch (err) {
       console.error("[handleCounter]", err);
       setError(err instanceof Error ? err.message : "Échec de la contre-proposition.");
@@ -74,6 +80,7 @@ export default function OffresPage() {
       setSuccess("Offre acceptée — l'engagement est maintenant confirmé.");
       setSelectedOffer(null);
       refresh();
+      refreshBadges();
     } catch (err) {
       console.error("[handleAccept]", err);
       setError(err instanceof Error ? err.message : "Échec de l'acceptation.");

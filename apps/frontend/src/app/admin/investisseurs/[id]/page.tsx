@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import { useAdminBadges } from "@/lib/admin-badges-context";
 import { USER_ROLE_CONFIG, KYC_STATUS_CONFIG, formatAdminDate, formatCompactAmount } from "@/lib/admin-ui";
 
 const INVESTMENT_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
@@ -46,6 +47,7 @@ export default function AdminInvestisseurDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { token } = useAuth();
+  const { refreshBadges } = useAdminBadges();
 
   const [user, setUser] = useState<UserDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -69,6 +71,7 @@ export default function AdminInvestisseurDetailPage() {
     try {
       await api.patch(`/auth/admin/users/${id}/${action}`, {}, token!);
       load();
+      refreshBadges();
     } finally {
       setActionLoading(false);
     }

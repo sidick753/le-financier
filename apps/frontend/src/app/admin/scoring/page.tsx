@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import { useAdminBadges } from "@/lib/admin-badges-context";
 import { useScoringWeights, ScoringWeightCriterion } from "@/lib/use-scoring-weights";
 import { ScoringSnapshotModal } from "@/components/scoring-snapshot-modal";
 
@@ -95,6 +96,7 @@ interface HistoryStats {
 
 export default function AdminScoringPage() {
   const { token } = useAuth();
+  const { refreshBadges } = useAdminBadges();
   const {
     weights, weightsLoading, weightsSaving, weightsError, saveWeights,
   } = useScoringWeights();
@@ -233,6 +235,7 @@ export default function AdminScoringPage() {
     } finally {
       fetchDossiers();
       fetchDashboardStats();
+      refreshBadges();
       setActionLoading(null);
     }
   }
@@ -246,6 +249,7 @@ export default function AdminScoringPage() {
       fetchDashboardStats();
       fetchHistory();
       fetchHistoryStats();
+      refreshBadges();
     } finally {
       setActionLoading(null);
     }

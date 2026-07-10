@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { InstitutionSidebar } from "@/components/institution-sidebar";
 import { NotificationsProvider } from "@/lib/notifications-context";
+import { InstitutionBadgesProvider } from "@/lib/institution-badges-context";
 
 export default function InstitutionLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -33,10 +34,12 @@ export default function InstitutionLayout({ children }: { children: React.ReactN
 
   return (
     <NotificationsProvider>
-      <div className="flex min-h-screen bg-slate-50">
-        <InstitutionSidebar />
-        <main className="ml-64 flex-1 overflow-y-auto">{children}</main>
-      </div>
+      <InstitutionBadgesProvider>
+        <div className="flex min-h-screen bg-slate-50">
+          <InstitutionSidebar />
+          <main className="ml-64 flex-1 overflow-y-auto">{children}</main>
+        </div>
+      </InstitutionBadgesProvider>
     </NotificationsProvider>
   );
 }

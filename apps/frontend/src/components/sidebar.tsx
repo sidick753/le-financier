@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useNotifications } from "@/lib/use-notifications";
-import { usePmeOffersBadge } from "@/lib/use-pme-offers-badge";
+import { usePmeBadges } from "@/lib/pme-badges-context";
 
 const NAV_ITEMS = [
   {
@@ -175,7 +175,7 @@ export function Sidebar({
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const { unreadCount } = useNotifications();
-  const offersPending = usePmeOffersBadge();
+  const { offresPending: offersPending } = usePmeBadges();
 
   return (
     <aside className="fixed left-0 top-0 z-20 flex h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-white">

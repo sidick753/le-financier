@@ -7,6 +7,7 @@ import {
   type AmlAlertType,
   type AmlAlertStatus,
 } from "@/lib/use-institution-settings";
+import { useInstitutionBadges } from "@/lib/institution-badges-context";
 import { NotifBell } from "@/components/ui/notif-bell";
 
 const AML_TYPE_LABELS: Record<AmlAlertType, string> = {
@@ -124,6 +125,7 @@ function computeStatus(value: number, seuil: number, plusBas: boolean): Indicato
 
 export default function RisquesPage() {
   const { riskIndicators, amlAlerts, amlStats, isLoading, refresh, resolveAmlAlert } = useInstitutionSettings();
+  const { refreshBadges } = useInstitutionBadges();
   const [tab, setTab] = useState<RisqueTab>("prudentiels");
 
   const indicateurs = INDICATOR_DEFS.map((def) => {
@@ -350,7 +352,7 @@ export default function RisquesPage() {
                           <td className="px-5 py-3 text-right">
                             {alert.status !== "RESOLU" && (
                               <button
-                                onClick={() => resolveAmlAlert(alert.id)}
+                                onClick={() => resolveAmlAlert(alert.id).then(refreshBadges)}
                                 className="rounded-md border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
                               >
                                 Traiter

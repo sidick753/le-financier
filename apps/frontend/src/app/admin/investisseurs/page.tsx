@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import { useAdminBadges } from "@/lib/admin-badges-context";
 import type { AdminUser } from "@/lib/use-admin-data";
 import { USER_ROLE_CONFIG, KYC_STATUS_CONFIG, formatAdminDate, formatCompactAmount } from "@/lib/admin-ui";
 
@@ -35,6 +36,7 @@ export default function AdminInvestisseursPage() {
 function AdminInvestisseursPageContent() {
   const searchParams = useSearchParams();
   const { token } = useAuth();
+  const { refreshBadges } = useAdminBadges();
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -106,6 +108,7 @@ function AdminInvestisseursPageContent() {
     try {
       await api.patch(`/auth/admin/users/${id}/${action}`, {}, token!);
       fetchUsers();
+      refreshBadges();
     } finally {
       setActionLoading(null);
     }

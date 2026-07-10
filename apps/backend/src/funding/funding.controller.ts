@@ -165,4 +165,20 @@ export class FundingController {
   cancel(@Param('id') id: string) {
     return this.fundingService.cancel(id);
   }
+
+  @ApiBearerAuth('jwt')
+  @ApiOperation({
+    summary: '[ADMIN] Réactiver (CANCELLED → PUBLISHED)',
+    description: 'Republie une demande suspendue — de nouveau visible par les investisseurs. Réservé aux rôles ADMIN et SUPER_ADMIN.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID de la demande' })
+  @ApiResponse({ status: 200, description: 'Statut mis à jour → PUBLISHED' })
+  @ApiResponse({ status: 400, description: 'La demande n\'est pas suspendue' })
+  @ApiResponse({ status: 403, description: 'Rôle insuffisant' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Patch(':id/reactivate')
+  reactivate(@Param('id') id: string) {
+    return this.fundingService.reactivate(id);
+  }
 }

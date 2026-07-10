@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import { useAdminBadges } from "@/lib/admin-badges-context";
 import { KYC_STATUS_CONFIG, formatAdminDate, formatFullAmount } from "@/lib/admin-ui";
 
 const MEMBER_ROLE_LABELS: Record<string, string> = {
@@ -50,6 +51,7 @@ export default function AdminPartenaireDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { token } = useAuth();
+  const { refreshBadges } = useAdminBadges();
 
   const [institution, setInstitution] = useState<InstitutionDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -73,6 +75,7 @@ export default function AdminPartenaireDetailPage() {
     try {
       await api.patch(`/auth/admin/users/${userId}/${action}`, {}, token!);
       load();
+      refreshBadges();
     } finally {
       setActionLoading(false);
     }

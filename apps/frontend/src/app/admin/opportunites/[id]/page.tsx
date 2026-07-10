@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import { useAdminBadges } from "@/lib/admin-badges-context";
 import { RejectReasonModal } from "@/components/reject-reason-modal";
 import { FUNDING_STATUS_CONFIG, formatAdminDate, formatFullAmount, formatFileSize } from "@/lib/admin-ui";
 
@@ -52,6 +53,7 @@ export default function AdminOpportuniteDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { token } = useAuth();
+  const { refreshBadges } = useAdminBadges();
 
   const [fr, setFr] = useState<FundingRequestDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -76,6 +78,7 @@ export default function AdminOpportuniteDetailPage() {
     try {
       await api.patch(`/funding-requests/${id}/approve`, {}, token!);
       load();
+      refreshBadges();
     } finally {
       setActionLoading(false);
     }
@@ -87,6 +90,7 @@ export default function AdminOpportuniteDetailPage() {
       await api.patch(`/funding-requests/${id}/reject`, { reason }, token!);
       setShowRejectModal(false);
       load();
+      refreshBadges();
     } finally {
       setActionLoading(false);
     }
@@ -97,6 +101,18 @@ export default function AdminOpportuniteDetailPage() {
     try {
       await api.patch(`/funding-requests/${id}/cancel`, {}, token!);
       load();
+      refreshBadges();
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleReactivate() {
+    setActionLoading(true);
+    try {
+      await api.patch(`/funding-requests/${id}/reactivate`, {}, token!);
+      load();
+      refreshBadges();
     } finally {
       setActionLoading(false);
     }
@@ -169,6 +185,15 @@ export default function AdminOpportuniteDetailPage() {
               className="rounded-md border border-orange-200 px-4 py-2 text-xs font-medium text-orange-600 hover:bg-orange-50 disabled:opacity-50"
             >
               Suspendre
+            </button>
+          )}
+          {fr.status === "CANCELLED" && (
+            <button
+              onClick={handleReactivate}
+              disabled={actionLoading}
+              className="rounded-md bg-brand-700 px-4 py-2 text-xs font-medium text-white hover:bg-brand-800 disabled:opacity-50"
+            >
+              Réactiver
             </button>
           )}
         </div>

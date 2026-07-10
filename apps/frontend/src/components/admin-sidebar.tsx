@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { useSidebarBadges, type SidebarBadges } from "@/lib/use-sidebar-badges";
+import { useAdminBadges, type SidebarBadges } from "@/lib/admin-badges-context";
 
 const NAV_ITEMS = [
   {
@@ -110,7 +110,7 @@ const NAV_ITEMS = [
 export function AdminSidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const badges = useSidebarBadges();
+  const { badges } = useAdminBadges();
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
 
   return (

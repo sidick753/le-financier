@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { RejectReasonModal } from "@/components/reject-reason-modal";
 import { ORG_STATUS_CONFIG, formatAdminDate, formatCompactAmount, formatFileSize } from "@/lib/admin-ui";
+import { useAdminBadges } from "@/lib/admin-badges-context";
 
 const DOC_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   PENDING_REVIEW: { label: "À vérifier", className: "bg-yellow-100 text-yellow-700" },
@@ -62,6 +63,7 @@ export default function AdminPmeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { token } = useAuth();
+  const { refreshBadges } = useAdminBadges();
 
   const [org, setOrg] = useState<OrganizationDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -86,6 +88,7 @@ export default function AdminPmeDetailPage() {
     try {
       await api.patch(`/organizations/admin/${id}/verify`, {}, token!);
       load();
+      refreshBadges();
     } finally {
       setActionLoading(false);
     }
@@ -97,6 +100,7 @@ export default function AdminPmeDetailPage() {
       await api.patch(`/organizations/admin/${id}/reject`, { reason }, token!);
       setModal(null);
       load();
+      refreshBadges();
     } finally {
       setActionLoading(false);
     }
@@ -108,6 +112,7 @@ export default function AdminPmeDetailPage() {
       await api.patch(`/organizations/admin/${id}/suspend`, { reason }, token!);
       setModal(null);
       load();
+      refreshBadges();
     } finally {
       setActionLoading(false);
     }
