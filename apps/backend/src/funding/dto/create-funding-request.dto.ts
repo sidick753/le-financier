@@ -7,6 +7,11 @@ export enum FundingCategoryDto {
   EQUITY  = 'EQUITY',
 }
 
+export enum FundingInvestorModeDto {
+  SINGLE_INVESTOR    = 'SINGLE_INVESTOR',
+  MULTIPLE_INVESTORS = 'MULTIPLE_INVESTORS',
+}
+
 export class CreateFundingRequestDto {
   @ApiProperty({ example: 'uuid-de-l-organisation' })
   @IsUUID()
@@ -40,6 +45,15 @@ export class CreateFundingRequestDto {
   @IsNumber()
   @Min(1)
   durationMonths?: number;
+
+  @ApiPropertyOptional({
+    enum: FundingInvestorModeDto,
+    default: FundingInvestorModeDto.MULTIPLE_INVESTORS,
+    description: "Ouvert à plusieurs investisseurs (par défaut) ou réservé à un seul investisseur finançant 100% du montant.",
+  })
+  @IsOptional()
+  @IsEnum(FundingInvestorModeDto)
+  investorMode?: FundingInvestorModeDto;
 
   // --- FACTURE : ce débiteur, cette facture précise ---
   // (le profil de la PME elle-même — secteur, santé financière, dirigeant, équipe —

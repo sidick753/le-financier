@@ -19,6 +19,8 @@ const CATEGORY_BY_TYPE: Record<FinancingType, "FACTURE" | "PRET" | "EQUITY"> = {
   EQUITY: "EQUITY",
 };
 
+type InvestorMode = "MULTIPLE_INVESTORS" | "SINGLE_INVESTOR";
+
 interface FormData {
   type: FinancingType;
   amount: string;
@@ -27,6 +29,7 @@ interface FormData {
   title: string;
   description: string;
   objective: string;
+  investorMode: InvestorMode;
 }
 
 // ── config par type ───────────────────────────────────────────────────────────
@@ -195,6 +198,48 @@ function Step1({
         </div>
       </div>
 
+      {/* Mode de financement */}
+      <div className="mt-4">
+        <label className="mb-1.5 block text-[13px] font-semibold text-slate-900">Mode de financement</label>
+        <div className="grid grid-cols-2 gap-3">
+          {(
+            [
+              {
+                value: "MULTIPLE_INVESTORS" as InvestorMode,
+                label: "Plusieurs investisseurs",
+                desc: "Votre montant peut être financé par plusieurs investisseurs qui se partagent le total.",
+              },
+              {
+                value: "SINGLE_INVESTOR" as InvestorMode,
+                label: "Un seul investisseur",
+                desc: "Vous voulez un unique investisseur qui finance 100% du montant, sans partage.",
+              },
+            ]
+          ).map((opt) => {
+            const selected = data.investorMode === opt.value;
+            return (
+              <label
+                key={opt.value}
+                className={`cursor-pointer rounded-xl border-[1.5px] p-3.5 transition ${
+                  selected ? "border-blue-600 bg-blue-50" : "border-slate-200 bg-white hover:border-slate-300"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="investorMode"
+                  value={opt.value}
+                  checked={selected}
+                  onChange={() => onChange("investorMode", opt.value)}
+                  className="sr-only"
+                />
+                <p className="text-[13px] font-bold text-slate-900">{opt.label}</p>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">{opt.desc}</p>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Rate */}
       {cfg.showRate && (
         <div className="mt-4">
@@ -286,25 +331,27 @@ interface DocSlotConfig {
   label: string;
   hint?: string;
   required?: boolean;
+  /** Non-obligatoire mais à mettre en avant explicitement — le niveau d'insistance à afficher. */
+  recommended?: "Fortement recommandé" | "Recommandé";
   docType: string;
 }
 
 const DOC_SLOTS_BY_TYPE: Record<FinancingType, DocSlotConfig[]> = {
   INVOICE: [
     { key: "facture", label: "Facture client", required: true, docType: "FUNDING_REQUEST_ATTACHMENT" },
-    { key: "etatsFinanciers", label: "États financiers récents", hint: "Bilan, compte de résultat (derniers 12 mois)", docType: "FINANCIAL_STATEMENT" },
-    { key: "businessPlan", label: "Business plan ou prévisionnel", hint: "Document décrivant votre activité et projections", docType: "FUNDING_REQUEST_ATTACHMENT" },
-    { key: "autres", label: "Autres documents", docType: "FUNDING_REQUEST_ATTACHMENT" },
+    { key: "etatsFinanciers", label: "États financiers récents", hint: "Bilan, compte de résultat (derniers 12 mois) — même non exigés, ils renforcent nettement votre dossier.", recommended: "Fortement recommandé", docType: "FINANCIAL_STATEMENT" },
+    { key: "businessPlan", label: "Business plan ou prévisionnel", hint: "Document décrivant votre activité et projections — non obligatoire, mais très utile à l'analyse.", recommended: "Recommandé", docType: "FUNDING_REQUEST_ATTACHMENT" },
+    { key: "autres", label: "Autres documents", hint: "Tout document supplémentaire (contrats, garanties, références...) augmente la confiance des financeurs.", recommended: "Recommandé", docType: "FUNDING_REQUEST_ATTACHMENT" },
   ],
   LOAN: [
-    { key: "etatsFinanciers", label: "États financiers récents", hint: "Bilan, compte de résultat (derniers 12 mois)", docType: "FINANCIAL_STATEMENT" },
-    { key: "businessPlan", label: "Business plan ou prévisionnel", hint: "Document décrivant votre activité et projections", docType: "FUNDING_REQUEST_ATTACHMENT" },
-    { key: "autres", label: "Autres documents", docType: "FUNDING_REQUEST_ATTACHMENT" },
+    { key: "etatsFinanciers", label: "États financiers récents", hint: "Bilan, compte de résultat (derniers 12 mois) — déterminants pour l'analyse de votre capacité de remboursement.", recommended: "Fortement recommandé", docType: "FINANCIAL_STATEMENT" },
+    { key: "businessPlan", label: "Business plan ou prévisionnel", hint: "Document décrivant votre activité et projections — non obligatoire, mais très utile à l'analyse.", recommended: "Recommandé", docType: "FUNDING_REQUEST_ATTACHMENT" },
+    { key: "autres", label: "Autres documents", hint: "Tout document supplémentaire (contrats, garanties, références...) augmente la confiance des financeurs.", recommended: "Recommandé", docType: "FUNDING_REQUEST_ATTACHMENT" },
   ],
   EQUITY: [
     { key: "businessPlan", label: "Business plan / pitch deck", required: true, docType: "FUNDING_REQUEST_ATTACHMENT" },
-    { key: "etatsFinanciers", label: "États financiers récents", hint: "Bilan, compte de résultat (derniers 12 mois)", docType: "FINANCIAL_STATEMENT" },
-    { key: "autres", label: "Autres documents", docType: "FUNDING_REQUEST_ATTACHMENT" },
+    { key: "etatsFinanciers", label: "États financiers récents", hint: "Bilan, compte de résultat (derniers 12 mois) — même non exigés, ils renforcent nettement votre dossier.", recommended: "Fortement recommandé", docType: "FINANCIAL_STATEMENT" },
+    { key: "autres", label: "Autres documents", hint: "Tout document supplémentaire (contrats, garanties, références...) augmente la confiance des financeurs.", recommended: "Recommandé", docType: "FUNDING_REQUEST_ATTACHMENT" },
   ],
 };
 
@@ -322,10 +369,31 @@ function DocSlot({ slot, uploaded, onUploaded, organizationId, fundingRequestId 
       }`}
     >
       <div className="min-w-0">
-        <p className="text-[13px] font-bold text-slate-900">
-          {slot.label}{slot.required && <span className="text-red-500"> (obligatoire)</span>}
-        </p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <p className="text-[13px] font-bold text-slate-900">{slot.label}</p>
+          {slot.required && (
+            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
+              OBLIGATOIRE
+            </span>
+          )}
+          {!slot.required && slot.recommended && (
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                slot.recommended === "Fortement recommandé"
+                  ? "bg-orange-100 text-orange-700"
+                  : "bg-blue-100 text-blue-700"
+              }`}
+            >
+              {slot.recommended.toUpperCase()}
+            </span>
+          )}
+        </div>
         {slot.hint && <p className="mt-0.5 text-[12px] text-blue-600">{slot.hint}</p>}
+        {!slot.required && (
+          <p className="mt-0.5 text-[11px] text-slate-400">
+            Non obligatoire, mais chaque document ajouté renforce sérieusement votre dossier.
+          </p>
+        )}
       </div>
       {uploaded ? (
         <span className="shrink-0 text-[12px] font-semibold text-green-600">✓ Ajouté</span>
@@ -353,7 +421,10 @@ function Step3({ data, organizationId, fundingRequestId, docs, onDocUploaded }: 
   return (
     <div className="rounded-[18px] border border-slate-200 bg-white p-7">
       <h2 className="mb-1 text-[15px] font-bold text-slate-900">Documents justificatifs</h2>
-      <p className="mb-5 text-[13px] text-slate-500">Ajoutez les documents qui appuient votre demande</p>
+      <p className="mb-5 text-[13px] text-slate-500">
+        Ajoutez les documents qui appuient votre demande. Même ceux qui ne sont pas obligatoires sont très
+        importants : ils accélèrent l'analyse et augmentent vos chances d'obtenir une offre.
+      </p>
       {!organizationId || !fundingRequestId ? (
         <p className="text-[13px] text-slate-400">Préparation de votre dossier...</p>
       ) : (
@@ -389,6 +460,10 @@ function Step4({ data }: { data: FormData }) {
           { label: "Montant", value: amountFmt },
           { label: "Durée", value: data.duration || "—" },
           { label: "Taux proposé", value: cfg.showRate ? (data.rate ? data.rate + " %" : "—") : "Participation aux bénéfices" },
+          {
+            label: "Mode de financement",
+            value: data.investorMode === "SINGLE_INVESTOR" ? "Investisseur unique (100%)" : "Plusieurs investisseurs",
+          },
         ].map(({ label, value }) => (
           <div key={label}>
             <p className="mb-1 text-[11px] font-medium text-slate-500">{label}</p>
@@ -438,6 +513,7 @@ const INITIAL: FormData = {
   title: "",
   description: "",
   objective: "",
+  investorMode: "MULTIPLE_INVESTORS",
 };
 
 export default function NewDemandePage() {
@@ -499,6 +575,7 @@ export default function NewDemandePage() {
         description,
         category: CATEGORY_BY_TYPE[data.type],
         amountRequested: amountRaw,
+        investorMode: data.investorMode,
         ...(durationMonths !== undefined && { durationMonths }),
         ...(expectedReturn !== undefined && !isNaN(expectedReturn) && { expectedReturn }),
       },

@@ -35,6 +35,7 @@ interface FundingRequestDetail {
   amountRequested: string;
   expectedReturn: string | null;
   durationMonths: number | null;
+  investorMode: "SINGLE_INVESTOR" | "MULTIPLE_INVESTORS";
   status: string;
 }
 
@@ -55,6 +56,7 @@ export default function EditDemandePage() {
   const [amount, setAmount] = useState("");
   const [duration, setDuration] = useState("");
   const [rate, setRate] = useState("");
+  const [investorMode, setInvestorMode] = useState<"SINGLE_INVESTOR" | "MULTIPLE_INVESTORS">("MULTIPLE_INVESTORS");
   const [organizationId, setOrganizationId] = useState<string | null>(null);
 
   const [documents, setDocuments] = useState<FundingDocument[]>([]);
@@ -82,6 +84,7 @@ export default function EditDemandePage() {
         setAmount(fmtAmountInput(r.amountRequested));
         setDuration(r.durationMonths ? String(r.durationMonths) : "");
         setRate(r.expectedReturn ?? "");
+        setInvestorMode(r.investorMode ?? "MULTIPLE_INVESTORS");
       })
       .catch((err) => setLoadError(err instanceof Error ? err.message : "Erreur de chargement."))
       .finally(() => setIsLoading(false));
@@ -132,6 +135,7 @@ export default function EditDemandePage() {
           description: description.trim(),
           category,
           amountRequested: amountRaw,
+          investorMode,
           ...(durationMonths !== undefined && !isNaN(durationMonths) && { durationMonths }),
           ...(expectedReturn !== undefined && !isNaN(expectedReturn) && { expectedReturn }),
         },
@@ -251,6 +255,39 @@ export default function EditDemandePage() {
               </div>
             </div>
 
+            <div className="mb-5">
+              <label className="mb-1.5 block text-[13px] font-semibold text-slate-900">Mode de financement</label>
+              <div className="grid grid-cols-2 gap-3">
+                {(
+                  [
+                    { value: "MULTIPLE_INVESTORS" as const, label: "Plusieurs investisseurs", desc: "Le montant peut être partagé entre plusieurs investisseurs." },
+                    { value: "SINGLE_INVESTOR" as const, label: "Un seul investisseur", desc: "Un unique investisseur finance 100% du montant, sans partage." },
+                  ]
+                ).map((opt) => {
+                  const selected = investorMode === opt.value;
+                  return (
+                    <label
+                      key={opt.value}
+                      className={`cursor-pointer rounded-[10px] border-[1.5px] p-3 transition ${
+                        selected ? "border-blue-500 bg-blue-50" : "border-slate-200 hover:border-slate-300"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="investorMode"
+                        value={opt.value}
+                        checked={selected}
+                        onChange={() => setInvestorMode(opt.value)}
+                        className="sr-only"
+                      />
+                      <p className="text-[12px] font-bold text-slate-900">{opt.label}</p>
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">{opt.desc}</p>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
             {category !== "EQUITY" && (
               <div className="mb-5">
                 <label className="mb-1.5 block text-[13px] font-semibold text-slate-900">Taux proposé (%)</label>
@@ -285,7 +322,10 @@ export default function EditDemandePage() {
         {!isLoading && !loadError && !notEditable && (
           <div className="mt-5 rounded-[18px] border border-slate-200 bg-white p-7">
             <h2 className="mb-1 text-[15px] font-bold text-slate-900">Documents</h2>
-            <p className="mb-4 text-[13px] text-slate-500">Ajoutez ou retirez des pièces justificatives.</p>
+            <p className="mb-4 text-[13px] text-slate-500">
+              Ajoutez ou retirez des pièces justificatives. Même les documents non obligatoires sont très
+              importants : chaque pièce ajoutée renforce la confiance des financeurs envers votre dossier.
+            </p>
 
             {documents.length > 0 && (
               <div className="mb-4 divide-y divide-slate-100 rounded-[10px] border border-slate-100">

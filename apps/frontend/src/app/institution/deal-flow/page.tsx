@@ -33,6 +33,7 @@ export default function DealFlowPage() {
   const [categoryFilter, setCategoryFilter] = useState("Tous");
   const [riskFilter, setRiskFilter] = useState("Tous");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<{ id: string; message: string } | null>(null);
 
   const engagedFundingRequestIds = new Set(investments.map((inv) => inv.fundingRequest.id));
 
@@ -50,6 +51,7 @@ export default function DealFlowPage() {
   async function handleEngage(opportunityId: string, amount: number, proposedReturn: number) {
     if (!token) return;
     setActionLoading(opportunityId);
+    setActionError(null);
     try {
       await api.post("/investments", {
         fundingRequestId: opportunityId,
@@ -58,7 +60,10 @@ export default function DealFlowPage() {
       }, token);
       refresh();
     } catch (err) {
-      console.error(err);
+      setActionError({
+        id: opportunityId,
+        message: err instanceof Error ? err.message : "Échec de la soumission.",
+      });
     } finally {
       setActionLoading(null);
     }
@@ -139,12 +144,18 @@ export default function DealFlowPage() {
         {filtered.map((opp) => {
           const requested = Number(opp.amountRequested);
           const raised = Number(opp.amountRaised);
+          const remaining = requested - raised;
           const progress = requested > 0 ? Math.min(100, (raised / requested) * 100) : 0;
           const isLarge = requested >= 100_000_000;
           const report = opp.scoringReports[0];
           const risk = gradeToRisk(report?.grade ?? null);
+          const isSingleInvestor = opp.investorMode === "SINGLE_INVESTOR";
+          const ticketAmount = isSingleInvestor ? remaining : Math.min(requested * 0.3, remaining);
 
           const isEngaged = engagedFundingRequestIds.has(opp.id);
+          // hasActiveInvestor compte aussi notre propre engagement (NEGOTIATING/COMMITTED) —
+          // ne signale "déjà pris par un autre" que si ce n'est pas nous.
+          const isTakenByOther = isSingleInvestor && opp.hasActiveInvestor && !isEngaged;
           const isNew = isRecentlyCreated(opp.createdAt);
           const statusConfig = isEngaged
             ? STATUS_DEAL_FLOW.engaged
@@ -169,6 +180,11 @@ export default function DealFlowPage() {
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusConfig.className}`}>
                     {statusConfig.label}
                   </span>
+                  {isSingleInvestor && (
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${isTakenByOther ? "bg-slate-100 text-slate-500" : "bg-amber-100 text-amber-700"}`}>
+                      {isTakenByOther ? "Investisseur unique · déjà pris" : "Investisseur unique · 100%"}
+                    </span>
+                  )}
                   {report?.grade ? (
                     <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${GRADE_CLASSNAMES[report.grade] ?? "bg-gray-100 text-gray-600"}`}>
                       {report.grade}
@@ -229,11 +245,17 @@ export default function DealFlowPage() {
 
               <div className="flex gap-2">
                 <button
-                  onClick={() => handleEngage(opp.id, requested * 0.3, Number(opp.expectedReturn ?? 8))}
-                  disabled={actionLoading === opp.id}
+                  onClick={() => handleEngage(opp.id, ticketAmount, Number(opp.expectedReturn ?? 8))}
+                  disabled={actionLoading === opp.id || isEngaged || isTakenByOther || ticketAmount <= 0}
                   className="flex-1 rounded-md bg-brand-700 py-2 text-xs font-medium text-white hover:bg-brand-800 disabled:opacity-50"
                 >
-                  {actionLoading === opp.id ? "Envoi..." : "Soumettre au comité"}
+                  {actionLoading === opp.id
+                    ? "Envoi..."
+                    : isTakenByOther
+                      ? "Déjà pris par un autre investisseur"
+                      : isSingleInvestor
+                        ? "Financer 100% (comité)"
+                        : "Soumettre au comité (30%)"}
                 </button>
                 <button
                   onClick={() => router.push(`/investor/opportunites/${opp.id}`)}
@@ -242,6 +264,9 @@ export default function DealFlowPage() {
                   Analyser
                 </button>
               </div>
+              {actionError?.id === opp.id && (
+                <p className="mt-2 text-xs text-red-600">{actionError.message}</p>
+              )}
             </div>
           );
         })}

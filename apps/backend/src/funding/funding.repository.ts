@@ -54,7 +54,7 @@ export class FundingRepository implements IFundingRepository {
   }
 
   async findAllPublished(filters?: { category?: string; search?: string }) {
-    return this.prisma.fundingRequest.findMany({
+    const results = await this.prisma.fundingRequest.findMany({
       where: {
         status: 'PUBLISHED',
         ...(filters?.category ? { category: filters.category as any } : {}),
@@ -70,9 +70,21 @@ export class FundingRepository implements IFundingRepository {
       include: {
         organization: true,
         scoringReports: { orderBy: { createdAt: 'desc' }, take: 1 },
+        // Ne sert qu'aux dossiers SINGLE_INVESTOR : permet d'afficher "déjà pris"
+        // sur les cards sans exposer les investissements eux-mêmes (voir
+        // hasActiveInvestor plus bas dans ce fichier pour le détail à l'unité).
+        _count: {
+          select: {
+            investments: {
+              where: { status: { in: ['NEGOTIATING', 'COMMITTED', 'SETTLED_OFF_PLATFORM'] } },
+            },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    return results.map(({ _count, ...fr }) => ({ ...fr, hasActiveInvestor: _count.investments > 0 }));
   }
 
   async create(data: CreateFundingRequestData) {
@@ -86,6 +98,7 @@ export class FundingRepository implements IFundingRepository {
           amountRequested: data.amountRequested,
           expectedReturn: data.expectedReturn,
           durationMonths: data.durationMonths,
+          investorMode: data.investorMode,
         },
       });
 
@@ -132,6 +145,7 @@ export class FundingRepository implements IFundingRepository {
         amountRequested: data.amountRequested,
         expectedReturn: data.expectedReturn,
         durationMonths: data.durationMonths,
+        investorMode: data.investorMode,
       },
     });
   }
@@ -173,6 +187,21 @@ export class FundingRepository implements IFundingRepository {
         },
       });
     });
+  }
+
+  // Utilisé uniquement pour les demandes en mode SINGLE_INVESTOR : indique si un
+  // investisseur a déjà pris la place exclusive (NEGOTIATING/COMMITTED/SETTLED),
+  // avant même que amountRaised ne bouge (qui ne reflète que le SETTLED_OFF_PLATFORM,
+  // voir InvestmentsRepository.approveSettlement). Sert à éviter qu'un second
+  // investisseur ne tente un engagement voué à l'échec sans comprendre pourquoi.
+  async hasActiveInvestor(fundingRequestId: string): Promise<boolean> {
+    const count = await this.prisma.investment.count({
+      where: {
+        fundingRequestId,
+        status: { in: ['NEGOTIATING', 'COMMITTED', 'SETTLED_OFF_PLATFORM'] },
+      },
+    });
+    return count > 0;
   }
 
   async findOrganizationOwner(organizationId: string) {

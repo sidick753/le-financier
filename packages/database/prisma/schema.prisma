@@ -286,6 +286,11 @@ enum FundingRequestStatus {
   CANCELLED
 }
 
+enum FundingInvestorMode {
+  SINGLE_INVESTOR    // la PME veut un seul investisseur qui finance 100% du montant
+  MULTIPLE_INVESTORS // la PME accepte que plusieurs investisseurs se partagent le montant
+}
+
 model FundingRequest {
   id             String                 @id @default(uuid())
   organizationId String
@@ -299,6 +304,7 @@ model FundingRequest {
   currency        String                @default("XOF")
   expectedReturn  Decimal?              @db.Decimal(5, 2) // taux/rendement attendu en %
   durationMonths  Int?
+  investorMode    FundingInvestorMode   @default(MULTIPLE_INVESTORS)
   status          FundingRequestStatus  @default(DRAFT)
   rejectionReason String?
 

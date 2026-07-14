@@ -46,6 +46,7 @@ interface FundingRequestDetail {
   amountRaised: string;
   expectedReturn: string | null;
   durationMonths: number | null;
+  investorMode: "SINGLE_INVESTOR" | "MULTIPLE_INVESTORS";
   status: string;
   rejectionReason: string | null;
   createdAt: string;
@@ -308,11 +309,15 @@ export default function AdminOpportuniteDetailPage() {
       )}
 
       {/* Stats */}
-      <div className="mb-6 grid grid-cols-4 gap-4">
+      <div className="mb-6 grid grid-cols-5 gap-4">
         <InfoCard label="Montant demandé" value={formatFullAmount(requested)} />
         <InfoCard label="Montant levé" value={`${formatFullAmount(raised)} (${progress.toFixed(0)}%)`} />
         <InfoCard label="Rendement proposé" value={fr.expectedReturn ? `${Number(fr.expectedReturn)}%` : "—"} />
         <InfoCard label="Durée" value={fr.durationMonths ? `${fr.durationMonths} mois` : "—"} />
+        <InfoCard
+          label="Mode de financement"
+          value={fr.investorMode === "SINGLE_INVESTOR" ? "Investisseur unique (100%)" : "Plusieurs investisseurs"}
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-4 items-start">
@@ -349,6 +354,11 @@ export default function AdminOpportuniteDetailPage() {
       <div className="mt-4 rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
           <p className="text-sm font-semibold text-gray-900">Investissements</p>
+          {fr.investorMode === "SINGLE_INVESTOR" && (
+            <p className="mt-0.5 text-xs text-amber-600">
+              Investisseur unique attendu — un seul engagement à 100% du montant est accepté sur ce dossier.
+            </p>
+          )}
         </div>
         <div className="divide-y divide-gray-100">
           {fr.investments.length === 0 && (

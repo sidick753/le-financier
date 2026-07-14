@@ -15,6 +15,8 @@ export interface Opportunity {
   durationMonths: number | null;
   currency: string;
   closesAt: string | null;
+  investorMode: "SINGLE_INVESTOR" | "MULTIPLE_INVESTORS";
+  hasActiveInvestor: boolean;
   organization: { legalName: string };
   scoringReports: ScoringReportSummary[];
 }

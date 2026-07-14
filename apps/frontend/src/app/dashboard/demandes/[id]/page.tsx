@@ -37,6 +37,7 @@ interface FundingRequestDetail {
   currency: string;
   expectedReturn: string | null;
   durationMonths: number | null;
+  investorMode: "SINGLE_INVESTOR" | "MULTIPLE_INVESTORS";
   status: string;
   rejectionReason: string | null;
   publishedAt: string | null;
@@ -224,6 +225,12 @@ export default function DemandeDetailPage() {
                 <p className="mb-1 text-[11px] text-slate-500">Durée</p>
                 <p className="text-[15px] font-semibold text-slate-900">
                   {request.durationMonths ? `${request.durationMonths} mois` : "—"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="mb-1 text-[11px] text-slate-500">Mode de financement</p>
+                <p className="text-[15px] font-semibold text-slate-900">
+                  {request.investorMode === "SINGLE_INVESTOR" ? "Investisseur unique (100%)" : "Plusieurs investisseurs"}
                 </p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white p-4">

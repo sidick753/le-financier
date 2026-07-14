@@ -1,5 +1,5 @@
 import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
-import { FundingCategory } from '@le-financier/database';
+import { FundingCategory, FundingInvestorMode } from '@le-financier/database';
 import { FundingRepository } from './funding.repository';
 import { OrganizationsRepository } from '../organizations/organizations.repository';
 import { ScoringService } from '../scoring/scoring.service';
@@ -37,6 +37,7 @@ export class FundingService {
       amountRequested: dto.amountRequested,
       expectedReturn: dto.expectedReturn,
       durationMonths: dto.durationMonths,
+      investorMode: dto.investorMode as FundingInvestorMode | undefined,
       // Scoring FACTURE — ce débiteur, cette facture précise
       debiteurNom: dto.debiteurNom,
       debiteurType: dto.debiteurType,
@@ -79,6 +80,7 @@ export class FundingService {
       amountRequested: dto.amountRequested,
       expectedReturn: dto.expectedReturn,
       durationMonths: dto.durationMonths,
+      investorMode: dto.investorMode as FundingInvestorMode | undefined,
     });
 
     // Le montant/durée/catégorie ont pu changer : si un score a déjà été
@@ -156,7 +158,15 @@ export class FundingService {
       }
     }
 
-    return fundingRequest;
+    // Ne concerne que le mode investisseur unique : permet au frontend de bloquer
+    // la tentative d'engagement d'un second investisseur *avant* le rejet backend,
+    // plutôt que de le laisser cliquer sur un montant affiché comme disponible.
+    const hasActiveInvestor =
+      fundingRequest.investorMode === 'SINGLE_INVESTOR'
+        ? await this.fundingRepository.hasActiveInvestor(id)
+        : false;
+
+    return { ...fundingRequest, hasActiveInvestor };
   }
 
   async findOneAdmin(id: string) {

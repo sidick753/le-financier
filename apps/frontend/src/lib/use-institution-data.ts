@@ -48,6 +48,8 @@ export interface InstitutionOpportunity {
   durationMonths: number | null;
   currency: string;
   createdAt: string;
+  investorMode: "SINGLE_INVESTOR" | "MULTIPLE_INVESTORS";
+  hasActiveInvestor: boolean;
   organization: {
     legalName: string;
     sector: string;

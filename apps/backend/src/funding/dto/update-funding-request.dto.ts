@@ -1,6 +1,6 @@
 import { IsString, IsNumber, IsOptional, Min, IsEnum } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { FundingCategoryDto } from './create-funding-request.dto';
+import { FundingCategoryDto, FundingInvestorModeDto } from './create-funding-request.dto';
 
 export class UpdateFundingRequestDto {
   @ApiPropertyOptional({ example: 'Financement facture client GIZ — 15 000 000 FCFA' })
@@ -35,4 +35,9 @@ export class UpdateFundingRequestDto {
   @IsNumber()
   @Min(1)
   durationMonths?: number;
+
+  @ApiPropertyOptional({ enum: FundingInvestorModeDto })
+  @IsOptional()
+  @IsEnum(FundingInvestorModeDto)
+  investorMode?: FundingInvestorModeDto;
 }

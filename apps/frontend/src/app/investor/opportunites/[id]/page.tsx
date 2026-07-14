@@ -31,6 +31,8 @@ interface Opportunity {
   expectedReturn: string | null;
   durationMonths: number | null;
   currency: string;
+  investorMode: "SINGLE_INVESTOR" | "MULTIPLE_INVESTORS";
+  hasActiveInvestor: boolean;
   organization: { legalName: string };
   scoringReports: ScoringReportSummary[];
 }
@@ -149,7 +151,9 @@ export default function OpportunityDetailPage() {
   async function handleEngage() {
     setSubmitError(null);
     setSubmitSuccess(null);
-    if (!amount || !proposedReturn) {
+    const isSingleInvestor = opportunity?.investorMode === "SINGLE_INVESTOR";
+    const effectiveAmount = isSingleInvestor ? remaining : Number(amount);
+    if (!effectiveAmount || !proposedReturn) {
       setSubmitError("Veuillez saisir un montant et un taux.");
       return;
     }
@@ -157,7 +161,7 @@ export default function OpportunityDetailPage() {
     try {
       await api.post("/investments", {
         fundingRequestId: id,
-        amountCommitted:  Number(amount),
+        amountCommitted:  effectiveAmount,
         proposedReturn:   Number(proposedReturn),
       }, token!);
       setSubmitSuccess("Votre proposition a été envoyée à la PME.");
@@ -248,10 +252,13 @@ export default function OpportunityDetailPage() {
   const pmeHasBall       = lastOffer?.proposedBy === "PME" && lastOffer?.status === "PENDING";
   const investorWaiting  = lastOffer?.proposedBy === "INVESTOR" && lastOffer?.status === "PENDING";
 
-  const gainEstimate  = amount && proposedReturn
-    ? Number(amount) * Number(proposedReturn) / 100
+  const isSingleInvestor = opportunity.investorMode === "SINGLE_INVESTOR";
+  const investAmount = isSingleInvestor ? remaining : Number(amount || 0);
+
+  const gainEstimate  = investAmount && proposedReturn
+    ? investAmount * Number(proposedReturn) / 100
     : 0;
-  const totalEstimate = Number(amount || 0) + gainEstimate;
+  const totalEstimate = investAmount + gainEstimate;
 
   const scoreReport = opportunity.scoringReports?.[0] ?? null;
 
@@ -281,9 +288,16 @@ export default function OpportunityDetailPage() {
             </p>
             <p className="text-[14px] text-slate-500">{opportunity.title}</p>
           </div>
-          <span className={`shrink-0 rounded-full px-3 py-1 text-[12px] font-semibold ${CATEGORY_BADGE[opportunity.category] ?? "bg-slate-100 text-slate-600"}`}>
-            {CATEGORY_LABELS[opportunity.category] ?? opportunity.category}
-          </span>
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <span className={`rounded-full px-3 py-1 text-[12px] font-semibold ${CATEGORY_BADGE[opportunity.category] ?? "bg-slate-100 text-slate-600"}`}>
+              {CATEGORY_LABELS[opportunity.category] ?? opportunity.category}
+            </span>
+            {opportunity.investorMode === "SINGLE_INVESTOR" && (
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-[12px] font-semibold text-amber-700">
+                Investisseur unique · 100%
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Stats */}
@@ -467,17 +481,32 @@ export default function OpportunityDetailPage() {
                 </div>
               )}
 
-              {!engagement && remaining > 0 && (
+              {!engagement && isSingleInvestor && opportunity.hasActiveInvestor && remaining > 0 && (
+                <div className="rounded-[10px] bg-slate-50 p-4 text-center">
+                  <p className="text-[13px] font-semibold text-slate-500">Déjà en négociation exclusive</p>
+                  <p className="mt-1 text-[12px] text-slate-400">
+                    Cette PME veut un investisseur unique pour 100% du montant, et négocie déjà avec un autre investisseur. Cette opportunité n&apos;est plus disponible.
+                  </p>
+                </div>
+              )}
+
+              {!engagement && remaining > 0 && !(isSingleInvestor && opportunity.hasActiveInvestor) && (
                 <div className="space-y-3">
+                  {isSingleInvestor && (
+                    <div className="rounded-[8px] bg-amber-50 px-3 py-2.5 text-[12px] text-amber-700">
+                      Cette PME souhaite un investisseur unique pour 100% du montant — votre engagement portera sur la totalité, sans possibilité de partage.
+                    </div>
+                  )}
                   <div>
                     <label className="mb-1 block text-[11px] font-semibold text-slate-700">Montant (F CFA)</label>
                     <input
                       type="number"
                       placeholder={`Max : ${remaining.toLocaleString("fr-FR")}`}
-                      value={amount}
+                      value={isSingleInvestor ? remaining : amount}
                       max={remaining}
-                      onChange={(e) => setAmount(e.target.value)}
-                      className="w-full rounded-[8px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-600"
+                      readOnly={isSingleInvestor}
+                      onChange={(e) => !isSingleInvestor && setAmount(e.target.value)}
+                      className={`w-full rounded-[8px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-600 ${isSingleInvestor ? "bg-slate-50 text-slate-500" : ""}`}
                     />
                   </div>
                   <div>
@@ -496,7 +525,7 @@ export default function OpportunityDetailPage() {
                     )}
                   </div>
 
-                  {amount && proposedReturn && (
+                  {investAmount > 0 && proposedReturn && (
                     <div className="rounded-[8px] bg-slate-50 p-3 text-[12px]">
                       <div className="flex justify-between">
                         <span className="text-slate-500">Gain estimé</span>

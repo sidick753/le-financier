@@ -132,7 +132,10 @@ export default function DocumentsPage() {
         <div className="overflow-hidden rounded-[18px] border border-slate-200 bg-white">
           <div className="border-b border-slate-100 px-5 py-4">
             <p className="text-[13px] font-bold text-slate-900">Ajouter un document</p>
-            <p className="mt-0.5 text-[11px] text-slate-500">Tout autre document utile à votre dossier</p>
+            <p className="mt-0.5 text-[11px] text-slate-500">
+              Tout autre document utile à votre dossier — même non exigé, il renforce la confiance des
+              financeurs envers votre entreprise.
+            </p>
           </div>
           <div className="p-5">
             {organization ? (

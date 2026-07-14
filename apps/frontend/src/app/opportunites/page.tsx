@@ -43,7 +43,14 @@ function OpportunityCard({ opp }: { opp: Opportunity }) {
     <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
       <div className="mb-1 flex items-start justify-between gap-2.5">
         <span className="text-[15px] font-semibold tracking-[-0.01em] text-slate-900">{opp.organization.legalName}</span>
-        <span className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${badge}`}>{label}</span>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${badge}`}>{label}</span>
+          {opp.investorMode === "SINGLE_INVESTOR" && (
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ${opp.hasActiveInvestor ? "bg-slate-100 text-slate-500" : "bg-amber-100 text-amber-700"}`}>
+              {opp.hasActiveInvestor ? "Investisseur unique · déjà pris" : "Investisseur unique · 100%"}
+            </span>
+          )}
+        </div>
       </div>
       <div className="mb-4 text-xs text-blue-700">{opp.title}</div>
 

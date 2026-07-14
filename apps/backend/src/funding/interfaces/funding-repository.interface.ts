@@ -1,4 +1,4 @@
-import { FundingRequest, FundingCategory } from '@le-financier/database';
+import { FundingRequest, FundingCategory, FundingInvestorMode } from '@le-financier/database';
 
 export interface CreateFundingRequestData {
   organizationId: string;
@@ -8,6 +8,7 @@ export interface CreateFundingRequestData {
   amountRequested: number;
   expectedReturn?: number;
   durationMonths?: number;
+  investorMode?: FundingInvestorMode;
 
   // Scoring FACTURE — ce débiteur, cette facture précise
   debiteurNom?: string;
@@ -31,6 +32,7 @@ export interface UpdateFundingRequestData {
   amountRequested?: number;
   expectedReturn?: number;
   durationMonths?: number;
+  investorMode?: FundingInvestorMode;
 }
 
 export interface FundingAdminFilters {
@@ -65,4 +67,5 @@ export interface IFundingRepository {
   update(id: string, data: UpdateFundingRequestData): Promise<FundingRequest>;
   delete(id: string): Promise<FundingRequest>;
   disburse(id: string, adminId: string): Promise<FundingRequest>;
+  hasActiveInvestor(fundingRequestId: string): Promise<boolean>;
 }

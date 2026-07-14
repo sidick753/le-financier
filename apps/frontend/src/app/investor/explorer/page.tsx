@@ -71,9 +71,16 @@ function OpportunityCard({ opp }: { opp: import("@/lib/use-opportunities").Oppor
       {/* Header */}
       <div className="mb-1 flex items-start justify-between gap-2">
         <p className="text-[15px] font-bold text-slate-900">{opp.organization.legalName}</p>
-        <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${badge}`}>
-          {label}
-        </span>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${badge}`}>
+            {label}
+          </span>
+          {opp.investorMode === "SINGLE_INVESTOR" && (
+            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${opp.hasActiveInvestor ? "bg-slate-100 text-slate-500" : "bg-amber-100 text-amber-700"}`}>
+              {opp.hasActiveInvestor ? "Investisseur unique · déjà pris" : "Investisseur unique · 100%"}
+            </span>
+          )}
+        </div>
       </div>
       <p className="mb-4 text-[13px] font-medium text-green-600">{opp.title}</p>
 

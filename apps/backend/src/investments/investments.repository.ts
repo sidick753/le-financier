@@ -59,22 +59,37 @@ export class InvestmentsRepository implements IInvestmentsRepository {
         throw new ConflictException("Cette demande n'est plus ouverte aux engagements.");
       }
 
-      const activeSum = await tx.investment.aggregate({
+      const activeInvestments = await tx.investment.findMany({
         where: {
           fundingRequestId,
           status: { in: ['NEGOTIATING', 'COMMITTED', 'SETTLED_OFF_PLATFORM'] },
         },
-        _sum: { amountCommitted: true },
       });
 
-      const currentTotal = Number(activeSum._sum.amountCommitted ?? 0);
+      const currentTotal = activeInvestments.reduce((sum, inv) => sum + Number(inv.amountCommitted), 0);
       const requested = Number(fundingRequest.amountRequested);
+      const remaining = requested - currentTotal;
 
-      if (currentTotal + amountCommitted > requested) {
-        const remaining = requested - currentTotal;
+      if (amountCommitted > remaining) {
         throw new ConflictException(
           `Montant trop élevé. Il reste ${remaining} ${fundingRequest.currency} disponibles sur cette demande.`,
         );
+      }
+
+      // La PME a choisi de ne financer ce dossier qu'avec un seul investisseur, à
+      // 100% du montant — pas de partage possible ni d'engagement partiel.
+      if (fundingRequest.investorMode === 'SINGLE_INVESTOR') {
+        const hasOtherInvestor = activeInvestments.some((inv) => inv.investorId !== investorId);
+        if (hasOtherInvestor) {
+          throw new ConflictException(
+            "Cette demande n'accepte qu'un seul investisseur pour 100% du montant — un autre investisseur y est déjà engagé.",
+          );
+        }
+        if (amountCommitted !== remaining) {
+          throw new ConflictException(
+            `Cette PME souhaite un investisseur unique finançant 100% du montant, soit ${remaining} ${fundingRequest.currency}.`,
+          );
+        }
       }
 
       const investment = await tx.investment.create({
