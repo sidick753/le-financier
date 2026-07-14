@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Delete,
   Param,
   Body,
   UseGuards,
@@ -9,6 +10,8 @@ import {
   UploadedFile,
   Request,
   ForbiddenException,
+  BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -24,6 +27,7 @@ import { DocumentsService } from './documents.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OrganizationsRepository } from '../organizations/organizations.repository';
+import { FundingRepository } from '../funding/funding.repository';
 
 @ApiTags('Documents')
 @ApiBearerAuth('jwt')
@@ -33,6 +37,7 @@ export class DocumentsController {
   constructor(
     private documentsService: DocumentsService,
     private organizationsRepository: OrganizationsRepository,
+    private fundingRepository: FundingRepository,
   ) {}
 
   @ApiOperation({
@@ -63,6 +68,7 @@ Le fichier est stocké dans l'object storage (S3/MinIO).`,
         organizationId:      { type: 'string', format: 'uuid' },
         fundingRequestId:    { type: 'string', format: 'uuid' },
         kycRequirementKey:   { type: 'string', example: 'kyc_id' },
+        title:               { type: 'string', example: 'Bilan comptable 2025', description: 'Requis pour le type OTHER' },
       },
     },
   })
@@ -75,16 +81,35 @@ Le fichier est stocké dans l'object storage (S3/MinIO).`,
     @Body() dto: CreateDocumentDto,
     @Request() req,
   ) {
-    if (dto.organizationId) {
-      const isMember = await this.organizationsRepository.isMember(
-        dto.organizationId,
-        req.user.id,
-      );
-      if (!isMember) {
-        throw new ForbiddenException("Vous n'avez pas accès à cette organisation.");
+    // L'organisation propriétaire est toujours dérivée de la demande de
+    // financement quand `fundingRequestId` est fourni — jamais du champ
+    // `organizationId` envoyé par le client, qui pourrait ne pas correspondre
+    // (ou être omis pour contourner le contrôle d'accès).
+    let organizationId = dto.organizationId;
+
+    if (dto.fundingRequestId) {
+      const fundingRequest = await this.fundingRepository.findById(dto.fundingRequestId);
+      if (!fundingRequest) {
+        throw new NotFoundException('Demande de financement introuvable.');
       }
+      organizationId = fundingRequest.organizationId;
     }
-    return this.documentsService.upload(file, dto, req.user.id);
+
+    if (!organizationId) {
+      throw new BadRequestException(
+        "organizationId ou fundingRequestId est requis pour associer ce document.",
+      );
+    }
+
+    const isMember = await this.organizationsRepository.isMember(
+      organizationId,
+      req.user.id,
+    );
+    if (!isMember) {
+      throw new ForbiddenException("Vous n'avez pas accès à cette organisation.");
+    }
+
+    return this.documentsService.upload(file, { ...dto, organizationId }, req.user.id);
   }
 
   @ApiOperation({ summary: 'URL de téléchargement', description: 'Retourne une URL pré-signée (valable 15 min) pour télécharger le document.' })
@@ -94,7 +119,7 @@ Le fichier est stocké dans l'object storage (S3/MinIO).`,
   @ApiResponse({ status: 404, description: 'Document introuvable' })
   @Get(':id/download-url')
   getDownloadUrl(@Param('id') id: string, @Request() req) {
-    return this.documentsService.getDownloadUrl(id, req.user.id);
+    return this.documentsService.getDownloadUrl(id, req.user.id, req.user.role);
   }
 
   @ApiOperation({ summary: 'Statut KYC d\'une organisation', description: 'Retourne la checklist KYC de l\'organisation avec le statut de chaque document requis.' })
@@ -131,5 +156,32 @@ Le fichier est stocké dans l'object storage (S3/MinIO).`,
       throw new ForbiddenException("Vous n'avez pas accès à cette organisation.");
     }
     return this.documentsService.findAllByOrganizationId(organizationId);
+  }
+
+  @ApiOperation({ summary: 'Documents d\'une demande de financement', description: 'Retourne tous les documents attachés à une demande. Réservé aux membres de l\'organisation propriétaire.' })
+  @ApiParam({ name: 'fundingRequestId', description: 'UUID de la demande de financement' })
+  @ApiResponse({ status: 200, description: 'Liste de documents' })
+  @ApiResponse({ status: 403, description: 'Pas membre de l\'organisation propriétaire' })
+  @ApiResponse({ status: 404, description: 'Demande introuvable' })
+  @Get('funding-request/:fundingRequestId')
+  findAllByFundingRequest(
+    @Param('fundingRequestId') fundingRequestId: string,
+    @Request() req,
+  ) {
+    return this.documentsService.findAllByFundingRequestForUser(fundingRequestId, req.user.id);
+  }
+
+  @ApiOperation({
+    summary: 'Supprimer un document',
+    description: "Supprime définitivement un document (fichier + métadonnées). Si le document est attaché à une demande de financement, celle-ci doit être encore au statut DRAFT ou UNDER_REVIEW.",
+  })
+  @ApiParam({ name: 'id', description: 'UUID du document' })
+  @ApiResponse({ status: 200, description: 'Document supprimé' })
+  @ApiResponse({ status: 400, description: 'Demande déjà publiée — document non supprimable' })
+  @ApiResponse({ status: 403, description: 'Accès non autorisé à ce document' })
+  @ApiResponse({ status: 404, description: 'Document introuvable' })
+  @Delete(':id')
+  remove(@Param('id') id: string, @Request() req) {
+    return this.documentsService.remove(id, req.user.id, req.user.role);
   }
 }

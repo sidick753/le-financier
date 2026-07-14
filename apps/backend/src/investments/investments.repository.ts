@@ -197,19 +197,8 @@ export class InvestmentsRepository implements IInvestmentsRepository {
         },
       });
 
-      // Recalculer amountRaised en incluant COMMITTED + SETTLED_OFF_PLATFORM
-      const raisedSum = await tx.investment.aggregate({
-        where: {
-          fundingRequestId: investment.fundingRequestId,
-          status: { in: ['COMMITTED', 'SETTLED_OFF_PLATFORM'] },
-        },
-        _sum: { amountCommitted: true },
-      });
-      await tx.fundingRequest.update({
-        where: { id: investment.fundingRequestId },
-        data: { amountRaised: Number(raisedSum._sum.amountCommitted ?? 0) },
-      });
-
+      // amountRaised ne reflète que les virements validés par un admin (SETTLED_OFF_PLATFORM) —
+      // un simple engagement COMMITTED ne compte pas comme fonds levés, voir settle()/approveSettlement().
       return updated;
     });
   }
@@ -235,6 +224,8 @@ export class InvestmentsRepository implements IInvestmentsRepository {
     });
   }
 
+  // Soumission par l'investisseur : dépose une preuve de virement, en attente de
+  // validation par un admin. Ne touche ni amountRaised ni le statut de la FundingRequest.
   async settle(investmentId: string, settlementProofId: string) {
     return this.prisma.$transaction(async (tx) => {
       const investment = await tx.investment.findUnique({
@@ -247,35 +238,62 @@ export class InvestmentsRepository implements IInvestmentsRepository {
 
       if (investment.status !== 'COMMITTED') {
         throw new ConflictException(
-          'Seul un engagement en attente peut être confirmé.',
+          'Seul un engagement en attente peut être soumis pour validation.',
         );
+      }
+
+      return tx.investment.update({
+        where: { id: investmentId },
+        data: {
+          status: 'SETTLEMENT_SUBMITTED',
+          settlementProofId,
+          settlementRejectionReason: null,
+        },
+      });
+    });
+  }
+
+  // Validation admin de la preuve de virement : engagement confirmé, amountRaised
+  // recalculé sur les seuls virements validés, FUNDED déclenché si 100% atteint.
+  async approveSettlement(investmentId: string, adminId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const investment = await tx.investment.findUnique({ where: { id: investmentId } });
+
+      if (!investment) {
+        throw new ConflictException('Engagement introuvable.');
+      }
+      if (investment.status !== 'SETTLEMENT_SUBMITTED') {
+        throw new ConflictException("Cet engagement n'a pas de preuve en attente de validation.");
       }
 
       const updatedInvestment = await tx.investment.update({
         where: { id: investmentId },
         data: {
           status: 'SETTLED_OFF_PLATFORM',
-          settlementProofId,
           settledAt: new Date(),
+          settlementValidatedById: adminId,
+          settlementValidatedAt: new Date(),
         },
       });
 
-      // Recalculer amountRaised à partir de la somme réelle des engagements confirmés,
-      // jamais en incrémentant à l'aveugle — ça évite toute dérive en cas de double appel.
+      if (investment.settlementProofId) {
+        await tx.document.update({
+          where: { id: investment.settlementProofId },
+          data: { status: 'APPROVED' },
+        });
+      }
+
+      // Recalcul à partir de la seule somme des virements validés — jamais en incrémentant
+      // à l'aveugle, ça évite toute dérive en cas de double appel.
       const settledSum = await tx.investment.aggregate({
-        where: {
-          fundingRequestId: investment.fundingRequestId,
-          status: { in: ['COMMITTED', 'SETTLED_OFF_PLATFORM'] },
-        },
+        where: { fundingRequestId: investment.fundingRequestId, status: 'SETTLED_OFF_PLATFORM' },
         _sum: { amountCommitted: true },
       });
-
       const totalRaised = Number(settledSum._sum.amountCommitted ?? 0);
 
       const fundingRequest = await tx.fundingRequest.findUnique({
         where: { id: investment.fundingRequestId },
       });
-
       if (!fundingRequest) {
         throw new ConflictException('Demande de financement introuvable.');
       }
@@ -285,13 +303,41 @@ export class InvestmentsRepository implements IInvestmentsRepository {
 
       await tx.fundingRequest.update({
         where: { id: investment.fundingRequestId },
-        data: {
-          amountRaised: totalRaised,
-          status: newStatus,
-        },
+        data: { amountRaised: totalRaised, status: newStatus },
       });
 
       return updatedInvestment;
+    });
+  }
+
+  // Rejet admin : l'investisseur retombe en COMMITTED et doit soumettre une nouvelle preuve.
+  async rejectSettlement(investmentId: string, adminId: string, reason: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const investment = await tx.investment.findUnique({ where: { id: investmentId } });
+
+      if (!investment) {
+        throw new ConflictException('Engagement introuvable.');
+      }
+      if (investment.status !== 'SETTLEMENT_SUBMITTED') {
+        throw new ConflictException("Cet engagement n'a pas de preuve en attente de validation.");
+      }
+
+      if (investment.settlementProofId) {
+        await tx.document.update({
+          where: { id: investment.settlementProofId },
+          data: { status: 'REJECTED' },
+        });
+      }
+
+      return tx.investment.update({
+        where: { id: investmentId },
+        data: {
+          status: 'COMMITTED',
+          settlementRejectionReason: reason,
+          settlementValidatedById: adminId,
+          settlementValidatedAt: new Date(),
+        },
+      });
     });
   }
 }

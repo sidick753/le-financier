@@ -9,8 +9,13 @@ export interface IRepaymentRepository {
   }): Promise<void>;
   findScheduleByInvestmentId(investmentId: string): Promise<any[]>;
   findScheduleByFundingRequestId(fundingRequestId: string): Promise<any[]>;
+  findScheduleById(scheduleId: string): Promise<any | null>;
   findUpcomingByInvestorId(investorId: string, limit?: number): Promise<any[]>;
   confirmPayment(scheduleId: string, userId: string, proofDocumentId?: string): Promise<any>;
+  findPaymentById(paymentId: string): Promise<any | null>;
+  approvePayment(paymentId: string, adminId: string): Promise<any>;
+  rejectPayment(paymentId: string, adminId: string, reason: string): Promise<any>;
+  findPendingPayments(): Promise<any[]>;
   findPaymentsByInvestorId(investorId: string): Promise<any[]>;
   findCommissionsByFundingRequestId(fundingRequestId: string): Promise<any[]>;
   findAllCommissions(filters?: {

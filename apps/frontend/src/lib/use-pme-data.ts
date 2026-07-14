@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "./auth-context";
 import { api } from "./api";
 
@@ -15,6 +15,7 @@ export interface FundingRequest {
   organizationId: string;
   title: string;
   description: string;
+  category: string;
   amountRequested: string;
   amountRaised: string;
   currency: string;
@@ -41,7 +42,7 @@ export function usePmeData() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
     if (!token) return;
 
     async function load() {
@@ -79,5 +80,9 @@ export function usePmeData() {
     load();
   }, [token]);
 
-  return { organization, fundingRequests, scoringReport, isLoading, error };
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return { organization, fundingRequests, scoringReport, isLoading, error, refresh };
 }

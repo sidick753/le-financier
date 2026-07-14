@@ -7,6 +7,7 @@ export interface CreateUserData {
   lastName: string;
   role: User['role'];
   phone?: string;
+  cniNumber?: string;
 }
 
 export type PublicUser = Omit<User, 'passwordHash' | 'twoFaEnabled' | 'updatedAt'>;
@@ -14,6 +15,7 @@ export type PublicUser = Omit<User, 'passwordHash' | 'twoFaEnabled' | 'updatedAt
 export interface IUsersRepository {
   findByEmail(email: string): Promise<User | null>;
   findById(id: string): Promise<User | null>;
+  findAdminIds(): Promise<string[]>;
   findByIdAdmin(id: string): Promise<any | null>;
   findAll(filters?: {
     role?: string;

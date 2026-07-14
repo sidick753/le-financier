@@ -4,6 +4,7 @@ import { useState, FormEvent, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { getPostAuthRedirectPath } from "@/lib/role-redirect";
 import { Logo } from "@/components/logo";
 
 type Role = "pme" | "investisseur" | "banque";
@@ -174,14 +175,25 @@ export default function RegisterPage() {
       const phoneValue = phone.trim() || undefined;
       let response;
       if (isPme) {
-        response = await registerPmeOwner({ email, password, firstName, lastName, phone: phoneValue });
+        response = await registerPmeOwner({
+          email, password, firstName, lastName, phone: phoneValue,
+          companyName: companyName.trim(),
+          registrationNumber: rccm.trim(),
+        });
       } else if (isInvestisseur) {
-        response = await registerInvestor({ email, password, firstName, lastName, phone: phoneValue });
+        response = await registerInvestor({
+          email, password, firstName, lastName, phone: phoneValue,
+          cniNumber: cniNumber.trim(),
+        });
       } else {
         const [fn = "", ...rest] = responsibleName.trim().split(" ");
-        response = await registerInstitution({ email, password, firstName: fn, lastName: rest.join(" ") || fn, phone: phoneValue });
+        response = await registerInstitution({
+          email, password, firstName: fn, lastName: rest.join(" ") || fn, phone: phoneValue,
+          institutionName: institutionName.trim(),
+          bceaoNumber: bceaoNumber.trim(),
+        });
       }
-      router.push(response.user.role === "PME_OWNER" ? "/dashboard" : "/investor");
+      router.push(getPostAuthRedirectPath(response.user.role));
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Inscription impossible.");
     } finally {

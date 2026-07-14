@@ -31,7 +31,10 @@ export function useOffers() {
   const [isLoading, setIsLoading] = useState(true);
 
   const refresh = useCallback(() => {
-    if (!token || !organization) return;
+    if (!token || !organization) {
+      setIsLoading(false);
+      return;
+    }
     api
       .get<Offer[]>(`/investments/organization/${organization.id}`, token)
       .then(setOffers)

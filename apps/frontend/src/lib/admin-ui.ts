@@ -19,8 +19,8 @@ export const FUNDING_STATUS_CONFIG: Record<string, { label: string; className: s
   DRAFT: { label: "Brouillon", className: "bg-gray-100 text-gray-600" },
   UNDER_REVIEW: { label: "En attente", className: "bg-yellow-100 text-yellow-700" },
   PUBLISHED: { label: "Publiée", className: "bg-blue-100 text-blue-700" },
-  FUNDED: { label: "En financement", className: "bg-purple-100 text-purple-700" },
-  CLOSED: { label: "Clôturée", className: "bg-gray-100 text-gray-600" },
+  FUNDED: { label: "Financée (à décaisser)", className: "bg-purple-100 text-purple-700" },
+  CLOSED: { label: "Décaissée", className: "bg-gray-100 text-gray-600" },
   REJECTED: { label: "Rejetée", className: "bg-red-100 text-red-700" },
   CANCELLED: { label: "Suspendue", className: "bg-orange-100 text-orange-700" },
 };

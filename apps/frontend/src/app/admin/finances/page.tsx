@@ -55,7 +55,7 @@ interface TopOrganization {
 function MiniBarChart({ data, colorClass }: { data: { label: string; value: number }[]; colorClass: string }) {
   const max = Math.max(...data.map((d) => d.value), 1);
   return (
-    <div className="flex h-24 items-end gap-2">
+    <div className="flex gap-2">
       {data.map((d, i) => (
         <div key={i} className="group relative flex flex-1 flex-col items-center gap-1">
           {d.value > 0 && (
@@ -63,10 +63,14 @@ function MiniBarChart({ data, colorClass }: { data: { label: string; value: numb
               {formatCompactAmount(d.value)} FCFA
             </div>
           )}
-          <div
-            className={`w-full max-w-6 rounded-t-sm ${colorClass} transition-all`}
-            style={{ height: `${(d.value / max) * 100}%`, minHeight: d.value > 0 ? "4px" : "0" }}
-          />
+          {/* Hauteur explicite requise : un pourcentage sur la barre ne se résout
+              que si son parent direct a une hauteur définie (pas le flex-col englobant). */}
+          <div className="flex h-24 w-full items-end">
+            <div
+              className={`mx-auto w-full max-w-6 rounded-t-sm ${colorClass} transition-all`}
+              style={{ height: `${(d.value / max) * 100}%`, minHeight: d.value > 0 ? "4px" : "0" }}
+            />
+          </div>
           <p className="text-[11px] text-gray-400">{d.label}</p>
         </div>
       ))}

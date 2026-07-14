@@ -31,4 +31,8 @@ export class DocumentsRepository implements IDocumentsRepository {
   async updateStatus(id: string, status: any) {
     return this.prisma.document.update({ where: { id }, data: { status } });
   }
+
+  async delete(id: string) {
+    return this.prisma.document.delete({ where: { id } });
+  }
 }

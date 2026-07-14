@@ -14,6 +14,14 @@ export class UsersRepository implements IUsersRepository {
     return this.prisma.user.findUnique({ where: { id } });
   }
 
+  async findAdminIds() {
+    const admins = await this.prisma.user.findMany({
+      where: { role: { in: ['ADMIN', 'SUPER_ADMIN'] } },
+      select: { id: true },
+    });
+    return admins.map((a) => a.id);
+  }
+
   async findByIdAdmin(id: string) {
     return this.prisma.user.findUnique({
       where: { id },
@@ -129,6 +137,7 @@ export class UsersRepository implements IUsersRepository {
         firstName: true,
         lastName: true,
         phone: true,
+        cniNumber: true,
         role: true,
         kycStatus: true,
         isActive: true,

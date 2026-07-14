@@ -175,7 +175,7 @@ export function Sidebar({
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const { unreadCount } = useNotifications();
-  const { offresPending: offersPending } = usePmeBadges();
+  const { offresPending: offersPending, demandesCount } = usePmeBadges();
 
   return (
     <aside className="fixed left-0 top-0 z-20 flex h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-white">
@@ -215,7 +215,9 @@ export function Sidebar({
             ? unreadCount
             : item.href === "/dashboard/offres"
               ? offersPending
-              : 0;
+              : item.href === "/dashboard/demandes"
+                ? demandesCount
+                : 0;
           return (
             <Link
               key={item.href}

@@ -1,8 +1,10 @@
-import { Body, Controller, Get, Param, Post, Patch, UseGuards, Request, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Patch, Delete, UseGuards, Request, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { FundingService } from './funding.service';
 import { CreateFundingRequestDto } from './dto/create-funding-request.dto';
+import { UpdateFundingRequestDto } from './dto/update-funding-request.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RejectionReasonDto } from '../common/dto/rejection-reason.dto';
@@ -48,13 +50,50 @@ export class FundingController {
     return this.fundingService.findAllPublished({ category, search });
   }
 
-  @ApiOperation({ summary: 'Détail d\'une demande', description: 'Retourne une demande avec son organisation et ses documents.' })
+  @ApiOperation({
+    summary: 'Détail d\'une demande',
+    description: "Retourne une demande avec son organisation et son scoring. Accès public si la demande est PUBLISHED/FUNDED/CLOSED (investisseurs) ; sinon réservé aux membres de l'organisation propriétaire (token requis).",
+  })
   @ApiParam({ name: 'id', description: 'UUID de la demande' })
   @ApiResponse({ status: 200, description: 'Détail de la demande' })
+  @ApiResponse({ status: 403, description: "Demande non publique et vous n'en êtes pas membre" })
   @ApiResponse({ status: 404, description: 'Demande introuvable' })
+  @UseGuards(OptionalJwtAuthGuard)
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.fundingService.findOneWithDetails(id);
+  findOne(@Param('id') id: string, @Request() req) {
+    return this.fundingService.findOneWithDetails(id, req.user?.id);
+  }
+
+  @ApiBearerAuth('jwt')
+  @ApiOperation({
+    summary: 'Modifier une demande',
+    description: "Modifie les champs d'une demande de financement. Réservé au membre de l'organisation propriétaire, et uniquement tant que la demande n'a jamais été publiée (statut DRAFT ou UNDER_REVIEW).",
+  })
+  @ApiParam({ name: 'id', description: 'UUID de la demande' })
+  @ApiResponse({ status: 200, description: 'Demande mise à jour' })
+  @ApiResponse({ status: 400, description: 'Demande déjà publiée — non modifiable' })
+  @ApiResponse({ status: 403, description: 'Pas membre de l\'organisation propriétaire' })
+  @ApiResponse({ status: 404, description: 'Demande introuvable' })
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: UpdateFundingRequestDto, @Request() req) {
+    return this.fundingService.update(id, dto, req.user.id);
+  }
+
+  @ApiBearerAuth('jwt')
+  @ApiOperation({
+    summary: 'Supprimer une demande',
+    description: "Supprime définitivement une demande de financement. Réservé au membre de l'organisation propriétaire, et uniquement tant que la demande n'a jamais été publiée (statut DRAFT ou UNDER_REVIEW).",
+  })
+  @ApiParam({ name: 'id', description: 'UUID de la demande' })
+  @ApiResponse({ status: 200, description: 'Demande supprimée' })
+  @ApiResponse({ status: 400, description: 'Demande déjà publiée — non supprimable' })
+  @ApiResponse({ status: 403, description: 'Pas membre de l\'organisation propriétaire' })
+  @ApiResponse({ status: 404, description: 'Demande introuvable' })
+  @UseGuards(JwtAuthGuard)
+  @Delete(':id')
+  remove(@Param('id') id: string, @Request() req) {
+    return this.fundingService.remove(id, req.user.id);
   }
 
   @ApiBearerAuth('jwt')
@@ -180,5 +219,23 @@ export class FundingController {
   @Patch(':id/reactivate')
   reactivate(@Param('id') id: string) {
     return this.fundingService.reactivate(id);
+  }
+
+  @ApiBearerAuth('jwt')
+  @ApiOperation({
+    summary: '[ADMIN] Décaisser vers la PME (FUNDED → CLOSED)',
+    description: `Verse les fonds accumulés (validés admin) à la PME, commission de financement déduite.
+- Réservé aux dossiers en statut **FUNDED** (100% des virements validés).
+- \`disbursedAmount\` = \`amountRaised\` - somme des commissions FUNDING_FEE en attente sur ce dossier.
+- Les commissions correspondantes passent en \`COLLECTED\`.`,
+  })
+  @ApiParam({ name: 'id', description: 'UUID de la demande' })
+  @ApiResponse({ status: 200, description: 'Décaissé — statut mis à jour → CLOSED' })
+  @ApiResponse({ status: 400, description: 'La demande n\'est pas en FUNDED' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Patch(':id/disburse')
+  disburse(@Param('id') id: string, @Request() req) {
+    return this.fundingService.disburse(id, req.user.id);
   }
 }

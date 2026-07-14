@@ -24,6 +24,15 @@ export interface CreateFundingRequestData {
   garantieCouverture?: number;
 }
 
+export interface UpdateFundingRequestData {
+  title?: string;
+  description?: string;
+  category?: FundingCategory;
+  amountRequested?: number;
+  expectedReturn?: number;
+  durationMonths?: number;
+}
+
 export interface FundingAdminFilters {
   status?: string;
   search?: string;
@@ -53,4 +62,7 @@ export interface IFundingRepository {
     status: FundingRequest['status'],
     rejectionReason?: string,
   ): Promise<FundingRequest>;
+  update(id: string, data: UpdateFundingRequestData): Promise<FundingRequest>;
+  delete(id: string): Promise<FundingRequest>;
+  disburse(id: string, adminId: string): Promise<FundingRequest>;
 }

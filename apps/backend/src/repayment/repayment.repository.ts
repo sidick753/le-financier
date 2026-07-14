@@ -33,8 +33,9 @@ export class RepaymentRepository implements IRepaymentRepository {
           baseAmount: params.amountCommitted,
           rate: FUNDING_FEE_RATE,
           commissionAmount: fundingCommission,
-          // Prélevée immédiatement sur les fonds réglés, pas de flux de collecte séparé.
-          status: 'COLLECTED',
+          // Due, mais collectée seulement au décaissement (FundingRepository.disburse) —
+          // c'est là que la plateforme prélève effectivement sa part sur le virement sortant.
+          status: 'PENDING',
         },
       });
     });
@@ -78,6 +79,19 @@ export class RepaymentRepository implements IRepaymentRepository {
     });
   }
 
+  async findScheduleById(scheduleId: string) {
+    return this.prisma.repaymentSchedule.findUnique({ where: { id: scheduleId } });
+  }
+
+  async findPaymentById(paymentId: string) {
+    return this.prisma.repaymentPayment.findUnique({
+      where: { id: paymentId },
+      include: { repaymentSchedule: { include: { investment: true } } },
+    });
+  }
+
+  // Soumission par la PME : dépose une preuve de virement sur le compte plateforme,
+  // en attente de validation admin. Ne touche pas l'échéance ni la commission.
   async confirmPayment(scheduleId: string, userId: string, proofDocumentId?: string) {
     return this.prisma.$transaction(async (tx) => {
       const schedule = await tx.repaymentSchedule.findUnique({
@@ -87,39 +101,120 @@ export class RepaymentRepository implements IRepaymentRepository {
       if (!schedule) throw new Error('Échéance introuvable.');
       if (schedule.status === 'PAID') throw new Error('Cette échéance est déjà payée.');
 
-      const payment = await tx.repaymentPayment.create({
+      return tx.repaymentPayment.create({
         data: {
           repaymentScheduleId: scheduleId,
           amountPaid: schedule.amountDue,
           paidAt: new Date(),
+          status: 'PENDING_VALIDATION',
           confirmedById: userId,
           proofDocumentId,
         },
       });
+    });
+  }
+
+  // [ADMIN] Valide la preuve : paiement confirmé, échéance soldée, commission d'intérêt
+  // collectée et reversement net à l'investisseur considéré effectué dans le même geste
+  // (pas de bundle multi-investisseurs à ce niveau, contrairement au décaissement du financement).
+  async approvePayment(paymentId: string, adminId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const payment = await tx.repaymentPayment.findUnique({
+        where: { id: paymentId },
+        include: { repaymentSchedule: true },
+      });
+      if (!payment) throw new Error('Paiement introuvable.');
+      if (payment.status !== 'PENDING_VALIDATION') {
+        throw new Error("Ce paiement n'est pas en attente de validation.");
+      }
+
+      const now = new Date();
+      const updatedPayment = await tx.repaymentPayment.update({
+        where: { id: paymentId },
+        data: {
+          status: 'CONFIRMED',
+          validatedById: adminId,
+          validatedAt: now,
+          disbursedAt: now,
+        },
+      });
 
       await tx.repaymentSchedule.update({
-        where: { id: scheduleId },
+        where: { id: payment.repaymentScheduleId },
         data: { status: 'PAID' },
       });
 
-      const interestAmount = Number(schedule.interestAmount);
+      if (payment.proofDocumentId) {
+        await tx.document.update({
+          where: { id: payment.proofDocumentId },
+          data: { status: 'APPROVED' },
+        });
+      }
+
+      const interestAmount = Number(payment.repaymentSchedule.interestAmount);
       if (interestAmount > 0) {
         const interestCommission = interestAmount * INTEREST_FEE_RATE;
         await tx.commission.create({
           data: {
             type: 'INTEREST_FEE',
-            fundingRequestId: schedule.fundingRequestId,
+            fundingRequestId: payment.repaymentSchedule.fundingRequestId,
             repaymentPaymentId: payment.id,
             baseAmount: interestAmount,
             rate: INTEREST_FEE_RATE,
             commissionAmount: interestCommission,
-            // Prélevée immédiatement sur l'échéance confirmée, pas de flux de collecte séparé.
+            // Collectée immédiatement : le reversement net à l'investisseur se fait dans
+            // le même geste que la validation, contrairement au décaissement du financement.
             status: 'COLLECTED',
           },
         });
       }
 
-      return payment;
+      return updatedPayment;
+    });
+  }
+
+  // [ADMIN] Rejette la preuve : la PME doit resoumettre. L'échéance reste PENDING.
+  async rejectPayment(paymentId: string, adminId: string, reason: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const payment = await tx.repaymentPayment.findUnique({ where: { id: paymentId } });
+      if (!payment) throw new Error('Paiement introuvable.');
+      if (payment.status !== 'PENDING_VALIDATION') {
+        throw new Error("Ce paiement n'est pas en attente de validation.");
+      }
+
+      if (payment.proofDocumentId) {
+        await tx.document.update({
+          where: { id: payment.proofDocumentId },
+          data: { status: 'REJECTED' },
+        });
+      }
+
+      return tx.repaymentPayment.update({
+        where: { id: paymentId },
+        data: {
+          status: 'REJECTED',
+          validatedById: adminId,
+          validatedAt: new Date(),
+          rejectionReason: reason,
+        },
+      });
+    });
+  }
+
+  async findPendingPayments() {
+    return this.prisma.repaymentPayment.findMany({
+      where: { status: 'PENDING_VALIDATION' },
+      include: {
+        repaymentSchedule: {
+          include: {
+            fundingRequest: { select: { id: true, title: true } },
+            investment: {
+              include: { investor: { select: { firstName: true, lastName: true } } },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
     });
   }
 

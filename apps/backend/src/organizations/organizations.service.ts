@@ -2,6 +2,7 @@ import { Injectable, ConflictException, ForbiddenException, NotFoundException } 
 import { OrganizationsRepository } from './organizations.repository';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateCreditProfileDto } from './dto/update-credit-profile.dto';
+import { UpdateBankInfoDto } from './dto/update-bank-info.dto';
 
 @Injectable()
 export class OrganizationsService {
@@ -84,5 +85,19 @@ export class OrganizationsService {
     }
 
     return this.organizationsRepository.updateCreditProfile(id, dto);
+  }
+
+  async updateBankInfo(id: string, userId: string, dto: UpdateBankInfoDto) {
+    const organization = await this.organizationsRepository.findById(id);
+    if (!organization) {
+      throw new NotFoundException('Organisation introuvable.');
+    }
+
+    const isMember = await this.organizationsRepository.isMember(id, userId);
+    if (!isMember) {
+      throw new ForbiddenException("Vous n'avez pas accès à cette organisation.");
+    }
+
+    return this.organizationsRepository.updateBankInfo(id, dto);
   }
 }

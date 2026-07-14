@@ -2,9 +2,19 @@
 
 import Link from "next/link";
 import { usePmeData, FundingRequest, ScoringReport } from "@/lib/use-pme-data";
+import { useOffers } from "@/lib/use-offers";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { SectionCard } from "@/components/ui/section-card";
 import { NotifBell } from "@/components/ui/notif-bell";
+
+const OFFER_STATUS: Record<string, { label: string; cls: string }> = {
+  INTERESTED:            { label: "Intéressé",       cls: "bg-slate-100 text-slate-600" },
+  NEGOTIATING:            { label: "En négociation",  cls: "bg-amber-100 text-amber-700" },
+  COMMITTED:              { label: "Confirmée",       cls: "bg-green-100 text-green-700" },
+  SETTLED_OFF_PLATFORM:   { label: "Réglée",          cls: "bg-blue-100 text-blue-700" },
+  CANCELLED:              { label: "Annulée",         cls: "bg-slate-100 text-slate-600" },
+  REJECTED:               { label: "Rejetée",         cls: "bg-red-100 text-red-600" },
+};
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -75,7 +85,7 @@ function ScoreCard({ report }: { report: ScoringReport | null }) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-6">
         <p className="mb-3.5 text-[11px] font-black uppercase tracking-widest text-slate-400">
-          Score LeFinancier™
+          Score LeFinancier
         </p>
         <p className="text-[13px] text-slate-500">
           Pas encore de score — soumettez un dossier pour être évalué.
@@ -95,7 +105,7 @@ function ScoreCard({ report }: { report: ScoringReport | null }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-6">
       <p className="mb-3.5 text-[11px] font-black uppercase tracking-widest text-slate-400">
-        Score LeFinancier™
+        Score LeFinancier
       </p>
       <div className="mb-4 flex items-center gap-4">
         <div className={`flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[14px] text-2xl font-bold ${gradeColor}`}>
@@ -105,7 +115,7 @@ function ScoreCard({ report }: { report: ScoringReport | null }) {
           <p className="text-[36px] font-bold leading-none tracking-tight">
             {score}<span className="text-sm font-medium text-slate-400">/100</span>
           </p>
-          <p className="mt-1 text-xs text-slate-500">Score LeFinancier™</p>
+          <p className="mt-1 text-xs text-slate-500">Score LeFinancier</p>
         </div>
       </div>
       <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
@@ -181,10 +191,18 @@ function StatusCard({ latestRequest }: { latestRequest: FundingRequest | null })
 
 export default function DashboardPage() {
   const { fundingRequests, scoringReport, isLoading, error } = usePmeData();
+  const { offers, isLoading: offersLoading } = useOffers();
+
+  const negotiatingCount = offers.filter((o) => o.status === "NEGOTIATING").length;
 
   const latestRequest = fundingRequests[0] ?? null;
   const activeRequests = fundingRequests.filter((r) => ["UNDER_REVIEW", "PUBLISHED"].includes(r.status));
-  const totalAmount = fundingRequests.reduce((sum, r) => sum + Number(r.amountRequested), 0);
+  // Un brouillon n'est pas encore une demande confirmée (le formulaire de
+  // création en persiste un dès l'étape 2, avant que l'utilisateur ait
+  // terminé) — il ne doit pas gonfler le montant total affiché.
+  const totalAmount = fundingRequests
+    .filter((r) => r.status !== "DRAFT")
+    .reduce((sum, r) => sum + Number(r.amountRequested), 0);
   const thisMonth = new Date().getMonth();
   const thisYear = new Date().getFullYear();
   const demandesMois = fundingRequests.filter((r) => {
@@ -261,8 +279,9 @@ export default function DashboardPage() {
           />
           <KpiCard
             label="Offres reçues"
-            value="—"
-            sub="Bientôt disponible"
+            value={offersLoading ? "…" : String(offers.length)}
+            sub={negotiatingCount > 0 ? `${negotiatingCount} en négociation` : "Aucune en négociation"}
+            trend={negotiatingCount > 0 ? "up" : ""}
             iconBg="#f5f3ff"
             iconColor="#7c3aed"
             icon={
@@ -317,19 +336,41 @@ export default function DashboardPage() {
             })}
           </SectionCard>
 
-          <SectionCard title="Offres reçues">
-            <div className="flex flex-col items-center justify-center px-5 py-10 text-center">
-              <div className="mb-2.5 flex h-11 w-11 items-center justify-center rounded-[14px] bg-blue-50">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="1.8">
-                  <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
-                  <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
-                </svg>
+          <SectionCard title="Offres reçues" action="Voir tout" actionHref="/dashboard/offres">
+            {offersLoading && <p className="p-5 text-sm text-slate-400">Chargement...</p>}
+            {!offersLoading && offers.length === 0 && (
+              <div className="flex flex-col items-center justify-center px-5 py-10 text-center">
+                <div className="mb-2.5 flex h-11 w-11 items-center justify-center rounded-[14px] bg-blue-50">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="1.8">
+                    <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                    <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+                  </svg>
+                </div>
+                <p className="text-[13px] font-semibold text-slate-900">Aucune offre pour l'instant</p>
+                <p className="mt-1.5 max-w-[200px] text-xs leading-relaxed text-slate-500">
+                  Les offres des investisseurs apparaîtront ici dès que votre demande sera visible.
+                </p>
               </div>
-              <p className="text-[13px] font-semibold text-slate-900">Aucune offre pour l'instant</p>
-              <p className="mt-1.5 max-w-[200px] text-xs leading-relaxed text-slate-500">
-                Les offres des investisseurs apparaîtront ici dès que votre demande sera visible.
-              </p>
-            </div>
+            )}
+            {!offersLoading && offers.slice(0, 5).map((o) => {
+              const s = OFFER_STATUS[o.status] ?? OFFER_STATUS.INTERESTED;
+              return (
+                <div key={o.id} className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5 last:border-b-0">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-semibold text-slate-900">
+                      {o.investor.firstName} {o.investor.lastName}
+                    </p>
+                    <p className="mt-0.5 truncate text-[11px] text-slate-500">
+                      {Number(o.amountCommitted).toLocaleString("fr-FR")} {o.fundingRequest.currency}
+                      &nbsp;·&nbsp;{o.fundingRequest.title}
+                    </p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${s.cls}`}>
+                    {s.label}
+                  </span>
+                </div>
+              );
+            })}
           </SectionCard>
         </div>
 

@@ -1,15 +1,23 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { usePmeData } from "@/lib/use-pme-data";
 import { api } from "@/lib/api";
+import { UploadZone as RealUploadZone } from "@/components/upload-zone";
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
 type FinancingType = "INVOICE" | "LOAN" | "EQUITY";
+
+// Le backend attend un FundingCategoryDto (FACTURE, PRET, EQUITY), pas le FinancingType du front.
+const CATEGORY_BY_TYPE: Record<FinancingType, "FACTURE" | "PRET" | "EQUITY"> = {
+  INVOICE: "FACTURE",
+  LOAN: "PRET",
+  EQUITY: "EQUITY",
+};
 
 interface FormData {
   type: FinancingType;
@@ -273,67 +281,93 @@ function Step2({
   );
 }
 
-function UploadZone({ label, hint, required }: { label: string; hint?: string; required?: boolean }) {
-  const ref = useRef<HTMLInputElement>(null);
-  const [filename, setFilename] = useState<string | null>(null);
-  const [dragging, setDragging] = useState(false);
+interface DocSlotConfig {
+  key: string;
+  label: string;
+  hint?: string;
+  required?: boolean;
+  docType: string;
+}
 
-  function handleFile(file: File) {
-    setFilename(file.name);
-  }
+const DOC_SLOTS_BY_TYPE: Record<FinancingType, DocSlotConfig[]> = {
+  INVOICE: [
+    { key: "facture", label: "Facture client", required: true, docType: "FUNDING_REQUEST_ATTACHMENT" },
+    { key: "etatsFinanciers", label: "États financiers récents", hint: "Bilan, compte de résultat (derniers 12 mois)", docType: "FINANCIAL_STATEMENT" },
+    { key: "businessPlan", label: "Business plan ou prévisionnel", hint: "Document décrivant votre activité et projections", docType: "FUNDING_REQUEST_ATTACHMENT" },
+    { key: "autres", label: "Autres documents", docType: "FUNDING_REQUEST_ATTACHMENT" },
+  ],
+  LOAN: [
+    { key: "etatsFinanciers", label: "États financiers récents", hint: "Bilan, compte de résultat (derniers 12 mois)", docType: "FINANCIAL_STATEMENT" },
+    { key: "businessPlan", label: "Business plan ou prévisionnel", hint: "Document décrivant votre activité et projections", docType: "FUNDING_REQUEST_ATTACHMENT" },
+    { key: "autres", label: "Autres documents", docType: "FUNDING_REQUEST_ATTACHMENT" },
+  ],
+  EQUITY: [
+    { key: "businessPlan", label: "Business plan / pitch deck", required: true, docType: "FUNDING_REQUEST_ATTACHMENT" },
+    { key: "etatsFinanciers", label: "États financiers récents", hint: "Bilan, compte de résultat (derniers 12 mois)", docType: "FINANCIAL_STATEMENT" },
+    { key: "autres", label: "Autres documents", docType: "FUNDING_REQUEST_ATTACHMENT" },
+  ],
+};
 
+function DocSlot({ slot, uploaded, onUploaded, organizationId, fundingRequestId }: {
+  slot: DocSlotConfig;
+  uploaded: boolean;
+  onUploaded: () => void;
+  organizationId: string;
+  fundingRequestId: string;
+}) {
   return (
     <div
-      onClick={() => ref.current?.click()}
-      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
-      className={`mb-3.5 cursor-pointer rounded-[14px] border-[1.5px] border-dashed p-6 text-center transition ${
-        filename
-          ? "border-green-500 bg-green-50"
-          : dragging
-          ? "border-blue-500 bg-blue-50"
-          : "border-slate-200 bg-white hover:border-blue-400 hover:bg-blue-50"
+      className={`mb-3.5 flex items-center justify-between gap-3 rounded-[14px] border-[1.5px] p-4 transition ${
+        uploaded ? "border-green-500 bg-green-50" : "border-slate-200 bg-white"
       }`}
     >
-      <div className={`mx-auto mb-2.5 w-fit ${filename ? "text-green-500" : "text-slate-300"}`}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <polyline points="17 8 12 3 7 8" />
-          <line x1="12" y1="3" x2="12" y2="15" />
-        </svg>
+      <div className="min-w-0">
+        <p className="text-[13px] font-bold text-slate-900">
+          {slot.label}{slot.required && <span className="text-red-500"> (obligatoire)</span>}
+        </p>
+        {slot.hint && <p className="mt-0.5 text-[12px] text-blue-600">{slot.hint}</p>}
       </div>
-      <p className="text-[13px] font-bold text-slate-900">
-        {label}{required && <span className="text-red-500"> (obligatoire)</span>}
-      </p>
-      {hint && <p className="mt-0.5 text-[12px] text-blue-600">{hint}</p>}
-      {filename ? (
-        <p className="mt-2 text-[11px] font-semibold text-green-600">✓ {filename}</p>
+      {uploaded ? (
+        <span className="shrink-0 text-[12px] font-semibold text-green-600">✓ Ajouté</span>
       ) : (
-        <button type="button" className="mt-3 rounded-[8px] border border-slate-200 px-3.5 py-1.5 text-[12px] font-semibold text-slate-700 transition hover:border-blue-500 hover:text-blue-600">
-          Choisir un fichier
-        </button>
+        <RealUploadZone
+          organizationId={organizationId}
+          documentType={slot.docType}
+          fundingRequestId={fundingRequestId}
+          onUploaded={onUploaded}
+          compact
+        />
       )}
-      <input
-        ref={ref}
-        type="file"
-        accept=".pdf,.jpg,.jpeg,.png"
-        className="sr-only"
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
-      />
     </div>
   );
 }
 
-function Step3() {
+function Step3({ data, organizationId, fundingRequestId, docs, onDocUploaded }: {
+  data: FormData;
+  organizationId: string | null;
+  fundingRequestId: string | null;
+  docs: Record<string, boolean>;
+  onDocUploaded: (key: string) => void;
+}) {
+  const slots = DOC_SLOTS_BY_TYPE[data.type];
   return (
     <div className="rounded-[18px] border border-slate-200 bg-white p-7">
       <h2 className="mb-1 text-[15px] font-bold text-slate-900">Documents justificatifs</h2>
       <p className="mb-5 text-[13px] text-slate-500">Ajoutez les documents qui appuient votre demande</p>
-      <UploadZone label="Facture client" required />
-      <UploadZone label="États financiers récents" hint="Bilan, compte de résultat (derniers 12 mois)" />
-      <UploadZone label="Business plan ou prévisionnel" hint="Document décrivant votre activité et projections" />
-      <UploadZone label="Autres documents" />
+      {!organizationId || !fundingRequestId ? (
+        <p className="text-[13px] text-slate-400">Préparation de votre dossier...</p>
+      ) : (
+        slots.map((slot) => (
+          <DocSlot
+            key={slot.key}
+            slot={slot}
+            uploaded={docs[slot.key] ?? false}
+            onUploaded={() => onDocUploaded(slot.key)}
+            organizationId={organizationId}
+            fundingRequestId={fundingRequestId}
+          />
+        ))
+      )}
     </div>
   );
 }
@@ -413,7 +447,10 @@ export default function NewDemandePage() {
   const [step, setStep] = useState(1);
   const [data, setData] = useState<FormData>(INITIAL);
   const [submitting, setSubmitting] = useState(false);
+  const [creatingDraft, setCreatingDraft] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  const [docs, setDocs] = useState<Record<string, boolean>>({});
 
   function onChange(k: keyof FormData, v: string) {
     setData((d) => ({ ...d, [k]: v }));
@@ -428,12 +465,78 @@ export default function NewDemandePage() {
       setError("Veuillez rédiger une description détaillée.");
       return false;
     }
+    if (step === 3) {
+      const missing = DOC_SLOTS_BY_TYPE[data.type].filter((slot) => slot.required && !docs[slot.key]);
+      if (missing.length > 0) {
+        setError(`Document(s) obligatoire(s) manquant(s) : ${missing.map((s) => s.label).join(", ")}.`);
+        return false;
+      }
+    }
     setError(null);
     return true;
   }
 
-  function next() {
+  // Construit le payload FundingRequest à partir des champs du formulaire —
+  // réutilisé pour créer le brouillon (avant l'étape documents) et pour la
+  // soumission finale.
+  function buildPayload() {
+    const amountRaw = parseInt(data.amount.replace(/\s/g, ""), 10);
+    const typeLabel = TYPE_CONFIG[data.type].label;
+    const title = data.title.trim() || `${typeLabel} — ${amountRaw.toLocaleString("fr-FR")} F CFA`;
+
+    // Combine description + objective into a single field (backend has one description field)
+    const description = data.objective.trim()
+      ? `${data.description}\n\nObjectif : ${data.objective}`
+      : data.description;
+
+    const durationMonths = parseDurationToMonths(data.duration);
+    const expectedReturn = data.rate ? parseFloat(data.rate) : undefined;
+
+    return {
+      amountRaw,
+      body: {
+        title,
+        description,
+        category: CATEGORY_BY_TYPE[data.type],
+        amountRequested: amountRaw,
+        ...(durationMonths !== undefined && { durationMonths }),
+        ...(expectedReturn !== undefined && !isNaN(expectedReturn) && { expectedReturn }),
+      },
+    };
+  }
+
+  async function next() {
     if (!validate()) return;
+
+    // En quittant l'étape 2 (détails), on crée le brouillon en base pour que
+    // l'étape 3 (documents) puisse réellement attacher les fichiers uploadés
+    // à une demande existante.
+    if (step === 2 && !createdId) {
+      if (!token || !organization) {
+        setError("Organisation introuvable.");
+        return;
+      }
+      const { amountRaw, body } = buildPayload();
+      if (isNaN(amountRaw) || amountRaw < 1) {
+        setError("Montant invalide.");
+        return;
+      }
+      setCreatingDraft(true);
+      try {
+        const created = await api.post<{ id: string }>(
+          "/funding-requests",
+          { organizationId: organization.id, ...body },
+          token,
+        );
+        setCreatedId(created.id);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Une erreur est survenue.");
+        setCreatingDraft(false);
+        return;
+      }
+      setCreatingDraft(false);
+    }
+
     setStep((s) => Math.min(s + 1, 4));
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -449,42 +552,27 @@ export default function NewDemandePage() {
     setSubmitting(true);
     setError(null);
     try {
-      const amountRaw = parseInt(data.amount.replace(/\s/g, ""), 10);
+      const { amountRaw, body } = buildPayload();
       if (isNaN(amountRaw) || amountRaw < 1) {
         setError("Montant invalide.");
         return;
       }
 
-      const typeLabel = TYPE_CONFIG[data.type].label;
-      const title = data.title.trim() || `${typeLabel} — ${amountRaw.toLocaleString("fr-FR")} F CFA`;
+      let id = createdId;
+      if (id) {
+        // Synchronise les derniers changements de champs (si l'utilisateur est
+        // revenu en arrière après avoir uploadé des documents).
+        await api.patch(`/funding-requests/${id}`, body, token);
+      } else {
+        const created = await api.post<{ id: string }>(
+          "/funding-requests",
+          { organizationId: organization.id, ...body },
+          token,
+        );
+        id = created.id;
+      }
 
-      // Combine description + objective into a single field (backend has one description field)
-      const description = data.objective.trim()
-        ? `${data.description}\n\nObjectif : ${data.objective}`
-        : data.description;
-
-      // Map duration string → durationMonths integer
-      const durationMonths = parseDurationToMonths(data.duration);
-
-      // Map rate string → expectedReturn float
-      const expectedReturn = data.rate ? parseFloat(data.rate) : undefined;
-
-      // Step 1 : create (status = DRAFT)
-      const created = await api.post<{ id: string }>(
-        "/funding-requests",
-        {
-          organizationId: organization.id,
-          title,
-          description,
-          amountRequested: amountRaw,
-          ...(durationMonths !== undefined && { durationMonths }),
-          ...(expectedReturn !== undefined && !isNaN(expectedReturn) && { expectedReturn }),
-        },
-        token,
-      );
-
-      // Step 2 : submit for review (status → UNDER_REVIEW)
-      await api.patch(`/funding-requests/${created.id}/submit`, {}, token);
+      await api.patch(`/funding-requests/${id}/submit`, {}, token);
 
       router.push("/dashboard/demandes");
     } catch (err) {
@@ -574,7 +662,15 @@ export default function NewDemandePage() {
           {/* Step content */}
           {step === 1 && <Step1 data={data} onChange={onChange} />}
           {step === 2 && <Step2 data={data} onChange={onChange} />}
-          {step === 3 && <Step3 />}
+          {step === 3 && (
+            <Step3
+              data={data}
+              organizationId={organization?.id ?? null}
+              fundingRequestId={createdId}
+              docs={docs}
+              onDocUploaded={(key) => setDocs((d) => ({ ...d, [key]: true }))}
+            />
+          )}
           {step === 4 && <Step4 data={data} />}
 
           {/* Navigation */}
@@ -589,9 +685,10 @@ export default function NewDemandePage() {
               {step < 4 ? (
                 <button
                   onClick={next}
-                  className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-slate-900 px-5 text-[13px] font-bold text-white transition hover:bg-slate-800"
+                  disabled={creatingDraft}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-slate-900 px-5 text-[13px] font-bold text-white transition hover:bg-slate-800 disabled:opacity-60"
                 >
-                  Suivant
+                  {creatingDraft ? "Préparation..." : "Suivant"}
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <polyline points="9 18 15 12 9 6" />
                   </svg>

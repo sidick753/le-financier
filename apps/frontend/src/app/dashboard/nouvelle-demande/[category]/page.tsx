@@ -459,6 +459,9 @@ export default function NouvelleDemandeFormPage() {
                     readOnly
                     className="w-full rounded-md border border-gray-100 bg-gray-100 px-3 py-2 text-sm text-gray-500"
                   />
+                  <p className="mt-1 text-xs text-gray-400">
+                    Montant total TTC de la facture, tel que renseigné à l'étape précédente.
+                  </p>
                 </div>
 
                 <div>
@@ -470,6 +473,9 @@ export default function NouvelleDemandeFormPage() {
                     onChange={(e) => setDebiteurNom(e.target.value)}
                     className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
                   />
+                  <p className="mt-1 text-xs text-gray-400">
+                    L'entreprise ou l'organisme qui vous doit ce paiement — pas votre propre société.
+                  </p>
                 </div>
 
                 <div>
@@ -485,7 +491,7 @@ export default function NouvelleDemandeFormPage() {
                     ))}
                   </select>
                   <p className="mt-1 text-xs text-gray-400">
-                    Le type de débiteur influe directement sur la quotité d'avance accordée.
+                    Choisissez la catégorie qui décrit le mieux ce client (entreprise privée, publique, particulier…).
                   </p>
                 </div>
 
@@ -514,10 +520,16 @@ export default function NouvelleDemandeFormPage() {
                     onChange={(e) => setEcheanceDate(e.target.value)}
                     className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
                   />
+                  <p className="mt-1 text-xs text-gray-400">
+                    Date à laquelle le débiteur doit régler la facture.
+                  </p>
                 </div>
 
                 <div>
-                  <p className="mb-2 text-sm font-medium text-gray-700">Ancienneté de la relation commerciale</p>
+                  <p className="mb-1 text-sm font-medium text-gray-700">Ancienneté de la relation avec ce client</p>
+                  <p className="mb-2 text-xs text-gray-400">
+                    Depuis combien de temps vous travaillez avec ce débiteur précis — pas votre ancienneté sur LeFinancier.
+                  </p>
                   <div className="space-y-2">
                     {[
                       { value: "plus_2ans",           label: "Plus de 2 ans",         hint: "Relation établie — favorable au scoring" },
@@ -565,6 +577,9 @@ export default function NouvelleDemandeFormPage() {
                     <span>0 % — client marginal</span>
                     <span>100 % — client unique</span>
                   </div>
+                  <p className="mt-1 text-xs text-gray-400">
+                    Estimez la part de votre chiffre d'affaires annuel générée par ce client.
+                  </p>
                 </div>
 
                 <div>
@@ -581,6 +596,9 @@ export default function NouvelleDemandeFormPage() {
                       <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                   </select>
+                  <p className="mt-1 text-xs text-gray-400">
+                    Basé sur vos échanges passés avec ce client, indiquez s'il paie plutôt à temps ou en retard.
+                  </p>
                 </div>
 
                 <div>
@@ -595,6 +613,9 @@ export default function NouvelleDemandeFormPage() {
                     onChange={(e) => setTauxImpaye(e.target.value)}
                     className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
                   />
+                  <p className="mt-1 text-xs text-gray-400">
+                    Part des factures de ce client restées impayées au-delà de l'échéance, sur les 12 derniers mois.
+                  </p>
                 </div>
               </div>
             )}

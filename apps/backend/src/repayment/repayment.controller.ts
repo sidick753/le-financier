@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards, Request } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, Request } from '@nestjs/common';
 import { RepaymentService } from './repayment.service';
 import { ConfirmPaymentDto } from './dto/confirm-payment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { RejectionReasonDto } from '../common/dto/rejection-reason.dto';
 import { parsePositiveInt } from '../common/pagination.util';
 
 @UseGuards(JwtAuthGuard)
@@ -33,6 +34,31 @@ export class RepaymentController {
     @Request() req,
   ) {
     return this.repaymentService.confirmPayment(scheduleId, dto, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Get('admin/pending')
+  getPendingPayments() {
+    return this.repaymentService.getPendingPayments();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Patch('payment/:paymentId/approve')
+  approvePayment(@Param('paymentId') paymentId: string, @Request() req) {
+    return this.repaymentService.approvePayment(paymentId, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Patch('payment/:paymentId/reject')
+  rejectPayment(
+    @Param('paymentId') paymentId: string,
+    @Body() dto: RejectionReasonDto,
+    @Request() req,
+  ) {
+    return this.repaymentService.rejectPayment(paymentId, req.user.id, dto.reason);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

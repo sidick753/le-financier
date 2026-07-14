@@ -1,5 +1,6 @@
 import {
   Injectable,
+  BadRequestException,
   ConflictException,
   NotFoundException,
   UnauthorizedException,
@@ -8,6 +9,8 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { UsersRepository } from '../users/users.repository';
+import { OrganizationsRepository } from '../organizations/organizations.repository';
+import { InstitutionsRepository } from '../institutions/institutions.repository';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
@@ -15,42 +18,74 @@ import { LoginDto } from './dto/login.dto';
 export class AuthService {
   constructor(
     private usersRepository: UsersRepository,
+    private organizationsRepository: OrganizationsRepository,
+    private institutionsRepository: InstitutionsRepository,
     private jwtService: JwtService,
   ) {}
 
   async registerPmeOwner(dto: RegisterDto) {
-    return this.register(dto, 'PME_OWNER');
-  }
+    await this.assertEmailAvailable(dto.email);
 
-  async registerInvestor(dto: RegisterDto) {
-    return this.register(dto, 'INVESTOR');
-  }
+    const companyName = dto.companyName?.trim();
+    const registrationNumber = dto.registrationNumber?.trim();
+    if (!companyName || !registrationNumber) {
+      throw new BadRequestException("Le nom de l'entreprise et le numéro RCCM sont requis.");
+    }
 
-  async registerInstitution(dto: RegisterDto) {
-    return this.register(dto, 'INSTITUTION');
-  }
-
-  private async register(
-    dto: RegisterDto,
-    role: 'PME_OWNER' | 'INVESTOR' | 'INSTITUTION',
-  ) {
-    const existing = await this.usersRepository.findByEmail(dto.email);
-    if (existing) {
-      throw new ConflictException('Un compte existe déjà avec cet email.');
+    const existingOrg = await this.organizationsRepository.findByRegistrationNumber(registrationNumber);
+    if (existingOrg) {
+      throw new ConflictException('Une organisation existe déjà avec ce numéro RCCM.');
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
+    const { user } = await this.organizationsRepository.registerOwner(
+      { email: dto.email, passwordHash, firstName: dto.firstName, lastName: dto.lastName, phone: dto.phone },
+      { legalName: companyName, registrationNumber, sector: 'Secteur non renseigné', country: 'CI' },
+    );
 
+    return this.buildAuthResponse(user);
+  }
+
+  async registerInvestor(dto: RegisterDto) {
+    await this.assertEmailAvailable(dto.email);
+
+    const passwordHash = await bcrypt.hash(dto.password, 12);
     const user = await this.usersRepository.create({
       email: dto.email,
       passwordHash,
       firstName: dto.firstName,
       lastName: dto.lastName,
-      role,
+      role: 'INVESTOR',
       phone: dto.phone,
+      cniNumber: dto.cniNumber,
     });
 
     return this.buildAuthResponse(user);
+  }
+
+  async registerInstitution(dto: RegisterDto) {
+    await this.assertEmailAvailable(dto.email);
+
+    const institutionName = dto.institutionName?.trim();
+    const bceaoNumber = dto.bceaoNumber?.trim();
+    if (!institutionName || !bceaoNumber) {
+      throw new BadRequestException("Le nom de l'institution et le numéro d'agrément BCEAO sont requis.");
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, 12);
+    const { user } = await this.institutionsRepository.registerOwner(
+      { email: dto.email, passwordHash, firstName: dto.firstName, lastName: dto.lastName, phone: dto.phone },
+      { name: institutionName, bceaoApprovalNumber: bceaoNumber, country: 'CI' },
+    );
+
+    return this.buildAuthResponse(user);
+  }
+
+  private async assertEmailAvailable(email: string) {
+    const existing = await this.usersRepository.findByEmail(email);
+    if (existing) {
+      throw new ConflictException('Un compte existe déjà avec cet email.');
+    }
   }
 
   async login(dto: LoginDto) {

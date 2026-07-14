@@ -6,6 +6,7 @@ import { api } from "./api";
 
 interface PmeBadgesContextValue {
   offresPending: number;
+  demandesCount: number;
   refreshBadges: () => void;
 }
 
@@ -14,20 +15,32 @@ const PmeBadgesContext = createContext<PmeBadgesContextValue | null>(null);
 export function PmeBadgesProvider({ children }: { children: ReactNode }) {
   const { token } = useAuth();
   const [offresPending, setOffresPending] = useState(0);
+  const [demandesCount, setDemandesCount] = useState(0);
 
-  const refreshBadges = useCallback(() => {
+  const refreshBadges = useCallback(async () => {
     if (!token) return;
-    api
-      .get<{ id: string }[]>("/organizations/mine", token)
-      .then((orgs) => {
-        const org = orgs[0];
-        if (!org) return null;
-        return api.get<{ count: number }>(`/investments/organization/${org.id}/pending-count`, token);
-      })
-      .then((res) => {
-        if (res) setOffresPending(res.count);
-      })
-      .catch(() => {});
+    let org: { id: string } | undefined;
+    try {
+      const orgs = await api.get<{ id: string }[]>("/organizations/mine", token);
+      org = orgs[0];
+    } catch {
+      // ignore — les badges resteront à leur dernière valeur connue
+    }
+    if (!org) return;
+
+    // Promise.allSettled plutôt que Promise.all : l'échec transitoire d'un des
+    // deux appels ne doit pas empêcher l'autre badge (indépendant) de se mettre
+    // à jour.
+    const [pendingResult, demandesResult] = await Promise.allSettled([
+      api.get<{ count: number }>(`/investments/organization/${org.id}/pending-count`, token),
+      api.get<{ id: string; status: string }[]>(`/funding-requests/organization/${org.id}`, token),
+    ]);
+    if (pendingResult.status === "fulfilled") {
+      setOffresPending(pendingResult.value.count);
+    }
+    if (demandesResult.status === "fulfilled") {
+      setDemandesCount(demandesResult.value.filter((d) => d.status !== "CLOSED").length);
+    }
   }, [token]);
 
   useEffect(() => {
@@ -35,7 +48,7 @@ export function PmeBadgesProvider({ children }: { children: ReactNode }) {
   }, [refreshBadges]);
 
   return (
-    <PmeBadgesContext.Provider value={{ offresPending, refreshBadges }}>
+    <PmeBadgesContext.Provider value={{ offresPending, demandesCount, refreshBadges }}>
       {children}
     </PmeBadgesContext.Provider>
   );

@@ -1,4 +1,5 @@
-import { Organization } from '@le-financier/database';
+import { Organization, User } from '@le-financier/database';
+import { CreateUserData } from '../../users/interfaces/users-repository.interface';
 
 export interface CreateOrganizationData {
   legalName: string;
@@ -40,6 +41,13 @@ export interface CreditProfileData {
   partMarcheRelative?: string;
 }
 
+export interface BankInfoData {
+  bankName?: string;
+  bankAccountHolder?: string;
+  bankAccountNumber?: string;
+  bankSwiftCode?: string;
+}
+
 export interface IOrganizationsRepository {
   findById(id: string): Promise<Organization | null>;
   findByIdAdmin(id: string): Promise<Organization | null>;
@@ -52,6 +60,10 @@ export interface IOrganizationsRepository {
     limit?: number;
   }): Promise<{ data: Organization[]; total: number }>;
   createWithOwner(data: CreateOrganizationData, ownerId: string): Promise<Organization>;
+  registerOwner(
+    userData: Omit<CreateUserData, 'role'>,
+    orgData: CreateOrganizationData,
+  ): Promise<{ user: User; organization: Organization }>;
   isMember(organizationId: string, userId: string): Promise<boolean>;
   countByStatus(): Promise<{
     total: number;
@@ -66,4 +78,5 @@ export interface IOrganizationsRepository {
     rejectionReason?: string,
   ): Promise<Organization>;
   updateCreditProfile(id: string, data: CreditProfileData): Promise<Organization>;
+  updateBankInfo(id: string, data: BankInfoData): Promise<Organization>;
 }

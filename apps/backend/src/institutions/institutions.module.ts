@@ -7,5 +7,6 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 @Module({
   controllers: [InstitutionsController],
   providers: [InstitutionsService, InstitutionsRepository, RolesGuard],
+  exports: [InstitutionsRepository],
 })
 export class InstitutionsModule {}

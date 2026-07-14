@@ -3,8 +3,11 @@ import { FundingCategory } from '@le-financier/database';
 import { FundingRepository } from './funding.repository';
 import { OrganizationsRepository } from '../organizations/organizations.repository';
 import { ScoringService } from '../scoring/scoring.service';
+import { DocumentsService } from '../documents/documents.service';
 import { CreateFundingRequestDto } from './dto/create-funding-request.dto';
+import { UpdateFundingRequestDto } from './dto/update-funding-request.dto';
 import { FundingAdminFilters } from './interfaces/funding-repository.interface';
+import { EDITABLE_FUNDING_STATUSES, PUBLIC_FUNDING_STATUSES } from './funding-status.constants';
 
 @Injectable()
 export class FundingService {
@@ -12,6 +15,7 @@ export class FundingService {
     private fundingRepository: FundingRepository,
     private organizationsRepository: OrganizationsRepository,
     private scoringService: ScoringService,
+    private documentsService: DocumentsService,
   ) {}
 
   async create(dto: CreateFundingRequestDto, userId: string) {
@@ -48,6 +52,82 @@ export class FundingService {
     });
   }
 
+  async update(id: string, dto: UpdateFundingRequestDto, userId: string) {
+    const fundingRequest = await this.fundingRepository.findById(id);
+    if (!fundingRequest) {
+      throw new NotFoundException('Demande de financement introuvable.');
+    }
+
+    const isMember = await this.organizationsRepository.isMember(
+      fundingRequest.organizationId,
+      userId,
+    );
+    if (!isMember) {
+      throw new ForbiddenException("Vous n'avez pas accès à cette demande.");
+    }
+
+    if (!EDITABLE_FUNDING_STATUSES.includes(fundingRequest.status)) {
+      throw new BadRequestException(
+        'Seule une demande non encore publiée peut être modifiée.',
+      );
+    }
+
+    const updated = await this.fundingRepository.update(id, {
+      title: dto.title,
+      description: dto.description,
+      category: dto.category as FundingCategory,
+      amountRequested: dto.amountRequested,
+      expectedReturn: dto.expectedReturn,
+      durationMonths: dto.durationMonths,
+    });
+
+    // Le montant/durée/catégorie ont pu changer : si un score a déjà été
+    // calculé (demande UNDER_REVIEW), il faut le recalculer pour ne pas
+    // laisser l'admin approuver sur la base de chiffres obsolètes.
+    if (fundingRequest.status === 'UNDER_REVIEW') {
+      this.scoringService.computeAndSave({
+        fundingRequestId: id,
+        organizationId: updated.organizationId,
+        product: updated.category,
+        amountRequested: Number(updated.amountRequested),
+        durationMonths: updated.durationMonths ?? undefined,
+      }).catch((err) => {
+        console.error(`[ScoringService] Erreur recalcul scoring ${id}:`, err);
+      });
+    }
+
+    return updated;
+  }
+
+  async remove(id: string, userId: string) {
+    const fundingRequest = await this.fundingRepository.findById(id);
+    if (!fundingRequest) {
+      throw new NotFoundException('Demande de financement introuvable.');
+    }
+
+    const isMember = await this.organizationsRepository.isMember(
+      fundingRequest.organizationId,
+      userId,
+    );
+    if (!isMember) {
+      throw new ForbiddenException("Vous n'avez pas accès à cette demande.");
+    }
+
+    if (!EDITABLE_FUNDING_STATUSES.includes(fundingRequest.status)) {
+      throw new BadRequestException(
+        'Seule une demande non encore publiée peut être supprimée.',
+      );
+    }
+
+    // Les lignes Document sont retirées en cascade par Postgres, mais les
+    // fichiers physiques dans l'object storage doivent être nettoyés avant,
+    // sans quoi ils restent orphelins indéfiniment.
+    await this.documentsService.deleteStorageForFundingRequest(id);
+
+    await this.fundingRepository.delete(id);
+    return { success: true };
+  }
+
   async findMineByOrganization(organizationId: string, userId: string) {
     const isMember = await this.organizationsRepository.isMember(organizationId, userId);
     if (!isMember) {
@@ -57,11 +137,25 @@ export class FundingService {
     return this.fundingRepository.findAllByOrganizationId(organizationId);
   }
 
-  async findOneWithDetails(id: string) {
+  async findOneWithDetails(id: string, userId?: string) {
     const fundingRequest = await this.fundingRepository.findById(id);
     if (!fundingRequest) {
       throw new NotFoundException('Demande de financement introuvable.');
     }
+
+    if (!PUBLIC_FUNDING_STATUSES.includes(fundingRequest.status)) {
+      if (!userId) {
+        throw new ForbiddenException("Cette demande n'est pas accessible publiquement.");
+      }
+      const isMember = await this.organizationsRepository.isMember(
+        fundingRequest.organizationId,
+        userId,
+      );
+      if (!isMember) {
+        throw new ForbiddenException("Vous n'avez pas accès à cette demande.");
+      }
+    }
+
     return fundingRequest;
   }
 
@@ -172,5 +266,14 @@ export class FundingService {
       throw new BadRequestException('Seule une demande suspendue peut être réactivée.');
     }
     return this.fundingRepository.updateStatus(id, 'PUBLISHED');
+  }
+
+  async disburse(id: string, adminId: string) {
+    const fr = await this.fundingRepository.findById(id);
+    if (!fr) throw new NotFoundException('Demande introuvable.');
+    if (fr.status !== 'FUNDED') {
+      throw new BadRequestException('Seule une demande entièrement financée (FUNDED) peut être décaissée.');
+    }
+    return this.fundingRepository.disburse(id, adminId);
   }
 }

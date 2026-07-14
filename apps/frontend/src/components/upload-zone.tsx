@@ -14,6 +14,7 @@ interface UploadZoneProps {
   fundingRequestId?: string;
   onUploaded: () => void;
   compact?: boolean;
+  requireTitle?: boolean;
 }
 
 export function UploadZone({
@@ -23,16 +24,24 @@ export function UploadZone({
   fundingRequestId,
   onUploaded,
   compact = false,
+  requireTitle = false,
 }: UploadZoneProps) {
   const { token } = useAuth();
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const titleMissing = requireTitle && !title.trim();
 
   async function uploadFile(file: File) {
     setError(null);
 
+    if (titleMissing) {
+      setError("Veuillez indiquer un titre pour ce document.");
+      return;
+    }
     if (file.size > MAX_SIZE_MB * 1024 * 1024) {
       setError(`Le fichier dépasse ${MAX_SIZE_MB} Mo.`);
       return;
@@ -52,6 +61,9 @@ export function UploadZone({
     if (fundingRequestId) {
       formData.append("fundingRequestId", fundingRequestId);
     }
+    if (requireTitle) {
+      formData.append("title", title.trim());
+    }
 
     setIsUploading(true);
     try {
@@ -65,6 +77,7 @@ export function UploadZone({
         throw new Error(data.message ?? "Échec de l'upload.");
       }
       onUploaded();
+      setTitle("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Échec de l'upload.");
     } finally {
@@ -75,6 +88,10 @@ export function UploadZone({
   function handleDrop(e: DragEvent<HTMLDivElement>) {
     e.preventDefault();
     setIsDragging(false);
+    if (titleMissing) {
+      setError("Veuillez indiquer un titre avant d'ajouter un fichier.");
+      return;
+    }
     const file = e.dataTransfer.files?.[0];
     if (file) uploadFile(file);
   }
@@ -108,13 +125,27 @@ export function UploadZone({
 
   return (
     <div>
+      {requireTitle && (
+        <div className="mb-3">
+          <label className="mb-1 block text-xs font-medium text-slate-700">
+            Titre du document
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => { setTitle(e.target.value); setError(null); }}
+            placeholder="Ex. Bilan comptable 2025"
+            className="h-[42px] w-full rounded-[10px] border border-slate-200 px-3.5 text-[13px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+          />
+        </div>
+      )}
       <div
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
         className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-16 text-center transition ${
-          isDragging ? "border-blue-600 bg-blue-50" : "border-slate-200 bg-slate-50"
-        }`}
+          titleMissing ? "opacity-50" : ""
+        } ${isDragging ? "border-blue-600 bg-blue-50" : "border-slate-200 bg-slate-50"}`}
       >
         <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${isDragging ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-400"}`}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -129,8 +160,8 @@ export function UploadZone({
         <p className="mt-1 text-xs text-slate-400">PDF, JPG, PNG, WEBP — max {MAX_SIZE_MB} Mo</p>
         <button
           onClick={() => inputRef.current?.click()}
-          disabled={isUploading}
-          className="mt-4 rounded-[8px] border border-slate-200 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+          disabled={isUploading || titleMissing}
+          className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
         >
           Parcourir les fichiers
         </button>

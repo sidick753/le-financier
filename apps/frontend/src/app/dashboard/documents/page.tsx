@@ -109,7 +109,7 @@ export default function DocumentsPage() {
           </div>
         </div>
 
-        {/* Bloc contractuels */}
+        {/* Bloc contractuels
         <div className="mb-5 overflow-hidden rounded-[18px] border border-slate-200 bg-white">
           <div className="border-b border-slate-100 px-5 py-4">
             <p className="text-[13px] font-bold text-slate-900">Documents contractuels</p>
@@ -126,7 +126,7 @@ export default function DocumentsPage() {
               La gestion des contrats et la signature électronique arrivent bientôt.
             </p>
           </div>
-        </div>
+        </div> */}
 
         {/* Bloc upload libre */}
         <div className="overflow-hidden rounded-[18px] border border-slate-200 bg-white">
@@ -140,6 +140,7 @@ export default function DocumentsPage() {
                 organizationId={organization.id}
                 documentType="OTHER"
                 onUploaded={refresh}
+                requireTitle
               />
             ) : (
               <p className="text-[13px] text-slate-400">Organisation non chargée.</p>

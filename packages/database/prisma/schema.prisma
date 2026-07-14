@@ -31,6 +31,7 @@ model User {
   firstName    String
   lastName     String
   phone        String?
+  cniNumber    String?   // Numéro de carte nationale d'identité (rôle INVESTOR)
   role         UserRole
   kycStatus    KycStatus @default(PENDING)
   isActive     Boolean   @default(true)
@@ -51,6 +52,9 @@ model User {
   validatedScoringReports    ScoringReport[]
   watchlist                  Watchlist[]
   repaymentPaymentsConfirmed RepaymentPayment[]
+  settlementValidations      Investment[]          @relation("InvestmentSettlementValidator")
+  fundingRequestsDisbursed   FundingRequest[]       @relation("FundingRequestDisburser")
+  repaymentPaymentsValidated RepaymentPayment[]     @relation("RepaymentPaymentValidator")
 
   @@index([role])
   @@map("users")
@@ -133,6 +137,12 @@ model Organization {
   scalabilite        String?
   moat               String?
   partMarcheRelative String?
+
+  // Informations bancaires (versement des fonds vers la PME)
+  bankName          String?
+  bankAccountHolder String?
+  bankAccountNumber String?
+  bankSwiftCode     String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -271,7 +281,7 @@ enum FundingRequestStatus {
   UNDER_REVIEW
   PUBLISHED
   FUNDED
-  CLOSED
+  CLOSED // 100% financé ET décaissé vers la PME (fonds versés, commission prélevée)
   REJECTED
   CANCELLED
 }
@@ -298,6 +308,13 @@ model FundingRequest {
   // Rempli si le dernier calcul de scoring automatique a échoué (visible admin) ;
   // remis à null dès qu'un calcul aboutit.
   scoringError String?
+
+  // Décaissement — versement des fonds accumulés (validés admin) vers la PME,
+  // déclenché manuellement par un admin une fois le statut FUNDED atteint.
+  disbursedAt     DateTime?
+  disbursedAmount Decimal?  @db.Decimal(14, 2) // = amountRaised - commissions FUNDING_FEE
+  disbursedById   String?
+  disbursedBy     User?     @relation("FundingRequestDisburser", fields: [disbursedById], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -327,7 +344,8 @@ enum InvestmentStatus {
   INTERESTED
   NEGOTIATING
   COMMITTED
-  SETTLED_OFF_PLATFORM
+  SETTLEMENT_SUBMITTED // preuve de virement uploadée, en attente de validation admin
+  SETTLED_OFF_PLATFORM // virement validé par un admin
   CANCELLED
   REJECTED
 }
@@ -357,6 +375,12 @@ model Investment {
 
   settlementProofId String?   @unique
   settledAt         DateTime?
+
+  // Validation admin de la preuve de virement (settlementProofId)
+  settlementValidatedById   String?
+  settlementValidatedBy     User?     @relation("InvestmentSettlementValidator", fields: [settlementValidatedById], references: [id])
+  settlementValidatedAt     DateTime?
+  settlementRejectionReason String?
 
   negotiationOffers  NegotiationOffer[]
   repaymentSchedules RepaymentSchedule[]
@@ -422,6 +446,7 @@ model Document {
   // Stockage : jamais le fichier en base, juste la référence
   storageKey String  // clé/chemin dans le object storage (S3/MinIO)
   fileName   String
+  title      String? // titre donné par l'utilisateur (requis pour les documents de type OTHER)
   mimeType   String
   sizeBytes  Int
 
@@ -649,7 +674,9 @@ enum RepaymentScheduleStatus {
 }
 
 enum RepaymentPaymentStatus {
-  CONFIRMED
+  PENDING_VALIDATION // soumis par la PME, en attente de validation admin
+  CONFIRMED          // validé par un admin (et reversé à l'investisseur, moins commission)
+  REJECTED           // preuve rejetée par un admin
   DISPUTED
 }
 
@@ -696,11 +723,20 @@ model RepaymentPayment {
 
   amountPaid      Decimal                @db.Decimal(14, 2)
   paidAt          DateTime
-  status          RepaymentPaymentStatus @default(CONFIRMED)
+  status          RepaymentPaymentStatus @default(PENDING_VALIDATION)
   proofDocumentId String?
 
+  // Soumis par (PME)
   confirmedById String
   confirmedBy   User   @relation(fields: [confirmedById], references: [id])
+
+  // Validé par (admin) — la validation vaut aussi décaissement net vers l'investisseur
+  // (pas de bundle multi-investisseurs à ce niveau, contrairement au financement)
+  validatedById   String?
+  validatedBy     User?     @relation("RepaymentPaymentValidator", fields: [validatedById], references: [id])
+  validatedAt     DateTime?
+  rejectionReason String?
+  disbursedAt     DateTime?
 
   createdAt DateTime @default(now())
 

@@ -20,7 +20,10 @@ export function useKycStatus() {
   const [isLoading, setIsLoading] = useState(true);
 
   const refresh = useCallback(() => {
-    if (!token || !organization) return;
+    if (!token || !organization) {
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     api
       .get<KycItem[]>(`/documents/organization/${organization.id}/kyc-status`, token)

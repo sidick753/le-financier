@@ -7,10 +7,14 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { RolesGuard } from './guards/roles.guard';
 import { UsersModule } from '../users/users.module';
+import { OrganizationsModule } from '../organizations/organizations.module';
+import { InstitutionsModule } from '../institutions/institutions.module';
 
 @Module({
   imports: [
     UsersModule,
+    OrganizationsModule,
+    InstitutionsModule,
     PassportModule,
     JwtModule.registerAsync({
       useFactory: (config: ConfigService) => ({

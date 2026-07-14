@@ -1,12 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { NotificationsRepository } from './notifications.repository';
 import { NotificationsGateway } from './notifications.gateway';
+import { UsersRepository } from '../users/users.repository';
 
 @Injectable()
 export class NotificationsService {
   constructor(
     private notificationsRepository: NotificationsRepository,
     private notificationsGateway: NotificationsGateway,
+    private usersRepository: UsersRepository,
   ) {}
 
   async notify(userId: string, title: string, body: string) {
@@ -19,6 +21,11 @@ export class NotificationsService {
     this.notificationsGateway.emitToUser(userId, 'notification', notification);
 
     return notification;
+  }
+
+  async notifyAdmins(title: string, body: string) {
+    const adminIds = await this.usersRepository.findAdminIds();
+    await Promise.all(adminIds.map((adminId) => this.notify(adminId, title, body)));
   }
 
   async findMine(userId: string) {

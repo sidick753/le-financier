@@ -4,7 +4,9 @@ import {
   IOrganizationsRepository,
   CreateOrganizationData,
   CreditProfileData,
+  BankInfoData,
 } from './interfaces/organizations-repository.interface';
+import { CreateUserData } from '../users/interfaces/users-repository.interface';
 
 @Injectable()
 export class OrganizationsRepository implements IOrganizationsRepository {
@@ -58,6 +60,25 @@ export class OrganizationsRepository implements IOrganizationsRepository {
       });
 
       return organization;
+    });
+  }
+
+  async registerOwner(userData: Omit<CreateUserData, 'role'>, orgData: CreateOrganizationData) {
+    // Inscription PME_OWNER : User + Organization + OrganizationMember(OWNER) doivent être
+    // créés atomiquement, sinon un compte peut exister sans organisation associée.
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({ data: { ...userData, role: 'PME_OWNER' } });
+      const organization = await tx.organization.create({ data: orgData });
+
+      await tx.organizationMember.create({
+        data: {
+          organizationId: organization.id,
+          userId: user.id,
+          role: 'OWNER',
+        },
+      });
+
+      return { user, organization };
     });
   }
 
@@ -133,6 +154,13 @@ export class OrganizationsRepository implements IOrganizationsRepository {
   }
 
   async updateCreditProfile(id: string, data: CreditProfileData) {
+    return this.prisma.organization.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async updateBankInfo(id: string, data: BankInfoData) {
     return this.prisma.organization.update({
       where: { id },
       data,

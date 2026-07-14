@@ -169,6 +169,9 @@ export class InvestmentsService {
     }).length;
   }
 
+  // Soumission par l'investisseur — dépose une preuve, notifie les admins pour validation.
+  // Ne génère pas encore l'échéancier de remboursement : on ne sait pas encore si le
+  // virement est réel, ça viendra à la validation admin (approveSettlement).
   async settle(investmentId: string, dto: SettleInvestmentDto, investorId: string) {
     const investment = await this.investmentsRepository.findById(investmentId);
     if (!investment) {
@@ -179,7 +182,26 @@ export class InvestmentsService {
       throw new ForbiddenException('Vous ne pouvez confirmer que vos propres engagements.');
     }
 
-    const settled = await this.investmentsRepository.settle(investmentId, dto.settlementProofId);
+    const submitted = await this.investmentsRepository.settle(investmentId, dto.settlementProofId);
+
+    const fundingRequest = await this.fundingRepository.findById(investment.fundingRequestId);
+    await this.notificationsService.notifyAdmins(
+      'Preuve de virement à valider',
+      `Une preuve de virement de ${Number(investment.amountCommitted).toLocaleString('fr-FR')} F CFA a été soumise sur "${fundingRequest?.title ?? 'une demande'}".`,
+    );
+
+    return submitted;
+  }
+
+  // [ADMIN] Valide la preuve : engagement confirmé, échéancier de remboursement généré,
+  // et FundingRequest.amountRaised/status recalculés (voir investments.repository.approveSettlement).
+  async approveSettlement(investmentId: string, adminId: string) {
+    const investment = await this.investmentsRepository.findById(investmentId);
+    if (!investment) {
+      throw new NotFoundException('Engagement introuvable.');
+    }
+
+    const approved = await this.investmentsRepository.approveSettlement(investmentId, adminId);
 
     const fundingRequest = await this.fundingRepository.findById(investment.fundingRequestId) as any;
     if (fundingRequest && investment.lockedReturn && fundingRequest.durationMonths) {
@@ -193,6 +215,31 @@ export class InvestmentsService {
       });
     }
 
-    return settled;
+    await this.notificationsService.notify(
+      investment.investorId,
+      'Virement validé',
+      `Votre virement de ${Number(investment.amountCommitted).toLocaleString('fr-FR')} F CFA sur "${fundingRequest?.title ?? 'une demande'}" a été validé.`,
+    );
+
+    return approved;
+  }
+
+  // [ADMIN] Rejette la preuve : l'investisseur retombe en COMMITTED et doit resoumettre.
+  async rejectSettlement(investmentId: string, adminId: string, reason: string) {
+    const investment = await this.investmentsRepository.findById(investmentId);
+    if (!investment) {
+      throw new NotFoundException('Engagement introuvable.');
+    }
+
+    const rejected = await this.investmentsRepository.rejectSettlement(investmentId, adminId, reason);
+
+    const fundingRequest = await this.fundingRepository.findById(investment.fundingRequestId);
+    await this.notificationsService.notify(
+      investment.investorId,
+      'Preuve de virement rejetée',
+      `Votre preuve de virement sur "${fundingRequest?.title ?? 'une demande'}" a été rejetée : ${reason}`,
+    );
+
+    return rejected;
   }
 }

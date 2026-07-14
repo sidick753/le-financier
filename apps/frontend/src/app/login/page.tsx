@@ -4,6 +4,7 @@ import { useState, FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { getPostAuthRedirectPath } from "@/lib/role-redirect";
 import { Logo } from "@/components/logo";
 
 const TEST_ACCOUNTS = [
@@ -35,15 +36,7 @@ export default function LoginPage() {
     setIsSubmitting(true);
     try {
       const response = await login(email, password);
-      if (response.user.role === "INSTITUTION") {
-        router.push("/institution");
-      } else if (response.user.role === "PME_OWNER" || response.user.role === "PME_MEMBER") {
-        router.push("/dashboard");
-      } else if (response.user.role === "ADMIN" || response.user.role === "SUPER_ADMIN") {
-        router.push("/admin");
-      } else {
-        router.push("/investor");
-      }
+      router.push(getPostAuthRedirectPath(response.user.role));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Connexion impossible.");
     } finally {

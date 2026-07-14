@@ -4,6 +4,27 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { usePmeData } from "@/lib/use-pme-data";
 import { api } from "@/lib/api";
+import { NotifBell } from "@/components/ui/notif-bell";
+
+type Tab = "entreprise" | "bancaire" | "securite";
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: "entreprise", label: "Profil entreprise" },
+  { id: "bancaire", label: "Informations bancaires" },
+  { id: "securite", label: "Sécurité" },
+];
+
+const INPUT_GRAY =
+  "w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-brand-700 focus:outline-none";
+
+function EyeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
 
 const SECTEURS = [
   { value: "services_essentiels", label: "Services essentiels / Santé / Éducation" },
@@ -96,6 +117,10 @@ interface CreditProfile {
   scalabilite: string | null;
   moat: string | null;
   partMarcheRelative: string | null;
+  bankName: string | null;
+  bankAccountHolder: string | null;
+  bankAccountNumber: string | null;
+  bankSwiftCode: string | null;
 }
 
 // Champs 0–1 en base, affichés/saisis en % dans ce formulaire.
@@ -115,6 +140,8 @@ function fromPercentInput(v: string): number | undefined {
 export default function ParametresPage() {
   const { token } = useAuth();
   const { organization, isLoading: orgLoading } = usePmeData();
+
+  const [tab, setTab] = useState<Tab>("entreprise");
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -150,6 +177,22 @@ export default function ParametresPage() {
   const [moat, setMoat] = useState("");
   const [partMarcheRelative, setPartMarcheRelative] = useState("");
 
+  const [bankName, setBankName] = useState("");
+  const [bankAccountHolder, setBankAccountHolder] = useState("");
+  const [bankAccountNumber, setBankAccountNumber] = useState("");
+  const [bankSwiftCode, setBankSwiftCode] = useState("");
+  const [isSavingBankInfo, setIsSavingBankInfo] = useState(false);
+  const [savedBankInfo, setSavedBankInfo] = useState(false);
+  const [bankInfoError, setBankInfoError] = useState<string | null>(null);
+
+  const [motDePasseActuel, setMotDePasseActuel] = useState("");
+  const [nouveauMotDePasse, setNouveauMotDePasse] = useState("");
+  const [confirmerMotDePasse, setConfirmerMotDePasse] = useState("");
+  const [showMotDePasseActuel, setShowMotDePasseActuel] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+
   useEffect(() => {
     if (!token || !organization) return;
     setIsLoading(true);
@@ -181,6 +224,10 @@ export default function ParametresPage() {
         setScalabilite(p.scalabilite ?? "");
         setMoat(p.moat ?? "");
         setPartMarcheRelative(p.partMarcheRelative ?? "");
+        setBankName(p.bankName ?? "");
+        setBankAccountHolder(p.bankAccountHolder ?? organization.legalName);
+        setBankAccountNumber(p.bankAccountNumber ?? "");
+        setBankSwiftCode(p.bankSwiftCode ?? "");
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Erreur de chargement."))
       .finally(() => setIsLoading(false));
@@ -231,6 +278,56 @@ export default function ParametresPage() {
     }
   }
 
+  async function handleSaveBankInfo() {
+    if (!token || !organization) return;
+    setIsSavingBankInfo(true);
+    setSavedBankInfo(false);
+    setBankInfoError(null);
+    try {
+      await api.patch(
+        `/organizations/${organization.id}/bank-info`,
+        {
+          bankName: bankName || undefined,
+          bankAccountHolder: bankAccountHolder || undefined,
+          bankAccountNumber: bankAccountNumber || undefined,
+          bankSwiftCode: bankSwiftCode || undefined,
+        },
+        token,
+      );
+      setSavedBankInfo(true);
+    } catch (err) {
+      setBankInfoError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement.");
+    } finally {
+      setIsSavingBankInfo(false);
+    }
+  }
+
+  async function handleChangePassword() {
+    if (!token) return;
+    setPasswordError(null);
+    setPasswordSuccess(false);
+    if (nouveauMotDePasse !== confirmerMotDePasse) {
+      setPasswordError("Les deux mots de passe ne correspondent pas.");
+      return;
+    }
+    setIsChangingPassword(true);
+    try {
+      await api.patch(
+        "/auth/change-password",
+        { currentPassword: motDePasseActuel, newPassword: nouveauMotDePasse },
+        token,
+      );
+      setMotDePasseActuel("");
+      setNouveauMotDePasse("");
+      setConfirmerMotDePasse("");
+      setPasswordSuccess(true);
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : "Erreur lors du changement de mot de passe.");
+    } finally {
+      setIsChangingPassword(false);
+    }
+  }
+
   if (orgLoading || isLoading) {
     return <div className="p-8 text-sm text-gray-400">Chargement...</div>;
   }
@@ -240,274 +337,409 @@ export default function ParametresPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Profil de mon entreprise</h1>
-        <p className="text-sm text-gray-500">
-          {organization.legalName} — ces informations sont partagées par toutes vos demandes de
-          financement (Prêt MLT et Equity) : vous ne les ressaisissez qu'une seule fois ici.
-        </p>
-      </div>
-
-      {error && (
-        <div className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-      )}
-      {saved && (
-        <div className="mb-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-700">
-          Profil enregistré.
+    <>
+      <header className="sticky top-0 z-10 flex h-[60px] items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
+        <div>
+          <p className="text-[18px] font-bold tracking-tight text-slate-900">Paramètres</p>
+          <p className="text-xs text-slate-500">{organization.legalName}</p>
         </div>
-      )}
+        <NotifBell />
+      </header>
 
-      <div className="space-y-6">
-        {/* Secteur & structure */}
-        <section className="rounded-xl border border-gray-200 bg-white p-6">
-          <h2 className="mb-1 text-sm font-semibold text-gray-900">Secteur & structure</h2>
-          <p className="mb-4 text-xs text-gray-500">Utilisé par le moteur de scoring Prêt MLT.</p>
-
-          <div className="mb-4">
-            <label className="mb-1 block text-sm font-medium text-gray-700">Secteur d'activité principal</label>
-            <select
-              value={secteurCode}
-              onChange={(e) => setSecteurCode(e.target.value)}
-              className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+      <div className="p-8 pb-16">
+        <div className="mb-6 flex gap-6 border-b border-slate-200">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`pb-3 text-[13px] font-medium transition ${
+                tab === t.id
+                  ? "border-b-2 border-blue-600 text-blue-600"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
             >
-              <option value="">Sélectionner</option>
-              {SECTEURS.map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex flex-wrap gap-4">
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={secteurSaisonnalite} onChange={(e) => setSecteurSaisonnalite(e.target.checked)} />
-              Activité saisonnière
-            </label>
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={secteurImportDevises} onChange={(e) => setSecteurImportDevises(e.target.checked)} />
-              Import en devises
-            </label>
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={secteurSoutienPublic} onChange={(e) => setSecteurSoutienPublic(e.target.checked)} />
-              Soutien public au secteur
-            </label>
-          </div>
-        </section>
-
-        {/* Santé financière */}
-        <section className="rounded-xl border border-gray-200 bg-white p-6">
-          <h2 className="mb-1 text-sm font-semibold text-gray-900">Santé financière</h2>
-          <p className="mb-4 text-xs text-gray-500">Utilisé par les moteurs Prêt MLT et Equity.</p>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Cash-flow annuel (FCFA)</label>
-              <input type="number" placeholder="Ex : 8 000 000" value={cashFlowAnnuel} onChange={(e) => setCashFlowAnnuel(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
-              <p className="mt-1 text-xs text-gray-400">D'après vos états financiers, si disponibles.</p>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Flux Mobile Money mensuel (FCFA)</label>
-              <input type="number" placeholder="Ex : 900 000" value={fluxMobileMoneyMensuel} onChange={(e) => setFluxMobileMoneyMensuel(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
-              <p className="mt-1 text-xs text-gray-400">À défaut de bilan formel — moyenne des 6 derniers mois.</p>
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Autonomie financière (%)</label>
-              <input type="number" step="0.1" placeholder="Ex : 35" value={autonomieFinanciere} onChange={(e) => setAutonomieFinanciere(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
-              <p className="mt-1 text-xs text-gray-400">Fonds propres ÷ total du bilan.</p>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Taux d'endettement (%)</label>
-              <input type="number" step="0.1" placeholder="Ex : 40" value={tauxEndettement} onChange={(e) => setTauxEndettement(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
-              <p className="mt-1 text-xs text-gray-400">À défaut de connaître votre autonomie financière.</p>
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Ratio de liquidité</label>
-              <input type="number" step="0.01" placeholder="Ex : 1.2" value={ratioLiquidite ? String(Number(ratioLiquidite) / 100) : ""}
-                onChange={(e) => setRatioLiquidite(e.target.value ? String(Number(e.target.value) * 100) : "")}
-                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
-              <p className="mt-1 text-xs text-gray-400">Actifs court terme ÷ passifs court terme.</p>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Nombre de clients actifs</label>
-              <input type="number" placeholder="Ex : 12" value={nbClientsActifs} onChange={(e) => setNbClientsActifs(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-3 gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">TCAM CA sur 3 ans (%)</label>
-              <input type="number" step="0.1" placeholder="Ex : 30" value={tcamCa3ans} onChange={(e) => setTcamCa3ans(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
-              <p className="mt-1 text-xs text-gray-400">Equity — taux de croissance annuel moyen.</p>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Marge brute (%)</label>
-              <input type="number" step="0.1" placeholder="Ex : 40" value={margeBrute} onChange={(e) => setMargeBrute(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Runway (mois)</label>
-              <input type="number" placeholder="Ex : 12" value={runwayMois} onChange={(e) => setRunwayMois(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
-              <p className="mt-1 text-xs text-gray-400">Mois de trésorerie sans nouveau financement.</p>
-            </div>
-          </div>
-        </section>
-
-        {/* Profil du dirigeant */}
-        <section className="rounded-xl border border-gray-200 bg-white p-6">
-          <h2 className="mb-1 text-sm font-semibold text-gray-900">Profil du dirigeant</h2>
-          <p className="mb-4 text-xs text-gray-500">Utilisé par les moteurs Prêt MLT et Equity.</p>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Expérience du dirigeant (années)</label>
-              <input type="number" placeholder="Ex : 7" value={dirigeantExperienceAns} onChange={(e) => setDirigeantExperienceAns(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Incidents légaux connus</label>
-              <select value={dirigeantIncidentsLegaux} onChange={(e) => setDirigeantIncidentsLegaux(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                <option value="aucun">Aucun</option>
-                <option value="connu">Incident(s) connu(s)</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Expérience sectorielle (années)</label>
-              <input type="number" placeholder="Ex : 10" value={experienceSecteurAns} onChange={(e) => setExperienceSecteurAns(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
-              <p className="mt-1 text-xs text-gray-400">Equity — expérience du dirigeant dans ce secteur.</p>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Track record du dirigeant</label>
-              <select value={trackRecord} onChange={(e) => setTrackRecord(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                <option value="">Sélectionner</option>
-                {TRACK_RECORD.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <label className="mb-1 block text-sm font-medium text-gray-700">Antécédents du dirigeant</label>
-            <input type="text" placeholder="Notes libres sur le parcours du dirigeant" value={dirigeantAntecedents} onChange={(e) => setDirigeantAntecedents(e.target.value)}
-              className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
-          </div>
-        </section>
-
-        {/* Équipe, gouvernance & marché — Equity */}
-        <section className="rounded-xl border border-gray-200 bg-white p-6">
-          <h2 className="mb-1 text-sm font-semibold text-gray-900">Équipe, gouvernance & marché</h2>
-          <p className="mb-4 text-xs text-gray-500">Utilisé par le moteur de scoring Equity.</p>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Taille du marché</label>
-              <select value={tailleMarche} onChange={(e) => setTailleMarche(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                <option value="">Sélectionner</option>
-                {TAILLE_MARCHE.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Scalabilité</label>
-              <select value={scalabilite} onChange={(e) => setScalabilite(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                <option value="">Sélectionner</option>
-                {SCALABILITE.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Avantage concurrentiel (moat)</label>
-              <select value={moat} onChange={(e) => setMoat(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                <option value="">Sélectionner</option>
-                {MOAT.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Position sur le marché</label>
-              <select value={partMarcheRelative} onChange={(e) => setPartMarcheRelative(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                <option value="">Sélectionner</option>
-                {PART_MARCHE.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Complétude de l'équipe</label>
-              <select value={completudeEquipe} onChange={(e) => setCompletudeEquipe(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                <option value="">Sélectionner</option>
-                {COMPLETUDE_EQUIPE.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Droits investisseurs</label>
-              <select value={droitsInvestisseur} onChange={(e) => setDroitsInvestisseur(e.target.value)}
-                className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                <option value="">Sélectionner</option>
-                {DROITS_INVESTISSEUR.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <label className="mb-1 block text-sm font-medium text-gray-700">Transparence financière</label>
-            <select value={transparence} onChange={(e) => setTransparence(e.target.value)}
-              className="w-full max-w-xs rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-              <option value="">Sélectionner</option>
-              {TRANSPARENCE.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
-        </section>
-
-        <div className="flex justify-end">
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="rounded-md bg-brand-700 px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-50"
-          >
-            {isSaving ? "Enregistrement…" : "Enregistrer les modifications"}
-          </button>
+              {t.label}
+            </button>
+          ))}
         </div>
+
+        {tab === "entreprise" && (
+          <div>
+            <div className="mb-6">
+              <p className="text-sm text-gray-500">
+                Ces informations sont partagées par toutes vos demandes de financement (Prêt MLT et
+                Equity) : vous ne les ressaisissez qu'une seule fois ici.
+              </p>
+            </div>
+
+            {error && (
+              <div className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+            )}
+            {saved && (
+              <div className="mb-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-700">
+                Profil enregistré.
+              </div>
+            )}
+
+            <div className="space-y-6">
+              {/* Secteur & structure */}
+              <section className="rounded-xl border border-gray-200 bg-white p-6">
+                <h2 className="mb-1 text-sm font-semibold text-gray-900">Secteur & structure</h2>
+                <p className="mb-4 text-xs text-gray-500">Utilisé par le moteur de scoring Prêt MLT.</p>
+
+                <div className="mb-4">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Secteur d'activité principal</label>
+                  <select
+                    value={secteurCode}
+                    onChange={(e) => setSecteurCode(e.target.value)}
+                    className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                  >
+                    <option value="">Sélectionner</option>
+                    {SECTEURS.map((s) => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" checked={secteurSaisonnalite} onChange={(e) => setSecteurSaisonnalite(e.target.checked)} />
+                    Activité saisonnière
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" checked={secteurImportDevises} onChange={(e) => setSecteurImportDevises(e.target.checked)} />
+                    Import en devises
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" checked={secteurSoutienPublic} onChange={(e) => setSecteurSoutienPublic(e.target.checked)} />
+                    Soutien public au secteur
+                  </label>
+                </div>
+              </section>
+
+              {/* Santé financière */}
+              <section className="rounded-xl border border-gray-200 bg-white p-6">
+                <h2 className="mb-1 text-sm font-semibold text-gray-900">Santé financière</h2>
+                <p className="mb-4 text-xs text-gray-500">Utilisé par les moteurs Prêt MLT et Equity.</p>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Cash-flow annuel (FCFA)</label>
+                    <input type="number" placeholder="Ex : 8 000 000" value={cashFlowAnnuel} onChange={(e) => setCashFlowAnnuel(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                    <p className="mt-1 text-xs text-gray-400">D'après vos états financiers, si disponibles.</p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Flux Mobile Money mensuel (FCFA)</label>
+                    <input type="number" placeholder="Ex : 900 000" value={fluxMobileMoneyMensuel} onChange={(e) => setFluxMobileMoneyMensuel(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                    <p className="mt-1 text-xs text-gray-400">À défaut de bilan formel — moyenne des 6 derniers mois.</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Autonomie financière (%)</label>
+                    <input type="number" step="0.1" placeholder="Ex : 35" value={autonomieFinanciere} onChange={(e) => setAutonomieFinanciere(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                    <p className="mt-1 text-xs text-gray-400">Fonds propres ÷ total du bilan.</p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Taux d'endettement (%)</label>
+                    <input type="number" step="0.1" placeholder="Ex : 40" value={tauxEndettement} onChange={(e) => setTauxEndettement(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                    <p className="mt-1 text-xs text-gray-400">À défaut de connaître votre autonomie financière.</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Ratio de liquidité</label>
+                    <input type="number" step="0.01" placeholder="Ex : 1.2" value={ratioLiquidite ? String(Number(ratioLiquidite) / 100) : ""}
+                      onChange={(e) => setRatioLiquidite(e.target.value ? String(Number(e.target.value) * 100) : "")}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                    <p className="mt-1 text-xs text-gray-400">Actifs court terme ÷ passifs court terme.</p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Nombre de clients actifs</label>
+                    <input type="number" placeholder="Ex : 12" value={nbClientsActifs} onChange={(e) => setNbClientsActifs(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">TCAM CA sur 3 ans (%)</label>
+                    <input type="number" step="0.1" placeholder="Ex : 30" value={tcamCa3ans} onChange={(e) => setTcamCa3ans(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                    <p className="mt-1 text-xs text-gray-400">Equity — taux de croissance annuel moyen.</p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Marge brute (%)</label>
+                    <input type="number" step="0.1" placeholder="Ex : 40" value={margeBrute} onChange={(e) => setMargeBrute(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Runway (mois)</label>
+                    <input type="number" placeholder="Ex : 12" value={runwayMois} onChange={(e) => setRunwayMois(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                    <p className="mt-1 text-xs text-gray-400">Mois de trésorerie sans nouveau financement.</p>
+                  </div>
+                </div>
+              </section>
+
+              {/* Profil du dirigeant */}
+              <section className="rounded-xl border border-gray-200 bg-white p-6">
+                <h2 className="mb-1 text-sm font-semibold text-gray-900">Profil du dirigeant</h2>
+                <p className="mb-4 text-xs text-gray-500">Utilisé par les moteurs Prêt MLT et Equity.</p>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Expérience du dirigeant (années)</label>
+                    <input type="number" placeholder="Ex : 7" value={dirigeantExperienceAns} onChange={(e) => setDirigeantExperienceAns(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Incidents légaux connus</label>
+                    <select value={dirigeantIncidentsLegaux} onChange={(e) => setDirigeantIncidentsLegaux(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
+                      <option value="aucun">Aucun</option>
+                      <option value="connu">Incident(s) connu(s)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Expérience sectorielle (années)</label>
+                    <input type="number" placeholder="Ex : 10" value={experienceSecteurAns} onChange={(e) => setExperienceSecteurAns(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                    <p className="mt-1 text-xs text-gray-400">Equity — expérience du dirigeant dans ce secteur.</p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Track record du dirigeant</label>
+                    <select value={trackRecord} onChange={(e) => setTrackRecord(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
+                      <option value="">Sélectionner</option>
+                      {TRACK_RECORD.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Antécédents du dirigeant</label>
+                  <input type="text" placeholder="Notes libres sur le parcours du dirigeant" value={dirigeantAntecedents} onChange={(e) => setDirigeantAntecedents(e.target.value)}
+                    className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                </div>
+              </section>
+
+              {/* Équipe, gouvernance & marché — Equity */}
+              <section className="rounded-xl border border-gray-200 bg-white p-6">
+                <h2 className="mb-1 text-sm font-semibold text-gray-900">Équipe, gouvernance & marché</h2>
+                <p className="mb-4 text-xs text-gray-500">Utilisé par le moteur de scoring Equity.</p>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Taille du marché</label>
+                    <select value={tailleMarche} onChange={(e) => setTailleMarche(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
+                      <option value="">Sélectionner</option>
+                      {TAILLE_MARCHE.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Scalabilité</label>
+                    <select value={scalabilite} onChange={(e) => setScalabilite(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
+                      <option value="">Sélectionner</option>
+                      {SCALABILITE.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Avantage concurrentiel (moat)</label>
+                    <select value={moat} onChange={(e) => setMoat(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
+                      <option value="">Sélectionner</option>
+                      {MOAT.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Position sur le marché</label>
+                    <select value={partMarcheRelative} onChange={(e) => setPartMarcheRelative(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
+                      <option value="">Sélectionner</option>
+                      {PART_MARCHE.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Complétude de l'équipe</label>
+                    <select value={completudeEquipe} onChange={(e) => setCompletudeEquipe(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
+                      <option value="">Sélectionner</option>
+                      {COMPLETUDE_EQUIPE.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Droits investisseurs</label>
+                    <select value={droitsInvestisseur} onChange={(e) => setDroitsInvestisseur(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
+                      <option value="">Sélectionner</option>
+                      {DROITS_INVESTISSEUR.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Transparence financière</label>
+                  <select value={transparence} onChange={(e) => setTransparence(e.target.value)}
+                    className="w-full max-w-xs rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
+                    <option value="">Sélectionner</option>
+                    {TRANSPARENCE.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </section>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="rounded-md bg-brand-700 px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-50"
+                >
+                  {isSaving ? "Enregistrement…" : "Enregistrer les modifications"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab === "bancaire" && (
+          <div className="max-w-2xl">
+            <p className="mb-4 text-sm text-gray-500">
+              Ces coordonnées sont utilisées pour vous verser les fonds levés (prêts et equity), une
+              fois la commission de la plateforme déduite.
+            </p>
+
+            {bankInfoError && (
+              <div className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{bankInfoError}</div>
+            )}
+            {savedBankInfo && (
+              <div className="mb-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-700">
+                Informations bancaires enregistrées.
+              </div>
+            )}
+
+            <section className="rounded-xl border border-gray-200 bg-white p-6">
+              <h2 className="mb-4 text-sm font-semibold text-gray-900">Coordonnées bancaires</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Nom de la banque</label>
+                  <input type="text" placeholder="Ex : Ecobank Côte d'Ivoire" value={bankName}
+                    onChange={(e) => setBankName(e.target.value)} className={INPUT_GRAY} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Titulaire du compte</label>
+                  <input type="text" placeholder={organization.legalName} value={bankAccountHolder}
+                    onChange={(e) => setBankAccountHolder(e.target.value)} className={INPUT_GRAY} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Numéro de compte / IBAN</label>
+                  <input type="text" placeholder="Ex : CI93 CI135 01023 00456789012 34" value={bankAccountNumber}
+                    onChange={(e) => setBankAccountNumber(e.target.value)} className={INPUT_GRAY} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Code SWIFT / BIC (optionnel)</label>
+                  <input type="text" placeholder="Ex : ECOCCIAB" value={bankSwiftCode}
+                    onChange={(e) => setBankSwiftCode(e.target.value)} className={INPUT_GRAY} />
+                </div>
+                <button
+                  onClick={handleSaveBankInfo}
+                  disabled={isSavingBankInfo}
+                  className="rounded-md bg-brand-700 px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-50"
+                >
+                  {isSavingBankInfo ? "Enregistrement…" : "Enregistrer les modifications"}
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {tab === "securite" && (
+          <div className="max-w-2xl">
+            <section className="rounded-xl border border-gray-200 bg-white p-6">
+              <p className="mb-4 text-sm font-semibold text-gray-900">Changement de mot de passe</p>
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-700">Mot de passe actuel</label>
+                  <div className="relative">
+                    <input
+                      type={showMotDePasseActuel ? "text" : "password"}
+                      value={motDePasseActuel}
+                      onChange={(e) => setMotDePasseActuel(e.target.value)}
+                      className={`${INPUT_GRAY} pr-10`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowMotDePasseActuel((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <EyeIcon />
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-700">Nouveau mot de passe</label>
+                  <input
+                    type="password"
+                    value={nouveauMotDePasse}
+                    onChange={(e) => setNouveauMotDePasse(e.target.value)}
+                    className={INPUT_GRAY}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-700">Confirmer le nouveau mot de passe</label>
+                  <input
+                    type="password"
+                    value={confirmerMotDePasse}
+                    onChange={(e) => setConfirmerMotDePasse(e.target.value)}
+                    className={INPUT_GRAY}
+                  />
+                </div>
+                {passwordError && <p className="text-xs text-red-600">{passwordError}</p>}
+                {passwordSuccess && <p className="text-xs text-green-600">✓ Mot de passe mis à jour.</p>}
+                <button
+                  onClick={handleChangePassword}
+                  disabled={isChangingPassword}
+                  className="rounded-md bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-50"
+                >
+                  {isChangingPassword ? "Modification…" : "Changer le mot de passe"}
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
       </div>
-    </div>
+    </>
   );
 }

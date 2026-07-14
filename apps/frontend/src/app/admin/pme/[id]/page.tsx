@@ -28,6 +28,10 @@ interface OrganizationDetail {
   verificationStatus: string;
   rejectionReason: string | null;
   createdAt: string;
+  bankName: string | null;
+  bankAccountHolder: string | null;
+  bankAccountNumber: string | null;
+  bankSwiftCode: string | null;
   members: Array<{
     id: string;
     role: string;
@@ -46,6 +50,7 @@ interface OrganizationDetail {
     id: string;
     type: string;
     fileName: string;
+    title: string | null;
     sizeBytes: number;
     status: string;
     createdAt: string;
@@ -207,6 +212,31 @@ export default function AdminPmeDetailPage() {
         <InfoCard label="Adresse" value={org.address ?? "—"} />
       </div>
 
+      {/* Coordonnées bancaires — utilisées pour le versement des fonds levés */}
+      <div className="mb-6 rounded-xl border border-gray-200 bg-white">
+        <div className="border-b border-gray-100 p-5">
+          <p className="text-sm font-semibold text-gray-900">Coordonnées bancaires</p>
+        </div>
+        <div className="grid grid-cols-4 gap-4 p-5">
+          <div>
+            <p className="text-xs text-gray-500">Banque</p>
+            <p className="mt-1 text-sm font-medium text-gray-900">{org.bankName ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Titulaire du compte</p>
+            <p className="mt-1 text-sm font-medium text-gray-900">{org.bankAccountHolder ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Numéro de compte / IBAN</p>
+            <p className="mt-1 text-sm font-medium text-gray-900">{org.bankAccountNumber ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Code SWIFT / BIC</p>
+            <p className="mt-1 text-sm font-medium text-gray-900">{org.bankSwiftCode ?? "—"}</p>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-4 items-start">
         {/* Membres */}
         <div className="rounded-xl border border-gray-200 bg-white">
@@ -247,9 +277,9 @@ export default function AdminPmeDetailPage() {
               return (
                 <div key={doc.id} className="flex items-center justify-between p-4">
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{doc.fileName}</p>
+                    <p className="text-sm font-medium text-gray-900">{doc.title ?? doc.fileName}</p>
                     <p className="text-xs text-gray-500">
-                      {doc.type} · {formatFileSize(doc.sizeBytes)}
+                      {doc.title && `${doc.fileName} · `}{doc.type} · {formatFileSize(doc.sizeBytes)}
                     </p>
                   </div>
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${docConfig.className}`}>

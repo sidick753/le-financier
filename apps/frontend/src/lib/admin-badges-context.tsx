@@ -10,6 +10,7 @@ export interface SidebarBadges {
   opportunites: number;
   partenaires: number;
   scoring: number;
+  remboursements: number;
 }
 
 const EMPTY_BADGES: SidebarBadges = {
@@ -18,6 +19,7 @@ const EMPTY_BADGES: SidebarBadges = {
   opportunites: 0,
   partenaires: 0,
   scoring: 0,
+  remboursements: 0,
 };
 
 interface AdminBadgesContextValue {
@@ -39,14 +41,16 @@ export function AdminBadgesProvider({ children }: { children: ReactNode }) {
       api.get<{ underReview: number }>("/funding-requests/admin/stats", token),
       api.get<{ pending: number }>("/institutions/admin/stats", token),
       api.get<{ count: number }>("/scoring/pending-count", token),
+      api.get<unknown[]>("/repayments/admin/pending", token),
     ])
-      .then(([pme, investisseurs, opportunites, partenaires, scoring]) => {
+      .then(([pme, investisseurs, opportunites, partenaires, scoring, pendingPayments]) => {
         setBadges({
           pme: pme.pending,
           investisseurs: investisseurs.pendingKyc,
           opportunites: opportunites.underReview,
           partenaires: partenaires.pending,
           scoring: scoring.count,
+          remboursements: pendingPayments.length,
         });
       })
       .catch(() => {});

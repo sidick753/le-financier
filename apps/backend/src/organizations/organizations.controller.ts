@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery }
 import { OrganizationsService } from './organizations.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateCreditProfileDto } from './dto/update-credit-profile.dto';
+import { UpdateBankInfoDto } from './dto/update-bank-info.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -56,6 +57,23 @@ export class OrganizationsController {
     @Request() req,
   ) {
     return this.organizationsService.updateCreditProfile(id, req.user.id, dto);
+  }
+
+  @ApiOperation({
+    summary: 'Mettre à jour les informations bancaires',
+    description: 'Coordonnées bancaires utilisées pour le versement des fonds levés (prêts et equity), une fois la commission plateforme déduite. Accessible uniquement aux membres.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID de l\'organisation' })
+  @ApiResponse({ status: 200, description: 'Informations bancaires mises à jour' })
+  @ApiResponse({ status: 403, description: 'Non membre' })
+  @ApiResponse({ status: 404, description: 'Organisation introuvable' })
+  @Patch(':id/bank-info')
+  updateBankInfo(
+    @Param('id') id: string,
+    @Body() dto: UpdateBankInfoDto,
+    @Request() req,
+  ) {
+    return this.organizationsService.updateBankInfo(id, req.user.id, dto);
   }
 
   @ApiOperation({ summary: '[Admin] Stats PME', description: 'Retourne les compteurs globaux : total, vérifiées, en attente, rejetées, montant total financé.' })

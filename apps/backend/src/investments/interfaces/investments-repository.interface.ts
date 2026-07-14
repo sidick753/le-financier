@@ -11,4 +11,6 @@ export interface IInvestmentsRepository {
   findByFundingRequestAndInvestor(fundingRequestId: string, investorId: string): Promise<any>;
   findAllForOrganization(organizationId: string): Promise<any[]>;
   settle(investmentId: string, settlementProofId: string): Promise<Investment>;
+  approveSettlement(investmentId: string, adminId: string): Promise<Investment>;
+  rejectSettlement(investmentId: string, adminId: string, reason: string): Promise<Investment>;
 }

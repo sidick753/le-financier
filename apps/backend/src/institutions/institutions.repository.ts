@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaClient, Prisma } from '@le-financier/database';
+import { CreateUserData } from '../users/interfaces/users-repository.interface';
 
 const ACTIVE_INVESTMENT_STATUSES = ['NEGOTIATING', 'COMMITTED', 'SETTLED_OFF_PLATFORM'] as const;
 // "Volume engagé" affiché aux admins ne compte que le capital réellement engagé,
@@ -23,6 +24,25 @@ export class InstitutionsRepository {
       return tx.institutionMember.create({
         data: { userId, institutionId: institution.id, role: 'OWNER' },
       });
+    });
+  }
+
+  async registerOwner(
+    userData: Omit<CreateUserData, 'role'>,
+    instData: { name: string; bceaoApprovalNumber?: string; country?: string },
+  ) {
+    // Inscription INSTITUTION : User + Institution + InstitutionMember(OWNER) créés
+    // atomiquement, avec le nom saisi à l'inscription (plutôt que le nom générique
+    // utilisé par l'auto-provisionnement paresseux de provisionInstitution()).
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({ data: { ...userData, role: 'INSTITUTION' } });
+      const institution = await tx.institution.create({ data: instData });
+
+      await tx.institutionMember.create({
+        data: { userId: user.id, institutionId: institution.id, role: 'OWNER' },
+      });
+
+      return { user, institution };
     });
   }
 

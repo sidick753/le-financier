@@ -3,6 +3,7 @@ import { PrismaClient, Prisma } from '@le-financier/database';
 import {
   IFundingRepository,
   CreateFundingRequestData,
+  UpdateFundingRequestData,
   FundingAdminFilters,
 } from './interfaces/funding-repository.interface';
 import { ALL_SCORING_FIELDS } from '../scoring/scoring-fields';
@@ -32,6 +33,12 @@ export class FundingRepository implements IFundingRepository {
         organization: true,
         documents: true,
         scoringReports: { orderBy: { createdAt: 'desc' }, take: 1 },
+        investments: {
+          include: {
+            investor: { select: { id: true, firstName: true, lastName: true, email: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
   }
@@ -112,6 +119,59 @@ export class FundingRepository implements IFundingRepository {
         status,
         rejectionReason: status === 'REJECTED' ? rejectionReason : null,
       },
+    });
+  }
+
+  async update(id: string, data: UpdateFundingRequestData) {
+    return this.prisma.fundingRequest.update({
+      where: { id },
+      data: {
+        title: data.title,
+        description: data.description,
+        category: data.category as any,
+        amountRequested: data.amountRequested,
+        expectedReturn: data.expectedReturn,
+        durationMonths: data.durationMonths,
+      },
+    });
+  }
+
+  async delete(id: string) {
+    return this.prisma.fundingRequest.delete({ where: { id } });
+  }
+
+  // [ADMIN] Décaisse les fonds accumulés (validés admin) vers la PME, en retirant
+  // la commission de financement due sur ce dossier (FUNDED → CLOSED).
+  // La garde de statut (doit être FUNDED) est faite en amont par le service.
+  async disburse(id: string, adminId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const fundingRequest = await tx.fundingRequest.findUniqueOrThrow({ where: { id } });
+
+      const pendingCommissions = await tx.commission.findMany({
+        where: { fundingRequestId: id, type: 'FUNDING_FEE', status: 'PENDING' },
+      });
+      const totalCommission = pendingCommissions.reduce(
+        (sum, c) => sum + Number(c.commissionAmount),
+        0,
+      );
+      const disbursedAmount = Number(fundingRequest.amountRaised) - totalCommission;
+
+      if (pendingCommissions.length > 0) {
+        await tx.commission.updateMany({
+          where: { id: { in: pendingCommissions.map((c) => c.id) } },
+          data: { status: 'COLLECTED' },
+        });
+      }
+
+      return tx.fundingRequest.update({
+        where: { id },
+        data: {
+          status: 'CLOSED',
+          disbursedAt: new Date(),
+          disbursedAmount,
+          disbursedById: adminId,
+        },
+      });
     });
   }
 

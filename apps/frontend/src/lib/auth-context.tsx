@@ -33,6 +33,11 @@ interface RegisterData {
   firstName: string;
   lastName: string;
   phone?: string;
+  companyName?: string;
+  registrationNumber?: string;
+  cniNumber?: string;
+  institutionName?: string;
+  bceaoNumber?: string;
 }
 
 interface AuthContextValue {

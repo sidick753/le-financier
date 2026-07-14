@@ -4,6 +4,7 @@ export interface CreateDocumentData {
   type: Document['type'];
   storageKey: string;
   fileName: string;
+  title?: string;
   mimeType: string;
   sizeBytes: number;
   uploadedById: string;
@@ -18,4 +19,5 @@ export interface IDocumentsRepository {
   findAllByOrganizationId(organizationId: string): Promise<Document[]>;
   findAllByFundingRequestId(fundingRequestId: string): Promise<Document[]>;
   updateStatus(id: string, status: Document['status']): Promise<Document>;
+  delete(id: string): Promise<Document>;
 }

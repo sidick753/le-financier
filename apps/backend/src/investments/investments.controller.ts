@@ -5,6 +5,9 @@ import { CreateInvestmentDto } from './dto/create-investment.dto';
 import { CounterOfferDto } from './dto/counter-offer.dto';
 import { SettleInvestmentDto } from './dto/settle-investment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RejectionReasonDto } from '../common/dto/rejection-reason.dto';
 
 @ApiTags('Investments')
 @ApiBearerAuth('jwt')
@@ -96,17 +99,49 @@ export class InvestmentsController {
   }
 
   @ApiOperation({
-    summary: 'Confirmer un engagement (COMMITTED → SETTLED_OFF_PLATFORM)',
-    description: `L'investisseur confirme le virement hors plateforme en fournissant l'ID du document de preuve (\`settlementProofId\`).
+    summary: 'Soumettre une preuve de virement (COMMITTED → SETTLEMENT_SUBMITTED)',
+    description: `L'investisseur a viré les fonds sur le compte de la plateforme et soumet son justificatif en fournissant l'ID du document de preuve (\`settlementProofId\`).
 - Le document doit avoir été uploadé au préalable via \`POST /documents/upload\` (type: SETTLEMENT_PROOF).
-- Si la somme des engagements confirmés atteint \`amountRequested\`, la demande passe automatiquement en **FUNDED**.`,
+- L'engagement passe en **SETTLEMENT_SUBMITTED** et attend la validation d'un admin (\`PATCH :id/settlement/approve\` ou \`/reject\`).
+- Tant que ce n'est pas validé, ni \`amountRaised\` ni le statut de la demande ne bougent.`,
   })
   @ApiParam({ name: 'id', description: 'UUID de l\'engagement' })
-  @ApiResponse({ status: 200, description: 'Engagement confirmé. La demande peut passer en FUNDED si 100% atteint.' })
+  @ApiResponse({ status: 200, description: 'Preuve soumise, en attente de validation admin.' })
   @ApiResponse({ status: 403, description: 'Vous ne pouvez confirmer que vos propres engagements' })
   @ApiResponse({ status: 409, description: 'L\'engagement n\'est pas en statut COMMITTED' })
   @Patch(':id/settle')
   settle(@Param('id') id: string, @Body() dto: SettleInvestmentDto, @Request() req) {
     return this.investmentsService.settle(id, dto, req.user.id);
+  }
+
+  @ApiOperation({
+    summary: '[ADMIN] Valider la preuve de virement (SETTLEMENT_SUBMITTED → SETTLED_OFF_PLATFORM)',
+    description: `Valide le justificatif de virement soumis par l'investisseur.
+- Génère l'échéancier de remboursement.
+- Recalcule \`amountRaised\` de la demande à partir des seuls virements validés.
+- Si 100% est atteint, la demande passe automatiquement en **FUNDED** (le décaissement vers la PME reste une action admin séparée, voir \`PATCH /funding-requests/:id/disburse\`).`,
+  })
+  @ApiParam({ name: 'id', description: 'UUID de l\'engagement' })
+  @ApiResponse({ status: 200, description: 'Virement validé.' })
+  @ApiResponse({ status: 409, description: 'Aucune preuve en attente de validation' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Patch(':id/settlement/approve')
+  approveSettlement(@Param('id') id: string, @Request() req) {
+    return this.investmentsService.approveSettlement(id, req.user.id);
+  }
+
+  @ApiOperation({
+    summary: '[ADMIN] Rejeter la preuve de virement (SETTLEMENT_SUBMITTED → COMMITTED)',
+    description: 'Rejette le justificatif soumis. L\'investisseur retombe en COMMITTED et doit soumettre une nouvelle preuve.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID de l\'engagement' })
+  @ApiResponse({ status: 200, description: 'Preuve rejetée.' })
+  @ApiResponse({ status: 409, description: 'Aucune preuve en attente de validation' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Patch(':id/settlement/reject')
+  rejectSettlement(@Param('id') id: string, @Body() dto: RejectionReasonDto, @Request() req) {
+    return this.investmentsService.rejectSettlement(id, req.user.id, dto.reason);
   }
 }

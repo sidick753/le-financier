@@ -35,4 +35,9 @@ export class CreateDocumentDto {
   @IsOptional()
   @IsString()
   kycRequirementKey?: string;
+
+  @ApiProperty({ example: 'Bilan comptable 2025', required: false, description: 'Titre donné au document (requis pour le type OTHER)' })
+  @IsOptional()
+  @IsString()
+  title?: string;
 }
