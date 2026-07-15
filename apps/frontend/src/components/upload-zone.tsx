@@ -4,7 +4,7 @@ import { useState, useRef, DragEvent, ChangeEvent } from "react";
 import { useAuth } from "@/lib/auth-context";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4201";
-const MAX_SIZE_MB = 10;
+const MAX_SIZE_MB = 50;
 const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
 
 interface UploadZoneProps {

@@ -379,6 +379,11 @@ model Investment {
   lockedReturn    Decimal?          @db.Decimal(5, 2)
   status          InvestmentStatus  @default(INTERESTED)
 
+  // Conditions particulières fixées par l'investisseur à la création de l'offre
+  // (garanties demandées, clauses, calendrier...) — non renégociables via les
+  // NegotiationOffer, qui ne portent que sur le taux.
+  conditions String? @db.Text
+
   settlementProofId String?   @unique
   settledAt         DateTime?
 

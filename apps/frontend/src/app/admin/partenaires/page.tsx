@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { KYC_STATUS_CONFIG, formatAdminDate, formatCompactAmount } from "@/lib/admin-ui";
+import { useSortableRows } from "@/lib/use-sortable-rows";
+import { SortableTh } from "@/components/ui/sortable-th";
 
 const FILTERS = ["Tous", "Vérifié", "En attente", "Suspendu"] as const;
 const FILTER_TO_STATUS: Record<string, string | undefined> = {
@@ -119,6 +121,18 @@ function AdminPartenairesPageContent() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  const { sortedRows: sortedInstitutions, sortKey, direction, toggleSort } = useSortableRows(
+    institutions,
+    {
+      name: (i) => i.name,
+      approval: (i) => i.bceaoApprovalNumber,
+      status: (i) => i.owner?.kycStatus ?? "",
+      members: (i) => i.memberCount,
+      engaged: (i) => i.totalEngaged,
+      createdAt: (i) => i.createdAt,
+    },
+  );
+
   return (
     <div className="p-8">
       <div className="mb-6">
@@ -181,17 +195,17 @@ function AdminPartenairesPageContent() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500">
-                  <th className="px-5 py-3 text-left font-medium">Institution</th>
-                  <th className="px-5 py-3 text-left font-medium">Agrément BCEAO</th>
-                  <th className="px-5 py-3 text-left font-medium">Statut</th>
-                  <th className="px-5 py-3 text-left font-medium">Membres</th>
-                  <th className="px-5 py-3 text-right font-medium">Volume engagé</th>
-                  <th className="px-5 py-3 text-left font-medium">Inscrit le</th>
+                  <SortableTh label="Institution" sortKey="name" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Agrément BCEAO" sortKey="approval" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Statut" sortKey="status" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Membres" sortKey="members" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Volume engagé" sortKey="engaged" currentKey={sortKey} direction={direction} onSort={toggleSort} align="right" />
+                  <SortableTh label="Inscrit le" sortKey="createdAt" currentKey={sortKey} direction={direction} onSort={toggleSort} />
                   <th className="px-5 py-3 text-left font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {institutions.map((inst) => {
+                {sortedInstitutions.map((inst) => {
                   const kycConfig = inst.owner
                     ? KYC_STATUS_CONFIG[inst.owner.kycStatus] ?? KYC_STATUS_CONFIG.PENDING
                     : null;

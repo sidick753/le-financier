@@ -55,12 +55,12 @@ export function useInvestorData() {
     setIsLoading(true);
     Promise.all([
       api.get<MyInvestment[]>("/investments/mine", token),
-      api.get<Opportunity[]>("/funding-requests/published", token),
+      api.get<{ data: Opportunity[]; total: number }>("/funding-requests/published", token),
     ])
       .then(([myInvestments, published]) => {
         setInvestments(myInvestments);
         const engagedIds = new Set(myInvestments.map((i) => i.fundingRequest.id));
-        setOpportunities(published.filter((o) => !engagedIds.has(o.id)));
+        setOpportunities(published.data.filter((o) => !engagedIds.has(o.id)));
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Erreur de chargement."))
       .finally(() => setIsLoading(false));

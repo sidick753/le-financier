@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useInstitutionSettings } from "@/lib/use-institution-settings";
 import { NotifBell } from "@/components/ui/notif-bell";
+import { useSortableRows } from "@/lib/use-sortable-rows";
+import { SortableTh } from "@/components/ui/sortable-th";
 
 const AVATAR_COLORS = [
   "bg-blue-200 text-blue-700",
@@ -44,6 +46,15 @@ export default function EquipePage() {
   const dossiersTotaux = members.reduce((s, m) => s + m.dossiersActifs, 0);
   const analystes = members.filter((m) => m.role === "ANALYST" && m.status === "ACTIVE").length;
   const encoursTotal = members.reduce((s, m) => s + m.encoursGere, 0);
+
+  const { sortedRows: sortedMembers, sortKey, direction, toggleSort } = useSortableRows(members, {
+    name: (m) => `${m.firstName} ${m.lastName}`,
+    email: (m) => m.email,
+    dossiers: (m) => m.dossiersActifs,
+    encours: (m) => m.encoursGere,
+    specialty: (m) => m.specialty ?? "",
+    status: (m) => m.status,
+  });
 
   async function handleInvite() {
     setInviteError(null);
@@ -145,17 +156,17 @@ export default function EquipePage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500">
-                  <th className="px-5 py-3 text-left font-medium">Membre</th>
-                  <th className="px-5 py-3 text-left font-medium">Email</th>
-                  <th className="px-5 py-3 text-center font-medium">Dossiers actifs</th>
-                  <th className="px-5 py-3 text-right font-medium">Encours géré</th>
-                  <th className="px-5 py-3 text-left font-medium">Spécialité</th>
-                  <th className="px-5 py-3 text-left font-medium">Statut</th>
+                  <SortableTh label="Membre" sortKey="name" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Email" sortKey="email" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Dossiers actifs" sortKey="dossiers" currentKey={sortKey} direction={direction} onSort={toggleSort} align="center" />
+                  <SortableTh label="Encours géré" sortKey="encours" currentKey={sortKey} direction={direction} onSort={toggleSort} align="right" />
+                  <SortableTh label="Spécialité" sortKey="specialty" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Statut" sortKey="status" currentKey={sortKey} direction={direction} onSort={toggleSort} />
                   <th className="px-5 py-3 text-left font-medium" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {members.map((membre, i) => (
+                {sortedMembers.map((membre, i) => (
                   <tr key={membre.id} className="hover:bg-gray-50">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">

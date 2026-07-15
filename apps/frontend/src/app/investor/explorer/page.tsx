@@ -15,6 +15,24 @@ const CATEGORIES = [
   { value: "EQUITY",  label: "Equity" },
 ];
 
+// Clés alignées avec PUBLISHED_SORT_ORDER côté backend (funding.repository.ts).
+const SORT_OPTIONS = [
+  { value: "recent",       label: "Plus récentes" },
+  { value: "closing_soon", label: "Date limite proche" },
+  { value: "return_desc",  label: "Rendement le plus élevé" },
+  { value: "amount_desc",  label: "Montant décroissant" },
+  { value: "amount_asc",   label: "Montant croissant" },
+];
+
+// Clés alignées avec gradeToRiskBucket côté backend (funding.repository.ts).
+const RISK_OPTIONS = [
+  { value: "",          label: "Tous les risques" },
+  { value: "FAIBLE",    label: "Risque faible" },
+  { value: "MODERE",    label: "Risque modéré" },
+  { value: "ELEVE",     label: "Risque élevé" },
+  { value: "NON_NOTE",  label: "Non évalué" },
+];
+
 const CATEGORY_BADGE: Record<string, string> = {
   FACTURE: "bg-blue-100 text-blue-700",
   PRET:    "bg-green-100 text-green-700",
@@ -53,6 +71,68 @@ function FilterIcon() {
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
       <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
     </svg>
+  );
+}
+
+function SortIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="7" y1="12" x2="17" y2="12" />
+      <line x1="11" y1="18" x2="13" y2="18" />
+    </svg>
+  );
+}
+
+// ── filter dropdown ──────────────────────────────────────────────────────────
+// <select> natif custom : le picker natif de Chrome ne s'ouvre pas quand le
+// zoom de la page n'est pas à 100% (bug Chromium connu), ce qui le fait
+// paraître "mort" au clic. Un menu maison, insensible au zoom, évite ça et
+// permet en plus de le styliser comme le reste de l'app.
+function FilterDropdown({
+  icon, value, options, onChange,
+}: {
+  icon: React.ReactNode;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = options.find((o) => o.value === value) ?? options[0];
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-10 items-center gap-2 rounded-[10px] border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-700 outline-none hover:bg-slate-50"
+      >
+        {icon}
+        <span className="whitespace-nowrap">{current.label}</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-slate-400">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-[calc(100%+6px)] z-50 min-w-full overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-[0_8px_24px_rgba(15,23,42,0.12)]">
+            {options.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => { onChange(o.value); setOpen(false); }}
+                className={`flex w-full items-center whitespace-nowrap rounded-[8px] px-3 py-2 text-left text-[13px] font-medium transition ${
+                  o.value === value ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -151,10 +231,36 @@ function OpportunityCard({ opp }: { opp: import("@/lib/use-opportunities").Oppor
 
 // ── page ──────────────────────────────────────────────────────────────────────
 
+const PAGE_SIZE = 12;
+
 export default function ExplorerPage() {
   const [search,   setSearch]   = useState("");
   const [category, setCategory] = useState("");
-  const { opportunities, isLoading } = useOpportunities({ category, search });
+  const [sort,     setSort]     = useState("recent");
+  const [risk,     setRisk]     = useState("");
+  const [page,     setPage]     = useState(1);
+  const { opportunities, total, isLoading } = useOpportunities({ category, search, sort, risk, page, limit: PAGE_SIZE });
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  function handleSearchChange(value: string) {
+    setSearch(value);
+    setPage(1);
+  }
+
+  function handleCategoryChange(value: string) {
+    setCategory(value);
+    setPage(1);
+  }
+
+  function handleSortChange(value: string) {
+    setSort(value);
+    setPage(1);
+  }
+
+  function handleRiskChange(value: string) {
+    setRisk(value);
+    setPage(1);
+  }
 
   return (
     <>
@@ -165,7 +271,7 @@ export default function ExplorerPage() {
           <p className="text-xs text-slate-500">
             {isLoading
               ? "Recherche..."
-              : `${opportunities.length} opportunité${opportunities.length !== 1 ? "s" : ""} disponible${opportunities.length !== 1 ? "s" : ""}`}
+              : `${total} opportunité${total !== 1 ? "s" : ""} disponible${total !== 1 ? "s" : ""}`}
           </p>
         </div>
         <NotifBell href="/investor/notifications" />
@@ -173,8 +279,8 @@ export default function ExplorerPage() {
 
       <div className="p-8 pb-16">
 
-        {/* Barre de filtres */}
-        <div className="mb-6 flex items-center gap-3">
+        {/* Barre de filtres — z-20 : reste cliquable au-dessus du header sticky (z-10) juste au-dessus */}
+        <div className="relative z-20 mb-6 flex items-center gap-3">
           {/* Recherche */}
           <div className="relative flex-1">
             <svg
@@ -187,41 +293,19 @@ export default function ExplorerPage() {
               type="text"
               placeholder="Rechercher par entreprise ou titre..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="h-10 w-full rounded-[10px] border border-slate-200 bg-white pl-10 pr-3 text-[13px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/10"
             />
           </div>
 
           {/* Filtre type */}
-          <div className="relative flex items-center gap-2 rounded-[10px] border border-slate-200 bg-white px-3 h-10">
-            <FilterIcon />
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="appearance-none bg-transparent pr-5 text-[13px] font-medium text-slate-700 outline-none"
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
-            <svg className="pointer-events-none absolute right-2.5 text-slate-400" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </div>
+          <FilterDropdown icon={<FilterIcon />} value={category} options={CATEGORIES} onChange={handleCategoryChange} />
 
-          {/* Filtre risque (cosmétique — module scoring à venir) */}
-          <div className="relative flex items-center gap-2 rounded-[10px] border border-slate-200 bg-white px-3 h-10">
-            <FilterIcon />
-            <select
-              disabled
-              className="appearance-none bg-transparent pr-5 text-[13px] font-medium text-slate-400 outline-none cursor-not-allowed"
-            >
-              <option>Tous les risques</option>
-            </select>
-            <svg className="pointer-events-none absolute right-2.5 text-slate-400" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </div>
+          {/* Tri */}
+          <FilterDropdown icon={<SortIcon />} value={sort} options={SORT_OPTIONS} onChange={handleSortChange} />
+
+          {/* Filtre risque */}
+          <FilterDropdown icon={<FilterIcon />} value={risk} options={RISK_OPTIONS} onChange={handleRiskChange} />
         </div>
 
         {/* Grille de cards */}
@@ -245,6 +329,44 @@ export default function ExplorerPage() {
             <OpportunityCard key={opp.id} opp={opp} />
           ))}
         </div>
+
+        {!isLoading && total > PAGE_SIZE && (
+          <div className="mt-6 flex items-center justify-center gap-1.5">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="flex h-9 items-center gap-1 rounded-[9px] border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              Précédent
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPage(p)}
+                className={`flex h-9 w-9 items-center justify-center rounded-[9px] text-[13px] font-medium transition ${
+                  p === page
+                    ? "bg-blue-700 text-white"
+                    : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="flex h-9 items-center gap-1 rounded-[9px] border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Suivant
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+          </div>
+        )}
 
       </div>
     </>

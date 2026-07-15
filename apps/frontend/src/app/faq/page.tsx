@@ -36,7 +36,7 @@ const PME: FaqItem[] = [
   },
   {
     q: "Quels documents dois-je fournir ?",
-    a: "Le RCCM, les bilans des deux derniers exercices, la carte CNI du dirigeant, l'attestation fiscale de l'année en cours et un plan de trésorerie. Un business plan et des états financiers détaillés sont recommandés mais optionnels pour accélérer l'étude de votre dossier. Formats acceptés : PDF, JPG, PNG, XLSX (10 Mo max par fichier).",
+    a: "Le RCCM, les bilans des deux derniers exercices, la carte CNI du dirigeant, l'attestation fiscale de l'année en cours et un plan de trésorerie. Un business plan et des états financiers détaillés sont recommandés mais optionnels pour accélérer l'étude de votre dossier. Formats acceptés : PDF, JPG, PNG, XLSX (50 Mo max par fichier).",
   },
   {
     q: "Combien de temps pour obtenir les fonds ?",

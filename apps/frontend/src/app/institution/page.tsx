@@ -3,6 +3,8 @@
 import { useInstitutionData, GRADE_CLASSNAMES } from "@/lib/use-institution-data";
 import { useRouter } from "next/navigation";
 import { NotifBell } from "@/components/ui/notif-bell";
+import { useSortableRows } from "@/lib/use-sortable-rows";
+import { SortableTh } from "@/components/ui/sortable-th";
 
 const CATEGORY_LABELS: Record<string, string> = {
   FACTURE: "Affacturage",
@@ -33,6 +35,21 @@ export default function InstitutionOverviewPage() {
   const router = useRouter();
 
   const totalByCategory = Object.values(byCategory).reduce((s, v) => s + v, 0);
+
+  const { sortedRows: sortedInvestments, sortKey, direction, toggleSort } = useSortableRows(
+    investments,
+    {
+      pme: (inv) => inv.fundingRequest.organization.legalName,
+      category: (inv) => inv.fundingRequest.category,
+      amount: (inv) => Number(inv.amountCommitted),
+      grade: (inv) => inv.fundingRequest.scoringReports[0]?.grade ?? "",
+      score: (inv) => {
+        const report = inv.fundingRequest.scoringReports[0];
+        return report ? Number(report.autoScore) : null;
+      },
+      status: (inv) => inv.status,
+    },
+  );
 
   return (
     <>
@@ -144,16 +161,16 @@ export default function InstitutionOverviewPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500">
-                    <th className="px-5 py-3 text-left font-medium">Dossier</th>
-                    <th className="px-5 py-3 text-left font-medium">Type</th>
-                    <th className="px-5 py-3 text-right font-medium">Montant</th>
-                    <th className="px-5 py-3 text-center font-medium">Note</th>
-                    <th className="px-5 py-3 text-center font-medium">Score</th>
-                    <th className="px-5 py-3 text-left font-medium">Statut</th>
+                    <SortableTh label="Dossier" sortKey="pme" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                    <SortableTh label="Type" sortKey="category" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                    <SortableTh label="Montant" sortKey="amount" currentKey={sortKey} direction={direction} onSort={toggleSort} align="right" />
+                    <SortableTh label="Note" sortKey="grade" currentKey={sortKey} direction={direction} onSort={toggleSort} align="center" />
+                    <SortableTh label="Score" sortKey="score" currentKey={sortKey} direction={direction} onSort={toggleSort} align="center" />
+                    <SortableTh label="Statut" sortKey="status" currentKey={sortKey} direction={direction} onSort={toggleSort} />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {investments.slice(0, 5).map((inv) => {
+                  {sortedInvestments.slice(0, 5).map((inv) => {
                     const statusConfig =
                       STATUS_PIPELINE[inv.status] ?? STATUS_PIPELINE.NEGOTIATING;
                     const report = inv.fundingRequest.scoringReports[0];

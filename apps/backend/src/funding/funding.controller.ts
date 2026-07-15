@@ -40,14 +40,41 @@ export class FundingController {
     return this.fundingService.findMineByOrganization(organizationId, req.user.id);
   }
 
-  @ApiOperation({ summary: 'Demandes publiées (public)', description: 'Retourne toutes les demandes en statut PUBLISHED. Endpoint public — aucun token requis.' })
-  @ApiResponse({ status: 200, description: 'Liste des demandes publiées' })
+  @ApiOperation({ summary: 'Demandes publiées (public)', description: 'Retourne les demandes en statut PUBLISHED. Endpoint public — aucun token requis.' })
+  @ApiQuery({ name: 'category', required: false, enum: ['FACTURE', 'PRET', 'EQUITY'] })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({
+    name: 'sort',
+    required: false,
+    enum: ['recent', 'amount_desc', 'amount_asc', 'return_desc', 'closing_soon'],
+    description: 'Tri (défaut : recent = date de création décroissante)',
+  })
+  @ApiQuery({
+    name: 'risk',
+    required: false,
+    enum: ['FAIBLE', 'MODERE', 'ELEVE', 'NON_NOTE'],
+    description: 'Filtre par niveau de risque (grade du dernier rapport de scoring)',
+  })
+  @ApiQuery({ name: 'page', required: false, description: 'Numéro de page (retourne tout si absent)' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Taille de page (retourne tout si absent)' })
+  @ApiResponse({ status: 200, description: '{ data: FundingRequest[], total: number }' })
   @Get('published')
   findAllPublished(
     @Query('category') category?: string,
     @Query('search') search?: string,
+    @Query('sort') sort?: string,
+    @Query('risk') risk?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.fundingService.findAllPublished({ category, search });
+    return this.fundingService.findAllPublished({
+      category,
+      search,
+      sort,
+      risk,
+      page: parsePositiveInt(page),
+      limit: parsePositiveInt(limit),
+    });
   }
 
   @ApiOperation({

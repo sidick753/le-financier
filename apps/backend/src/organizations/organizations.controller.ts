@@ -4,6 +4,7 @@ import { OrganizationsService } from './organizations.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateCreditProfileDto } from './dto/update-credit-profile.dto';
 import { UpdateBankInfoDto } from './dto/update-bank-info.dto';
+import { UpdateIdentityDto } from './dto/update-identity.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -74,6 +75,23 @@ export class OrganizationsController {
     @Request() req,
   ) {
     return this.organizationsService.updateBankInfo(id, req.user.id, dto);
+  }
+
+  @ApiOperation({
+    summary: "Mettre à jour l'identité de l'entreprise",
+    description: "Secteur (description libre), forme juridique, année de création, ville, adresse — jamais capturés à l'inscription. Accessible uniquement aux membres.",
+  })
+  @ApiParam({ name: 'id', description: 'UUID de l\'organisation' })
+  @ApiResponse({ status: 200, description: 'Identité mise à jour' })
+  @ApiResponse({ status: 403, description: 'Non membre' })
+  @ApiResponse({ status: 404, description: 'Organisation introuvable' })
+  @Patch(':id/identity')
+  updateIdentity(
+    @Param('id') id: string,
+    @Body() dto: UpdateIdentityDto,
+    @Request() req,
+  ) {
+    return this.organizationsService.updateIdentity(id, req.user.id, dto);
   }
 
   @ApiOperation({ summary: '[Admin] Stats PME', description: 'Retourne les compteurs globaux : total, vérifiées, en attente, rejetées, montant total financé.' })

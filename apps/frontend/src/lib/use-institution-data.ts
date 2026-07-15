@@ -96,11 +96,11 @@ export function useInstitutionData() {
     setIsLoading(true);
     Promise.all([
       api.get<InstitutionInvestment[]>("/investments/mine", token),
-      api.get<InstitutionOpportunity[]>("/funding-requests/published", token),
+      api.get<{ data: InstitutionOpportunity[]; total: number }>("/funding-requests/published", token),
     ])
       .then(([inv, opp]) => {
         setInvestments(inv);
-        setOpportunities(opp);
+        setOpportunities(opp.data);
       })
       .finally(() => setIsLoading(false));
   }, [token]);

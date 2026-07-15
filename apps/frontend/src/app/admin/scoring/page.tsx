@@ -5,6 +5,8 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { useAdminBadges } from "@/lib/admin-badges-context";
 import { useScoringWeights, ScoringWeightCriterion } from "@/lib/use-scoring-weights";
+import { useSortableRows } from "@/lib/use-sortable-rows";
+import { SortableTh } from "@/components/ui/sortable-th";
 import { ScoringSnapshotModal } from "@/components/scoring-snapshot-modal";
 
 type Tab = "automatise" | "configuration" | "historique";
@@ -258,6 +260,36 @@ export default function AdminScoringPage() {
   const dossierTotalPages = Math.max(1, Math.ceil(dossierTotal / PAGE_SIZE));
   const historyTotalPages = Math.max(1, Math.ceil(historyTotal / PAGE_SIZE));
 
+  const {
+    sortedRows: sortedDossiers,
+    sortKey: dossierSortKey,
+    direction: dossierDirection,
+    toggleSort: toggleDossierSort,
+  } = useSortableRows(dossiers, {
+    pme: (d) => d.pme,
+    product: (d) => d.product,
+    amount: (d) => Number(d.amount),
+    submittedAt: (d) => d.submittedAt,
+    completude: (d) => d.completude,
+    status: (d) => d.scoringStatus,
+  });
+
+  const {
+    sortedRows: sortedHistoryReports,
+    sortKey: historySortKey,
+    direction: historyDirection,
+    toggleSort: toggleHistorySort,
+  } = useSortableRows(historyReports, {
+    createdAt: (r) => r.createdAt,
+    pme: (r) => r.organization.legalName,
+    product: (r) => r.fundingRequest?.category ?? "",
+    score: (r) => Number(r.autoScore),
+    grade: (r) => r.grade ?? "",
+    bareme: (r) => r.bareme_version,
+    analyste: (r) => (r.validatedBy ? `${r.validatedBy.firstName} ${r.validatedBy.lastName}` : ""),
+    decision: (r) => r.status,
+  });
+
   return (
     <div className="p-8">
       <div className="mb-6 flex items-center justify-between">
@@ -352,17 +384,17 @@ export default function AdminScoringPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500">
-                      <th className="px-5 py-3 text-left font-medium">DOSSIER / PME</th>
-                      <th className="px-5 py-3 text-left font-medium">PRODUIT</th>
-                      <th className="px-5 py-3 text-right font-medium">MONTANT</th>
-                      <th className="px-5 py-3 text-left font-medium">SOUMISSION</th>
-                      <th className="px-5 py-3 text-left font-medium">COMPLÉTUDE</th>
-                      <th className="px-5 py-3 text-left font-medium">STATUT</th>
+                      <SortableTh label="DOSSIER / PME" sortKey="pme" currentKey={dossierSortKey} direction={dossierDirection} onSort={toggleDossierSort} />
+                      <SortableTh label="PRODUIT" sortKey="product" currentKey={dossierSortKey} direction={dossierDirection} onSort={toggleDossierSort} />
+                      <SortableTh label="MONTANT" sortKey="amount" currentKey={dossierSortKey} direction={dossierDirection} onSort={toggleDossierSort} align="right" />
+                      <SortableTh label="SOUMISSION" sortKey="submittedAt" currentKey={dossierSortKey} direction={dossierDirection} onSort={toggleDossierSort} />
+                      <SortableTh label="COMPLÉTUDE" sortKey="completude" currentKey={dossierSortKey} direction={dossierDirection} onSort={toggleDossierSort} />
+                      <SortableTh label="STATUT" sortKey="status" currentKey={dossierSortKey} direction={dossierDirection} onSort={toggleDossierSort} />
                       <th className="px-5 py-3 text-left font-medium" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {dossiers.map((d) => {
+                    {sortedDossiers.map((d) => {
                       const productCfg = PRODUCT_LABELS[d.product];
                       const statusCfg  = STATUS_CONFIG[d.scoringStatus] ?? STATUS_CONFIG.A_SCORER;
                       const canScore   = d.scoringStatus === "A_SCORER" || d.scoringStatus === "ERREUR_CALCUL";
@@ -651,19 +683,19 @@ export default function AdminScoringPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500">
-                      <th className="px-5 py-3 text-left font-medium">DATE & HEURE</th>
-                      <th className="px-5 py-3 text-left font-medium">PME</th>
-                      <th className="px-5 py-3 text-left font-medium">PRODUIT</th>
-                      <th className="px-5 py-3 text-center font-medium">SCORE</th>
-                      <th className="px-5 py-3 text-center font-medium">GRADE</th>
-                      <th className="px-5 py-3 text-left font-medium">BARÈME</th>
-                      <th className="px-5 py-3 text-left font-medium">ANALYSTE</th>
-                      <th className="px-5 py-3 text-left font-medium">DÉCISION</th>
+                      <SortableTh label="DATE & HEURE" sortKey="createdAt" currentKey={historySortKey} direction={historyDirection} onSort={toggleHistorySort} />
+                      <SortableTh label="PME" sortKey="pme" currentKey={historySortKey} direction={historyDirection} onSort={toggleHistorySort} />
+                      <SortableTh label="PRODUIT" sortKey="product" currentKey={historySortKey} direction={historyDirection} onSort={toggleHistorySort} />
+                      <SortableTh label="SCORE" sortKey="score" currentKey={historySortKey} direction={historyDirection} onSort={toggleHistorySort} align="center" />
+                      <SortableTh label="GRADE" sortKey="grade" currentKey={historySortKey} direction={historyDirection} onSort={toggleHistorySort} align="center" />
+                      <SortableTh label="BARÈME" sortKey="bareme" currentKey={historySortKey} direction={historyDirection} onSort={toggleHistorySort} />
+                      <SortableTh label="ANALYSTE" sortKey="analyste" currentKey={historySortKey} direction={historyDirection} onSort={toggleHistorySort} />
+                      <SortableTh label="DÉCISION" sortKey="decision" currentKey={historySortKey} direction={historyDirection} onSort={toggleHistorySort} />
                       <th className="px-5 py-3" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {historyReports.map((report) => {
+                    {sortedHistoryReports.map((report) => {
                       const cat        = report.fundingRequest?.category ?? "";
                       const productCfg = PRODUCT_LABELS[cat] ?? { label: "—", className: "bg-gray-100 text-gray-500" };
                       const decisionCfg = DECISION_CONFIG[report.status] ?? { label: report.status, className: "text-gray-400" };

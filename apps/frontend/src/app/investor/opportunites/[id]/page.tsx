@@ -5,7 +5,20 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { useNegotiationSocket } from "@/lib/use-negotiation-socket";
-import { ScoringReportSummary } from "@/lib/use-institution-data";
+import { DocumentPreviewModal } from "@/components/document-preview-modal";
+import { FundingDocument, DOCUMENT_TYPE_LABELS, DOCUMENT_STATUS_CONFIG, formatFileSize } from "@/lib/document-labels";
+import {
+  SECTEURS,
+  TAILLE_MARCHE,
+  SCALABILITE,
+  MOAT,
+  PART_MARCHE,
+  TRACK_RECORD,
+  COMPLETUDE_EQUIPE,
+  DROITS_INVESTISSEUR,
+  TRANSPARENCE,
+  labelFor,
+} from "@/lib/credit-profile-options";
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
@@ -21,6 +34,123 @@ const CATEGORY_BADGE: Record<string, string> = {
   EQUITY:  "bg-purple-100 text-purple-700",
 };
 
+// Libellés des champs scoringInput — mêmes clés que scoring.engine.ts (backend),
+// aucune liste équivalente n'existait déjà côté frontend.
+const DEBITEUR_TYPE_LABELS: Record<string, string> = {
+  multinationale:    "Multinationale",
+  grande_entreprise:  "Grande entreprise",
+  public_solvable:    "Organisme public solvable",
+  pme_etablie:        "PME établie",
+  petite_structure:   "Petite structure",
+  particulier:        "Particulier",
+};
+
+const DEBITEUR_SOLVABILITE_LABELS: Record<string, string> = {
+  solide:   "Solide",
+  neutre:   "Neutre",
+  tension:  "Sous tension",
+  incident: "Incident(s) de paiement",
+};
+
+const ANCIENNETE_RELATION_LABELS: Record<string, string> = {
+  plus_2ans:            "Plus de 2 ans",
+  "6mois_2ans":          "Entre 6 mois et 2 ans",
+  premiere_transaction: "Première transaction",
+};
+
+const DELAI_PAIEMENT_LABELS: Record<string, string> = {
+  a_echeance:      "Paiement à échéance",
+  leger_retard:    "Léger retard habituel",
+  souvent_retard:  "Retards fréquents",
+};
+
+const GARANTIE_TYPE_LABELS: Record<string, string> = {
+  depot_cash:            "Dépôt de garantie en espèces",
+  hypotheque:            "Hypothèque",
+  nantissement_compte:   "Nantissement de compte",
+  nantissement_materiel: "Nantissement de matériel",
+  caution_personnelle:   "Caution personnelle",
+  caution_morale:        "Caution morale",
+  aucune:                "Aucune garantie",
+};
+
+// Profil de crédit + identité de l'entreprise — jamais les champs bancaires
+// (bankName/bankAccountHolder/bankAccountNumber/bankSwiftCode), que le backend
+// exclut désormais de cette réponse publique (cf. funding.service.ts).
+interface OpportunityOrganization {
+  id: string;
+  legalName: string;
+  sector: string | null;
+  legalForm: string | null;
+  foundedYear: number | null;
+  city: string | null;
+  address: string | null;
+  secteurCode: string | null;
+  secteurSaisonnalite: boolean | null;
+  secteurImportDevises: boolean | null;
+  secteurSoutienPublic: boolean | null;
+  cashFlowAnnuel: string | null;
+  fluxMobileMoneyMensuel: string | null;
+  autonomieFinanciere: string | null;
+  tauxEndettement: string | null;
+  ratioLiquidite: string | null;
+  tcamCa3ans: string | null;
+  margeBrute: string | null;
+  runwayMois: number | null;
+  nbClientsActifs: number | null;
+  dirigeantExperienceAns: number | null;
+  dirigeantAntecedents: string | null;
+  dirigeantIncidentsLegaux: string | null;
+  experienceSecteurAns: number | null;
+  trackRecord: string | null;
+  completudeEquipe: string | null;
+  droitsInvestisseur: string | null;
+  transparence: string | null;
+  tailleMarche: string | null;
+  scalabilite: string | null;
+  moat: string | null;
+  partMarcheRelative: string | null;
+}
+
+interface ScoreCriterion {
+  key: string;
+  label: string;
+  weight: number;
+  rawScore: number | null;
+  evaluable: boolean;
+  penalized: boolean;
+  reliability: number;
+  note: string;
+}
+
+// Volontairement plus riche que ScoringReportSummary (partagé avec les pages
+// institution) : cette page a besoin du détail des critères, pas seulement du
+// grade/score. On ne réutilise pas kpiSnapshot.recommendation (verdict interne
+// du comité crédit, ex. "Refuser") — non pertinent sur un deal déjà publié.
+interface FullScoringReport {
+  grade: string;
+  autoScore: string;
+  confidence: string;
+  coverage: string;
+  kpiSnapshot: { criteria: ScoreCriterion[] };
+}
+
+// Détail propre à CETTE demande (pas au profil général de la PME) : le
+// débiteur d'une facture, la garantie d'un prêt — renseigné selon la
+// catégorie, jamais les deux à la fois.
+interface OpportunityScoringInput {
+  debiteurNom: string | null;
+  debiteurType: string | null;
+  debiteurSolvabilite: string | null;
+  echeanceFactureDate: string | null;
+  ancienneteRelation: string | null;
+  partPlusGrosClient: string | null;
+  delaiPaiementMenu: string | null;
+  tauxImpaye12m: string | null;
+  garantieType: string | null;
+  garantieCouverture: string | null;
+}
+
 interface Opportunity {
   id: string;
   title: string;
@@ -33,8 +163,11 @@ interface Opportunity {
   currency: string;
   investorMode: "SINGLE_INVESTOR" | "MULTIPLE_INVESTORS";
   hasActiveInvestor: boolean;
-  organization: { legalName: string };
-  scoringReports: ScoringReportSummary[];
+  publishedAt: string | null;
+  closesAt: string | null;
+  organization: OpportunityOrganization;
+  scoringReports: FullScoringReport[];
+  scoringInput: OpportunityScoringInput | null;
 }
 
 interface NegotiationOffer {
@@ -50,6 +183,7 @@ interface MyEngagement {
   amountCommitted: string;
   status: string;
   lockedReturn: string | null;
+  conditions: string | null;
   negotiationOffers: NegotiationOffer[];
 }
 
@@ -57,6 +191,30 @@ interface MyEngagement {
 
 function fmtAmount(v: string | number) {
   return `${Number(v).toLocaleString("fr-FR")} F CFA`;
+}
+
+// Stocké en base sous forme de ratio 0–1, affiché en %.
+function fmtPercent(value: string | null) {
+  if (value === null || value === undefined) return "—";
+  return `${(Number(value) * 100).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} %`;
+}
+
+function gradeColorClass(grade: string | undefined | null) {
+  if (!grade) return "text-slate-300";
+  if (grade === "A+" || grade === "A") return "text-green-600";
+  if (grade === "BBB") return "text-yellow-600";
+  if (grade === "BB") return "text-orange-600";
+  return "text-red-600";
+}
+
+function fmtDate(v: string | null) {
+  if (!v) return "—";
+  return new Date(v).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
+}
+
+function labelFromMap(map: Record<string, string>, value: string | null) {
+  if (!value) return "—";
+  return map[value] ?? value;
 }
 
 // ── sub-components ────────────────────────────────────────────────────────────
@@ -85,6 +243,212 @@ function OfferStatusBadge({ status }: { status: string }) {
   return <span className="text-[11px] text-slate-400">{status}</span>;
 }
 
+const TABS = [
+  { key: "finance",    label: "Analyse financière" },
+  { key: "entreprise", label: "L'entreprise" },
+  { key: "documents",  label: "Documents" },
+] as const;
+
+function TabBar({
+  active, onChange,
+}: { active: string; onChange: (tab: typeof TABS[number]["key"]) => void }) {
+  return (
+    <div className="flex border-b border-slate-100">
+      {TABS.map((tab) => (
+        <button
+          key={tab.key}
+          onClick={() => onChange(tab.key)}
+          className={`px-5 py-3 text-[12px] font-bold transition ${
+            active === tab.key
+              ? "border-b-2 border-blue-600 text-slate-900"
+              : "text-slate-400 hover:text-slate-600"
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Field({ label, value, span2 }: { label: string; value: string; span2?: boolean }) {
+  return (
+    <div className={span2 ? "col-span-2" : undefined}>
+      <p className="text-[11px] text-slate-400">{label}</p>
+      <p className="mt-0.5 break-words text-[13px] font-semibold text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+function BoolField({ label, value }: { label: string; value: boolean | null }) {
+  return <Field label={label} value={value ? "Oui" : "Non"} />;
+}
+
+function FieldSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="mb-3 text-[11px] font-bold uppercase tracking-wide text-slate-400">{title}</p>
+      <div className="grid grid-cols-3 gap-x-4 gap-y-3">{children}</div>
+    </div>
+  );
+}
+
+function FinanceTab({
+  scoreReport, organization, scoringInput, category,
+}: {
+  scoreReport: FullScoringReport | null;
+  organization: OpportunityOrganization;
+  scoringInput: OpportunityScoringInput | null;
+  category: string;
+}) {
+  return (
+    <div className="space-y-5">
+      <div>
+        <p className="mb-3 text-[11px] font-bold uppercase tracking-wide text-slate-400">Scoring LeFinancier</p>
+        {!scoreReport ? (
+          <p className="text-[12px] text-slate-400">Le scoring de cette PME n&apos;est pas encore disponible.</p>
+        ) : (
+          <>
+            <div className="mb-3 flex items-center gap-4">
+              <span className={`text-[26px] font-extrabold ${gradeColorClass(scoreReport.grade)}`}>
+                {scoreReport.grade}
+              </span>
+              <div className="text-[11px] text-slate-500">
+                <p>Score : <strong className="text-slate-900">{Math.round(Number(scoreReport.autoScore))}/100</strong></p>
+                <p>Confiance : <strong className="text-slate-900">{Math.round(Number(scoreReport.confidence) * 100)}%</strong></p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {scoreReport.kpiSnapshot.criteria.map((c) => (
+                <div key={c.key} className="rounded-[10px] bg-slate-50 px-3 py-2">
+                  <div className="flex items-center justify-between text-[12px]">
+                    <span className="font-medium text-slate-700">{c.label}</span>
+                    <span className="font-bold text-slate-900">
+                      {c.evaluable && c.rawScore !== null ? `${Math.round(c.rawScore)}/100` : "Non évaluable"}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between text-[11px] text-slate-400">
+                    <span>Poids {Math.round(c.weight * 100)}%</span>
+                    {c.note && <span className="truncate pl-2">{c.note}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {scoringInput && category === "FACTURE" && (
+        <FieldSection title="Débiteur de la facture">
+          <Field label="Nom du débiteur" value={scoringInput.debiteurNom || "—"} />
+          <Field label="Type de débiteur" value={labelFromMap(DEBITEUR_TYPE_LABELS, scoringInput.debiteurType)} />
+          <Field label="Solvabilité" value={labelFromMap(DEBITEUR_SOLVABILITE_LABELS, scoringInput.debiteurSolvabilite)} />
+          <Field label="Échéance de la facture" value={fmtDate(scoringInput.echeanceFactureDate)} />
+          <Field label="Ancienneté de la relation" value={labelFromMap(ANCIENNETE_RELATION_LABELS, scoringInput.ancienneteRelation)} />
+          <Field label="Délai de paiement habituel" value={labelFromMap(DELAI_PAIEMENT_LABELS, scoringInput.delaiPaiementMenu)} />
+          <Field label="Part du plus gros client" value={fmtPercent(scoringInput.partPlusGrosClient)} />
+          <Field label="Taux d'impayés (12 mois)" value={fmtPercent(scoringInput.tauxImpaye12m)} />
+        </FieldSection>
+      )}
+
+      {scoringInput && category === "PRET" && (scoringInput.garantieType || scoringInput.garantieCouverture) && (
+        <FieldSection title="Garantie">
+          <Field label="Type de garantie" value={labelFromMap(GARANTIE_TYPE_LABELS, scoringInput.garantieType)} />
+          <Field label="Taux de couverture" value={fmtPercent(scoringInput.garantieCouverture)} />
+        </FieldSection>
+      )}
+
+      <FieldSection title="Santé financière">
+        <Field label="Cash-flow annuel" value={organization.cashFlowAnnuel ? fmtAmount(organization.cashFlowAnnuel) : "—"} />
+        <Field label="Flux Mobile Money mensuel" value={organization.fluxMobileMoneyMensuel ? fmtAmount(organization.fluxMobileMoneyMensuel) : "—"} />
+        <Field label="Autonomie financière" value={fmtPercent(organization.autonomieFinanciere)} />
+        <Field label="Taux d'endettement" value={fmtPercent(organization.tauxEndettement)} />
+        <Field label="Ratio de liquidité" value={fmtPercent(organization.ratioLiquidite)} />
+        <Field label="Marge brute" value={fmtPercent(organization.margeBrute)} />
+        <Field label="TCAM CA sur 3 ans" value={fmtPercent(organization.tcamCa3ans)} />
+        <Field label="Runway" value={organization.runwayMois != null ? `${organization.runwayMois} mois` : "—"} />
+        <Field label="Clients actifs" value={organization.nbClientsActifs?.toString() ?? "—"} />
+      </FieldSection>
+
+      <FieldSection title="Profil du dirigeant">
+        <Field label="Expérience du dirigeant" value={organization.dirigeantExperienceAns != null ? `${organization.dirigeantExperienceAns} ans` : "—"} />
+        <Field label="Expérience sectorielle" value={organization.experienceSecteurAns != null ? `${organization.experienceSecteurAns} ans` : "—"} />
+        <Field
+          label="Incidents légaux connus"
+          value={organization.dirigeantIncidentsLegaux === "connu" ? "Incident(s) connu(s)" : organization.dirigeantIncidentsLegaux === "aucun" ? "Aucun" : "—"}
+        />
+        <Field label="Antécédents du dirigeant" value={organization.dirigeantAntecedents || "—"} span2 />
+      </FieldSection>
+    </div>
+  );
+}
+
+function EntrepriseTab({ organization }: { organization: OpportunityOrganization }) {
+  return (
+    <div className="space-y-5">
+      <FieldSection title="Identité">
+        <Field label="Secteur d'activité" value={organization.sector || "—"} />
+        <Field label="Forme juridique" value={organization.legalForm || "—"} />
+        <Field label="Année de création" value={organization.foundedYear?.toString() ?? "—"} />
+        <Field label="Ville" value={organization.city || "—"} />
+        <Field label="Adresse" value={organization.address || "—"} span2 />
+      </FieldSection>
+
+      <FieldSection title="Secteur & structure">
+        <Field label="Secteur d'activité (scoring)" value={labelFor(SECTEURS, organization.secteurCode)} />
+        <BoolField label="Activité saisonnière" value={organization.secteurSaisonnalite} />
+        <BoolField label="Import en devises" value={organization.secteurImportDevises} />
+        <BoolField label="Soutien public au secteur" value={organization.secteurSoutienPublic} />
+      </FieldSection>
+
+      <FieldSection title="Équipe, gouvernance & marché">
+        <Field label="Taille du marché" value={labelFor(TAILLE_MARCHE, organization.tailleMarche)} />
+        <Field label="Scalabilité" value={labelFor(SCALABILITE, organization.scalabilite)} />
+        <Field label="Avantage concurrentiel (moat)" value={labelFor(MOAT, organization.moat)} />
+        <Field label="Position sur le marché" value={labelFor(PART_MARCHE, organization.partMarcheRelative)} />
+        <Field label="Complétude de l'équipe" value={labelFor(COMPLETUDE_EQUIPE, organization.completudeEquipe)} />
+        <Field label="Droits investisseurs" value={labelFor(DROITS_INVESTISSEUR, organization.droitsInvestisseur)} />
+        <Field label="Transparence financière" value={labelFor(TRANSPARENCE, organization.transparence)} />
+        <Field label="Track record du dirigeant" value={labelFor(TRACK_RECORD, organization.trackRecord)} />
+      </FieldSection>
+    </div>
+  );
+}
+
+function DocumentsTab({ documents, onPreview }: { documents: FundingDocument[]; onPreview: (id: string) => void }) {
+  if (documents.length === 0) {
+    return <p className="text-center text-[12px] text-slate-400">Aucun document disponible pour cette opportunité.</p>;
+  }
+  return (
+    <div className="divide-y divide-slate-100">
+      {documents.map((doc) => {
+        const dcfg = DOCUMENT_STATUS_CONFIG[doc.status] ?? DOCUMENT_STATUS_CONFIG.PENDING_REVIEW;
+        return (
+          <div key={doc.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+            <div className="min-w-0">
+              <p className="truncate text-[13px] font-medium text-slate-900">{doc.fileName}</p>
+              <p className="mt-0.5 text-[11px] text-slate-400">
+                {DOCUMENT_TYPE_LABELS[doc.type] ?? doc.type} · {formatFileSize(doc.sizeBytes)}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${dcfg.badgeClass}`}>
+                {dcfg.label}
+              </span>
+              <button
+                onClick={() => onPreview(doc.id)}
+                className="rounded-[8px] border border-slate-200 px-3 py-1.5 text-[12px] font-medium text-slate-600 transition hover:bg-slate-50"
+              >
+                Voir
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── page ──────────────────────────────────────────────────────────────────────
 
 export default function OpportunityDetailPage() {
@@ -97,8 +461,11 @@ export default function OpportunityDetailPage() {
   const [isLoading, setIsLoading]     = useState(true);
   const [error, setError]             = useState<string | null>(null);
 
+  const [amountMode, setAmountMode]         = useState<"amount" | "percent">("amount");
   const [amount, setAmount]                 = useState("");
+  const [percent, setPercent]               = useState("");
   const [proposedReturn, setProposedReturn] = useState("");
+  const [conditions, setConditions]         = useState("");
   const [counterReturn, setCounterReturn]   = useState("");
   const [isSubmitting, setIsSubmitting]     = useState(false);
   const [submitError, setSubmitError]       = useState<string | null>(null);
@@ -106,6 +473,10 @@ export default function OpportunityDetailPage() {
 
   const [isFavorited, setIsFavorited]       = useState(false);
   const [favLoading, setFavLoading]         = useState(false);
+
+  const [activeTab, setActiveTab] = useState<"finance" | "entreprise" | "documents">("finance");
+  const [documents, setDocuments] = useState<FundingDocument[]>([]);
+  const [previewDocId, setPreviewDocId] = useState<string | null>(null);
 
   async function refreshEngagement() {
     if (!token) return;
@@ -137,6 +508,17 @@ export default function OpportunityDetailPage() {
             const fav = await api.get<{ favorited: boolean }>(`/watchlist/${id}/status`, token);
             setIsFavorited(fav.favorited);
           } catch { /* ignore */ }
+          try {
+            // Le RCCM/les bilans vivent au niveau de l'organisation (checklist
+            // KYC, versée une seule fois) ; les pièces jointes propres au
+            // dossier vivent sur la demande — les deux sources sont
+            // pertinentes pour l'analyse d'un investisseur.
+            const [orgDocs, requestDocs] = await Promise.all([
+              api.get<FundingDocument[]>(`/documents/organization/${opp.organization.id}`, token).catch(() => []),
+              api.get<FundingDocument[]>(`/documents/funding-request/${id}`, token).catch(() => []),
+            ]);
+            setDocuments([...orgDocs, ...requestDocs]);
+          } catch { /* ignore */ }
         }
       } catch {
         setError("Impossible de charger cette opportunité.");
@@ -151,9 +533,7 @@ export default function OpportunityDetailPage() {
   async function handleEngage() {
     setSubmitError(null);
     setSubmitSuccess(null);
-    const isSingleInvestor = opportunity?.investorMode === "SINGLE_INVESTOR";
-    const effectiveAmount = isSingleInvestor ? remaining : Number(amount);
-    if (!effectiveAmount || !proposedReturn) {
+    if (!investAmount || !proposedReturn) {
       setSubmitError("Veuillez saisir un montant et un taux.");
       return;
     }
@@ -161,8 +541,9 @@ export default function OpportunityDetailPage() {
     try {
       await api.post("/investments", {
         fundingRequestId: id,
-        amountCommitted:  effectiveAmount,
+        amountCommitted:  investAmount,
         proposedReturn:   Number(proposedReturn),
+        conditions:       conditions.trim() || undefined,
       }, token!);
       setSubmitSuccess("Votre proposition a été envoyée à la PME.");
       await refreshEngagement();
@@ -253,7 +634,16 @@ export default function OpportunityDetailPage() {
   const investorWaiting  = lastOffer?.proposedBy === "INVESTOR" && lastOffer?.status === "PENDING";
 
   const isSingleInvestor = opportunity.investorMode === "SINGLE_INVESTOR";
-  const investAmount = isSingleInvestor ? remaining : Number(amount || 0);
+  const investAmount = isSingleInvestor
+    ? remaining
+    : amountMode === "percent"
+      ? Math.round(remaining * (Number(percent || 0) / 100))
+      : Number(amount || 0);
+  const investPercentOfRemaining = isSingleInvestor
+    ? 100
+    : remaining > 0
+      ? (amountMode === "percent" ? Number(percent || 0) : (Number(amount || 0) / remaining) * 100)
+      : 0;
 
   const gainEstimate  = investAmount && proposedReturn
     ? investAmount * Number(proposedReturn) / 100
@@ -278,7 +668,7 @@ export default function OpportunityDetailPage() {
         </button>
       </header>
 
-      <div className="mx-auto max-w-5xl px-8 py-8">
+      <div className="px-8 py-8">
 
         {/* Header */}
         <div className="mb-6 flex items-start justify-between gap-4">
@@ -287,6 +677,10 @@ export default function OpportunityDetailPage() {
               {opportunity.organization.legalName}
             </p>
             <p className="text-[14px] text-slate-500">{opportunity.title}</p>
+            <p className="mt-1 text-[11px] text-slate-400">
+              Publié le {fmtDate(opportunity.publishedAt)}
+              {opportunity.closesAt && <> · Clôture le {fmtDate(opportunity.closesAt)}</>}
+            </p>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1.5">
             <span className={`rounded-full px-3 py-1 text-[12px] font-semibold ${CATEGORY_BADGE[opportunity.category] ?? "bg-slate-100 text-slate-600"}`}>
@@ -321,12 +715,7 @@ export default function OpportunityDetailPage() {
           <StatCard
             label="Score risque"
             value={scoreReport ? `${Math.round(Number(scoreReport.autoScore))}/100 · ${scoreReport.grade}` : "Non évalué"}
-            valueClass={
-              !scoreReport ? "text-slate-300" :
-              scoreReport.grade === "A+" || scoreReport.grade === "A" ? "text-green-600" :
-              scoreReport.grade === "BBB" ? "text-yellow-600" :
-              scoreReport.grade === "BB" ? "text-orange-600" : "text-red-600"
-            }
+            valueClass={gradeColorClass(scoreReport?.grade)}
             icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>}
           />
         </div>
@@ -355,19 +744,24 @@ export default function OpportunityDetailPage() {
               </div>
             </div>
 
-            {/* Onglets — à venir */}
+            {/* Onglets */}
             <div className="overflow-hidden rounded-[18px] border border-slate-200 bg-white">
-              <div className="flex border-b border-slate-100">
-                {["Analyse financière", "L'entreprise", "Documents"].map((tab) => (
-                  <div key={tab} className="px-5 py-3 text-[12px] font-medium text-slate-400">
-                    {tab}
-                  </div>
-                ))}
-              </div>
-              <div className="px-5 py-10 text-center">
-                <p className="text-[12px] text-slate-400">
-                  Les indicateurs financiers, données entreprise et documents PME seront disponibles avec le module scoring et les données KYC validées.
-                </p>
+              <TabBar active={activeTab} onChange={setActiveTab} />
+              <div className="p-5">
+                {activeTab === "finance" && (
+                  <FinanceTab
+                    scoreReport={scoreReport}
+                    organization={opportunity.organization}
+                    scoringInput={opportunity.scoringInput}
+                    category={opportunity.category}
+                  />
+                )}
+                {activeTab === "entreprise" && (
+                  <EntrepriseTab organization={opportunity.organization} />
+                )}
+                {activeTab === "documents" && (
+                  <DocumentsTab documents={documents} onPreview={setPreviewDocId} />
+                )}
               </div>
             </div>
           </div>
@@ -378,8 +772,21 @@ export default function OpportunityDetailPage() {
             {/* Évaluation du risque */}
             <div className="rounded-[18px] border border-slate-200 bg-white p-5 text-center">
               <p className="mb-2 text-[13px] font-bold text-slate-900">Évaluation du risque</p>
-              <p className="text-[32px] font-extrabold text-slate-200">—</p>
-              <p className="mt-1 text-[11px] text-slate-400">Disponible avec le module scoring</p>
+              {scoreReport ? (
+                <>
+                  <p className={`text-[32px] font-extrabold ${gradeColorClass(scoreReport.grade)}`}>
+                    {scoreReport.grade}
+                  </p>
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    Score {Math.round(Number(scoreReport.autoScore))}/100 · Confiance {Math.round(Number(scoreReport.confidence) * 100)}%
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[32px] font-extrabold text-slate-200">—</p>
+                  <p className="mt-1 text-[11px] text-slate-400">Disponible avec le module scoring</p>
+                </>
+              )}
             </div>
 
             {/* Bloc engagement / négociation */}
@@ -406,6 +813,11 @@ export default function OpportunityDetailPage() {
                   <p className="text-[12px] text-green-600">
                     Taux figé : {Number(engagement?.lockedReturn)}%
                   </p>
+                  {engagement?.conditions && (
+                    <p className="mt-2 text-left text-[11px] text-green-700">
+                      <span className="font-semibold">Conditions : </span>{engagement.conditions}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -425,6 +837,12 @@ export default function OpportunityDetailPage() {
                       ))}
                     </div>
                   </div>
+
+                  {engagement!.conditions && (
+                    <div className="rounded-[8px] bg-slate-50 p-3 text-[11px] text-slate-600">
+                      <span className="font-semibold text-slate-700">Vos conditions : </span>{engagement!.conditions}
+                    </div>
+                  )}
 
                   {/* PME a la balle — on peut accepter ou contre-proposer */}
                   {pmeHasBall && (
@@ -498,16 +916,65 @@ export default function OpportunityDetailPage() {
                     </div>
                   )}
                   <div>
-                    <label className="mb-1 block text-[11px] font-semibold text-slate-700">Montant (F CFA)</label>
-                    <input
-                      type="number"
-                      placeholder={`Max : ${remaining.toLocaleString("fr-FR")}`}
-                      value={isSingleInvestor ? remaining : amount}
-                      max={remaining}
-                      readOnly={isSingleInvestor}
-                      onChange={(e) => !isSingleInvestor && setAmount(e.target.value)}
-                      className={`w-full rounded-[8px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-600 ${isSingleInvestor ? "bg-slate-50 text-slate-500" : ""}`}
-                    />
+                    <div className="mb-1 flex items-center justify-between">
+                      <label className="text-[11px] font-semibold text-slate-700">Montant</label>
+                      {!isSingleInvestor && (
+                        <div className="flex rounded-[6px] border border-slate-200 p-0.5 text-[10px] font-semibold">
+                          <button
+                            type="button"
+                            onClick={() => setAmountMode("amount")}
+                            className={`rounded-[4px] px-2 py-0.5 transition ${amountMode === "amount" ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-700"}`}
+                          >
+                            F CFA
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAmountMode("percent")}
+                            className={`rounded-[4px] px-2 py-0.5 transition ${amountMode === "percent" ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-700"}`}
+                          >
+                            %
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {isSingleInvestor ? (
+                      <input
+                        type="number"
+                        value={remaining}
+                        readOnly
+                        className="w-full rounded-[8px] border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-500 outline-none"
+                      />
+                    ) : amountMode === "percent" ? (
+                      <>
+                        <input
+                          type="number"
+                          placeholder="Ex : 25"
+                          value={percent}
+                          max={100}
+                          min={0}
+                          onChange={(e) => setPercent(e.target.value)}
+                          className="w-full rounded-[8px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-600"
+                        />
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          = {fmtAmount(investAmount)} sur {fmtAmount(remaining)} restants
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <input
+                          type="number"
+                          placeholder={`Max : ${remaining.toLocaleString("fr-FR")}`}
+                          value={amount}
+                          max={remaining}
+                          onChange={(e) => setAmount(e.target.value)}
+                          className="w-full rounded-[8px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-600"
+                        />
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          = {investPercentOfRemaining.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}% du montant restant
+                        </p>
+                      </>
+                    )}
                   </div>
                   <div>
                     <label className="mb-1 block text-[11px] font-semibold text-slate-700">Taux proposé (%)</label>
@@ -524,10 +991,44 @@ export default function OpportunityDetailPage() {
                       </p>
                     )}
                   </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] font-semibold text-slate-700">
+                      Conditions d&apos;investissement <span className="font-normal text-slate-400">(optionnel)</span>
+                    </label>
+                    <textarea
+                      rows={3}
+                      maxLength={1000}
+                      placeholder="Garanties demandées, calendrier de versement, clauses spécifiques…"
+                      value={conditions}
+                      onChange={(e) => setConditions(e.target.value)}
+                      className="w-full resize-none rounded-[8px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-600"
+                    />
+                  </div>
 
                   {investAmount > 0 && proposedReturn && (
                     <div className="rounded-[8px] bg-slate-50 p-3 text-[12px]">
+                      <p className="mb-2 text-[11px] font-bold text-slate-700">Récapitulatif de l&apos;offre</p>
                       <div className="flex justify-between">
+                        <span className="text-slate-500">Montant investi</span>
+                        <span className="font-semibold text-slate-900">{fmtAmount(investAmount)}</span>
+                      </div>
+                      <div className="mt-1 flex justify-between">
+                        <span className="text-slate-500">Part du montant demandé</span>
+                        <span className="font-semibold text-slate-900">
+                          {requested > 0 ? ((investAmount / requested) * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) : 0}%
+                        </span>
+                      </div>
+                      <div className="mt-1 flex justify-between">
+                        <span className="text-slate-500">Taux proposé</span>
+                        <span className="font-semibold text-slate-900">{Number(proposedReturn)}%</span>
+                      </div>
+                      <div className="mt-1 flex justify-between">
+                        <span className="text-slate-500">Durée</span>
+                        <span className="font-semibold text-slate-900">
+                          {opportunity.durationMonths ? `${opportunity.durationMonths} mois` : "—"}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex justify-between">
                         <span className="text-slate-500">Gain estimé</span>
                         <span className="font-semibold text-green-600">{fmtAmount(gainEstimate)}</span>
                       </div>
@@ -535,6 +1036,12 @@ export default function OpportunityDetailPage() {
                         <span className="text-slate-500">Total à recevoir</span>
                         <span className="font-bold text-slate-900">{fmtAmount(totalEstimate)}</span>
                       </div>
+                      {conditions.trim() && (
+                        <div className="mt-2 border-t border-slate-200 pt-2">
+                          <span className="text-slate-500">Conditions : </span>
+                          <span className="text-slate-700">{conditions}</span>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -571,7 +1078,7 @@ export default function OpportunityDetailPage() {
 
             {/* Aide */}
             <div className="rounded-[18px] border border-slate-200 bg-white p-5">
-              <p className="mb-1 text-[13px] font-bold text-slate-900">Besoin d'aide ?</p>
+              <p className="mb-1 text-[13px] font-bold text-slate-900">Besoin d&apos;aide ?</p>
               <p className="mb-3 text-[11px] text-slate-500">
                 Notre équipe est disponible pour vous accompagner dans votre décision.
               </p>
@@ -583,6 +1090,10 @@ export default function OpportunityDetailPage() {
           </div>
         </div>
       </div>
+
+      {previewDocId && (
+        <DocumentPreviewModal documentId={previewDocId} onClose={() => setPreviewDocId(null)} />
+      )}
     </div>
   );
 }

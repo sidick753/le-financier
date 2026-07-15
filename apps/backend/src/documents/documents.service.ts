@@ -5,9 +5,10 @@ import { CreateDocumentDto } from './dto/create-document.dto';
 import { getKycRequirements } from './kyc-checklist';
 import { FundingRepository } from '../funding/funding.repository';
 import { OrganizationsRepository } from '../organizations/organizations.repository';
-import { EDITABLE_FUNDING_STATUSES } from '../funding/funding-status.constants';
+import { EDITABLE_FUNDING_STATUSES, PUBLIC_FUNDING_STATUSES } from '../funding/funding-status.constants';
+import { INVESTOR_VISIBLE_DOCUMENT_TYPES } from './document-visibility.constants';
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = [
   'application/pdf',
   'image/jpeg',
@@ -29,7 +30,7 @@ export class DocumentsService {
       throw new BadRequestException('Aucun fichier reçu.');
     }
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      throw new BadRequestException('Le fichier dépasse la taille maximale de 10 Mo.');
+      throw new BadRequestException('Le fichier dépasse la taille maximale de 50 Mo.');
     }
     if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
       throw new BadRequestException(
@@ -74,8 +75,31 @@ export class DocumentsService {
       throw new NotFoundException('Document introuvable.');
     }
     const isAdmin = requesterRole === 'ADMIN' || requesterRole === 'SUPER_ADMIN';
-    if (document.uploadedById !== requesterId && !isAdmin) {
-      throw new ForbiddenException('Accès non autorisé à ce document.');
+    if (!isAdmin && document.uploadedById !== requesterId) {
+      // Pas le déposant lui-même : autorisé seulement s'il est membre de
+      // l'organisation propriétaire du document (ex. un cofondateur qui
+      // consulte un document déposé par un autre membre de la même PME).
+      const isOrgMember = document.organizationId
+        ? await this.organizationsRepository.isMember(document.organizationId, requesterId)
+        : false;
+      if (!isOrgMember) {
+        // Ni membre ni admin : autorisé uniquement pour un type de document
+        // "métier" (pas KYC) rattaché — directement ou via l'organisation —
+        // à une demande de financement déjà rendue publique. Même règle que
+        // findAllByFundingRequestForUser/findAllByOrganizationForUser, pour
+        // qu'un investisseur ne puisse pas contourner le filtre de liste en
+        // devinant l'id d'un document KYC.
+        const isInvestorVisible =
+          INVESTOR_VISIBLE_DOCUMENT_TYPES.includes(document.type) &&
+          (document.fundingRequestId
+            ? await this.isFundingRequestPublic(document.fundingRequestId)
+            : document.organizationId
+              ? await this.hasPublicFundingRequest(document.organizationId)
+              : false);
+        if (!isInvestorVisible) {
+          throw new ForbiddenException('Accès non autorisé à ce document.');
+        }
+      }
     }
     const url = await this.storageService.getSignedDownloadUrl(document.storageKey);
     return { url, fileName: document.fileName, mimeType: document.mimeType };
@@ -98,10 +122,48 @@ export class DocumentsService {
       fundingRequest.organizationId,
       userId,
     );
-    if (!isMember) {
+    const documents = await this.documentsRepository.findAllByFundingRequestId(fundingRequestId);
+    if (isMember) {
+      return documents;
+    }
+    // Non-membre (investisseur, institution...) : accès en lecture seule aux
+    // documents "métier" (pas KYC) une fois la demande rendue publique — pour
+    // évaluer le dossier avant d'engager des fonds. Une demande encore en
+    // DRAFT/UNDER_REVIEW reste entièrement privée.
+    if (!PUBLIC_FUNDING_STATUSES.includes(fundingRequest.status)) {
       throw new ForbiddenException("Vous n'avez pas accès à cette demande.");
     }
-    return this.documentsRepository.findAllByFundingRequestId(fundingRequestId);
+    return documents.filter((doc) => INVESTOR_VISIBLE_DOCUMENT_TYPES.includes(doc.type));
+  }
+
+  // Le RCCM, les bilans, etc. sont versés une fois au niveau de l'organisation
+  // (checklist KYC, cf. kyc-checklist.ts) plutôt que ressaisis à chaque demande
+  // de financement — c'est ici, et non dans findAllByFundingRequestForUser, que
+  // vit la majorité des documents "métier" qu'un investisseur veut consulter.
+  async findAllByOrganizationForUser(organizationId: string, userId: string) {
+    const isMember = await this.organizationsRepository.isMember(organizationId, userId);
+    const documents = await this.documentsRepository.findAllByOrganizationId(organizationId);
+    if (isMember) {
+      return documents;
+    }
+    if (!(await this.hasPublicFundingRequest(organizationId))) {
+      throw new ForbiddenException("Vous n'avez pas accès à cette organisation.");
+    }
+    return documents.filter((doc) => INVESTOR_VISIBLE_DOCUMENT_TYPES.includes(doc.type));
+  }
+
+  private async isFundingRequestPublic(fundingRequestId: string): Promise<boolean> {
+    const fundingRequest = await this.fundingRepository.findById(fundingRequestId);
+    return !!fundingRequest && PUBLIC_FUNDING_STATUSES.includes(fundingRequest.status);
+  }
+
+  // Une organisation n'a pas de statut public propre : elle est "publique" au
+  // sens documentaire dès lors qu'au moins une de ses demandes de financement
+  // l'est — évite qu'un investisseur puisse lister les documents d'une PME qui
+  // n'a encore jamais rien publié.
+  private async hasPublicFundingRequest(organizationId: string): Promise<boolean> {
+    const fundingRequests = await this.fundingRepository.findAllByOrganizationId(organizationId);
+    return fundingRequests.some((fr) => PUBLIC_FUNDING_STATUSES.includes(fr.status));
   }
 
   async remove(documentId: string, userId: string, requesterRole?: string) {

@@ -2,6 +2,8 @@
 
 import { useInstitutionData, isRecentlyCreated } from "@/lib/use-institution-data";
 import { NotifBell } from "@/components/ui/notif-bell";
+import { useSortableRows } from "@/lib/use-sortable-rows";
+import { SortableTh } from "@/components/ui/sortable-th";
 
 const CATEGORY_LABELS: Record<string, string> = {
   FACTURE: "Affacturage",
@@ -75,6 +77,29 @@ export default function InstitutionPortefeuillePage() {
       return sum + capital + (capital * (rate / 100) * (elapsedMonths / 12));
     }, 0);
 
+  const { sortedRows: sortedInvestments, sortKey, direction, toggleSort } = useSortableRows(
+    investments,
+    {
+      pme: (inv) => inv.fundingRequest.organization.legalName,
+      category: (inv) => inv.fundingRequest.category,
+      capital: (inv) => Number(inv.amountCommitted),
+      value: (inv) => {
+        const capital = Number(inv.amountCommitted);
+        const rate = Number(inv.lockedReturn ?? 0);
+        const elapsedMonths = getElapsedMonths(inv.createdAt, inv.fundingRequest.durationMonths);
+        return capital + capital * (rate / 100) * (elapsedMonths / 12);
+      },
+      rate: (inv) => Number(inv.lockedReturn ?? 0),
+      progress: (inv) => {
+        const requested = Number(inv.fundingRequest.amountRequested);
+        const raised = Number(inv.fundingRequest.amountRaised);
+        return requested > 0 ? Math.min(100, (raised / requested) * 100) : 0;
+      },
+      status: (inv) => (isRecentlyCreated(inv.createdAt) ? 1 : 0),
+      createdAt: (inv) => inv.createdAt,
+    },
+  );
+
   return (
     <>
       <header className="sticky top-0 z-10 flex h-15 items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
@@ -141,18 +166,18 @@ export default function InstitutionPortefeuillePage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500">
-                  <th className="px-5 py-3 text-left font-medium">PME</th>
-                  <th className="px-5 py-3 text-left font-medium">Type</th>
-                  <th className="px-5 py-3 text-right font-medium">Investi</th>
-                  <th className="px-5 py-3 text-right font-medium">Valeur</th>
-                  <th className="px-5 py-3 text-center font-medium">Rdt</th>
-                  <th className="px-5 py-3 text-left font-medium">Progression</th>
-                  <th className="px-5 py-3 text-left font-medium">Statut</th>
-                  <th className="px-5 py-3 text-left font-medium">Échéance</th>
+                  <SortableTh label="PME" sortKey="pme" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Type" sortKey="category" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Investi" sortKey="capital" currentKey={sortKey} direction={direction} onSort={toggleSort} align="right" />
+                  <SortableTh label="Valeur" sortKey="value" currentKey={sortKey} direction={direction} onSort={toggleSort} align="right" />
+                  <SortableTh label="Rdt" sortKey="rate" currentKey={sortKey} direction={direction} onSort={toggleSort} align="center" />
+                  <SortableTh label="Progression" sortKey="progress" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Statut" sortKey="status" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Échéance" sortKey="createdAt" currentKey={sortKey} direction={direction} onSort={toggleSort} />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {investments.map((inv) => {
+                {sortedInvestments.map((inv) => {
                   const capital = Number(inv.amountCommitted);
                   const rate = Number(inv.lockedReturn ?? 0);
                   const elapsedMonths = getElapsedMonths(inv.createdAt, inv.fundingRequest.durationMonths);

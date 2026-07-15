@@ -6,6 +6,8 @@ import { useOffers } from "@/lib/use-offers";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { SectionCard } from "@/components/ui/section-card";
 import { NotifBell } from "@/components/ui/notif-bell";
+import { KycAlertBanner } from "@/components/kyc-alert-banner";
+import { CompanyProfileAlertBanner } from "@/components/company-profile-alert-banner";
 
 const OFFER_STATUS: Record<string, { label: string; cls: string }> = {
   INTERESTED:            { label: "Intéressé",       cls: "bg-slate-100 text-slate-600" },
@@ -235,6 +237,9 @@ export default function DashboardPage() {
           <NotifBell />
         </div>
       </header>
+
+      <CompanyProfileAlertBanner />
+      <KycAlertBanner />
 
       {/* ── Content ── */}
       <div className="p-8 pb-16">

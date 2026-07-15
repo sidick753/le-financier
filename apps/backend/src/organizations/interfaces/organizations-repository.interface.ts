@@ -48,6 +48,14 @@ export interface BankInfoData {
   bankSwiftCode?: string;
 }
 
+export interface IdentityData {
+  sector?: string;
+  legalForm?: string;
+  foundedYear?: number;
+  address?: string;
+  city?: string;
+}
+
 export interface IOrganizationsRepository {
   findById(id: string): Promise<Organization | null>;
   findByIdAdmin(id: string): Promise<Organization | null>;
@@ -79,4 +87,5 @@ export interface IOrganizationsRepository {
   ): Promise<Organization>;
   updateCreditProfile(id: string, data: CreditProfileData): Promise<Organization>;
   updateBankInfo(id: string, data: BankInfoData): Promise<Organization>;
+  updateIdentity(id: string, data: IdentityData): Promise<Organization>;
 }

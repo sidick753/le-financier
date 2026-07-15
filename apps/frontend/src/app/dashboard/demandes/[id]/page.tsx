@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { NotifBell } from "@/components/ui/notif-bell";
+import { DocumentPreviewModal } from "@/components/document-preview-modal";
 import { FundingDocument, DOCUMENT_TYPE_LABELS, DOCUMENT_STATUS_CONFIG, formatFileSize } from "@/lib/document-labels";
 import { EDITABLE_STATUSES } from "@/lib/funding-status";
 
@@ -81,6 +82,7 @@ export default function DemandeDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [previewDocId, setPreviewDocId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token || !id) return;
@@ -285,9 +287,17 @@ export default function DemandeDetailPage() {
                             {DOCUMENT_TYPE_LABELS[doc.type] ?? doc.type} · {formatFileSize(doc.sizeBytes)}
                           </p>
                         </div>
-                        <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${dcfg.badgeClass}`}>
-                          {dcfg.label}
-                        </span>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${dcfg.badgeClass}`}>
+                            {dcfg.label}
+                          </span>
+                          <button
+                            onClick={() => setPreviewDocId(doc.id)}
+                            className="rounded-[8px] border border-slate-200 px-3 py-1.5 text-[12px] font-medium text-slate-600 transition hover:bg-slate-50"
+                          >
+                            Voir
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -304,6 +314,10 @@ export default function DemandeDetailPage() {
           </>
         )}
       </div>
+
+      {previewDocId && (
+        <DocumentPreviewModal documentId={previewDocId} onClose={() => setPreviewDocId(null)} />
+      )}
     </>
   );
 }

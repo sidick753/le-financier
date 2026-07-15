@@ -112,7 +112,10 @@ Le fichier est stocké dans l'object storage (S3/MinIO).`,
     return this.documentsService.upload(file, { ...dto, organizationId }, req.user.id);
   }
 
-  @ApiOperation({ summary: 'URL de téléchargement', description: 'Retourne une URL pré-signée (valable 15 min) pour télécharger le document.' })
+  @ApiOperation({
+    summary: 'URL de téléchargement',
+    description: "Retourne une URL pré-signée (valable 15 min) pour télécharger le document. Accessible au déposant, à l'admin, à tout membre de l'organisation propriétaire, et — pour les types de document non-KYC (RCCM, états financiers, pièces jointes) — à tout utilisateur authentifié dès que la demande de financement liée est publique (PUBLISHED/FUNDED/CLOSED).",
+  })
   @ApiParam({ name: 'id', description: 'UUID du document' })
   @ApiResponse({ status: 200, description: '{ url: string }' })
   @ApiResponse({ status: 403, description: 'Accès non autorisé' })
@@ -140,28 +143,28 @@ Le fichier est stocké dans l'object storage (S3/MinIO).`,
     return this.documentsService.getKycStatus(organizationId);
   }
 
-  @ApiOperation({ summary: 'Documents d\'une organisation', description: 'Retourne tous les documents associés à une organisation.' })
+  @ApiOperation({
+    summary: 'Documents d\'une organisation',
+    description: "Membre de l'organisation : liste complète (y compris KYC). Autre utilisateur authentifié : sous-ensemble \"métier\" (RCCM, états financiers — pas KYC) si l'organisation a au moins une demande de financement publique (PUBLISHED/FUNDED/CLOSED), sinon 403.",
+  })
   @ApiParam({ name: 'organizationId', description: 'UUID de l\'organisation' })
   @ApiResponse({ status: 200, description: 'Liste de documents' })
+  @ApiResponse({ status: 403, description: 'Organisation sans demande publique et non membre' })
   @Get('organization/:organizationId')
-  async findAllByOrganization(
+  findAllByOrganization(
     @Param('organizationId') organizationId: string,
     @Request() req,
   ) {
-    const isMember = await this.organizationsRepository.isMember(
-      organizationId,
-      req.user.id,
-    );
-    if (!isMember) {
-      throw new ForbiddenException("Vous n'avez pas accès à cette organisation.");
-    }
-    return this.documentsService.findAllByOrganizationId(organizationId);
+    return this.documentsService.findAllByOrganizationForUser(organizationId, req.user.id);
   }
 
-  @ApiOperation({ summary: 'Documents d\'une demande de financement', description: 'Retourne tous les documents attachés à une demande. Réservé aux membres de l\'organisation propriétaire.' })
+  @ApiOperation({
+    summary: 'Documents d\'une demande de financement',
+    description: "Membre de l'organisation propriétaire : liste complète (y compris KYC). Autre utilisateur authentifié : sous-ensemble \"métier\" (RCCM, états financiers, pièces jointes — pas KYC) si la demande est publique (PUBLISHED/FUNDED/CLOSED), sinon 403.",
+  })
   @ApiParam({ name: 'fundingRequestId', description: 'UUID de la demande de financement' })
   @ApiResponse({ status: 200, description: 'Liste de documents' })
-  @ApiResponse({ status: 403, description: 'Pas membre de l\'organisation propriétaire' })
+  @ApiResponse({ status: 403, description: 'Demande non publique et non membre de l\'organisation propriétaire' })
   @ApiResponse({ status: 404, description: 'Demande introuvable' })
   @Get('funding-request/:fundingRequestId')
   findAllByFundingRequest(

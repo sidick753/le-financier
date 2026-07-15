@@ -3,6 +3,7 @@ import { OrganizationsRepository } from './organizations.repository';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateCreditProfileDto } from './dto/update-credit-profile.dto';
 import { UpdateBankInfoDto } from './dto/update-bank-info.dto';
+import { UpdateIdentityDto } from './dto/update-identity.dto';
 
 @Injectable()
 export class OrganizationsService {
@@ -99,5 +100,19 @@ export class OrganizationsService {
     }
 
     return this.organizationsRepository.updateBankInfo(id, dto);
+  }
+
+  async updateIdentity(id: string, userId: string, dto: UpdateIdentityDto) {
+    const organization = await this.organizationsRepository.findById(id);
+    if (!organization) {
+      throw new NotFoundException('Organisation introuvable.');
+    }
+
+    const isMember = await this.organizationsRepository.isMember(id, userId);
+    if (!isMember) {
+      throw new ForbiddenException("Vous n'avez pas accès à cette organisation.");
+    }
+
+    return this.organizationsRepository.updateIdentity(id, dto);
   }
 }

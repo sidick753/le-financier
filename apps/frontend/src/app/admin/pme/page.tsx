@@ -7,6 +7,8 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import type { AdminOrganization } from "@/lib/use-admin-data";
 import { ORG_STATUS_CONFIG, formatAdminDate, formatCompactAmount } from "@/lib/admin-ui";
+import { useSortableRows } from "@/lib/use-sortable-rows";
+import { SortableTh } from "@/components/ui/sortable-th";
 
 const FILTERS = ["Tous", "Vérifié", "En attente", "Suspendu"] as const;
 const FILTER_TO_STATUS: Record<string, string | undefined> = {
@@ -108,6 +110,18 @@ function AdminPmePageContent() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  const { sortedRows: sortedOrganizations, sortKey, direction, toggleSort } = useSortableRows(
+    organizations,
+    {
+      legalName: (o) => o.legalName,
+      owner: (o) => (o.members[0]?.user ? `${o.members[0].user.firstName} ${o.members[0].user.lastName}` : ""),
+      status: (o) => o.verificationStatus,
+      demandes: (o) => o.fundingRequests.length,
+      financed: (o) => o.fundingRequests.reduce((s, fr) => s + Number(fr.amountRaised ?? 0), 0),
+      createdAt: (o) => o.createdAt,
+    },
+  );
+
   return (
     <div className="p-8">
       <div className="mb-6">
@@ -178,17 +192,17 @@ function AdminPmePageContent() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500">
-                  <th className="px-5 py-3 text-left font-medium">PME</th>
-                  <th className="px-5 py-3 text-left font-medium">Dirigeant</th>
-                  <th className="px-5 py-3 text-left font-medium">Statut</th>
-                  <th className="px-5 py-3 text-left font-medium">Demandes</th>
-                  <th className="px-5 py-3 text-right font-medium">Financé</th>
-                  <th className="px-5 py-3 text-left font-medium">Inscrit le</th>
+                  <SortableTh label="PME" sortKey="legalName" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Dirigeant" sortKey="owner" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Statut" sortKey="status" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Demandes" sortKey="demandes" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Financé" sortKey="financed" currentKey={sortKey} direction={direction} onSort={toggleSort} align="right" />
+                  <SortableTh label="Inscrit le" sortKey="createdAt" currentKey={sortKey} direction={direction} onSort={toggleSort} />
                   <th className="px-5 py-3 text-left font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {organizations.map((org) => {
+                {sortedOrganizations.map((org) => {
                   const config =
                     ORG_STATUS_CONFIG[org.verificationStatus] ??
                     ORG_STATUS_CONFIG.PENDING;

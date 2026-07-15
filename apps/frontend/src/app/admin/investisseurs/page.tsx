@@ -8,6 +8,8 @@ import { api } from "@/lib/api";
 import { useAdminBadges } from "@/lib/admin-badges-context";
 import type { AdminUser } from "@/lib/use-admin-data";
 import { USER_ROLE_CONFIG, KYC_STATUS_CONFIG, formatAdminDate, formatCompactAmount } from "@/lib/admin-ui";
+import { useSortableRows } from "@/lib/use-sortable-rows";
+import { SortableTh } from "@/components/ui/sortable-th";
 
 const FILTERS = ["Tous", "Particuliers", "Institutions/Banques"] as const;
 const FILTER_TO_ROLE: Record<string, string> = {
@@ -116,6 +118,19 @@ function AdminInvestisseursPageContent() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  const { sortedRows: sortedUsers, sortKey, direction, toggleSort } = useSortableRows(users, {
+    name: (u) => `${u.firstName} ${u.lastName}`,
+    role: (u) => u.role,
+    status: (u) => u.kycStatus,
+    active: (u) =>
+      u.investments.filter((i) => ["COMMITTED", "SETTLED_OFF_PLATFORM"].includes(i.status)).length,
+    engaged: (u) =>
+      u.investments
+        .filter((i) => ["COMMITTED", "SETTLED_OFF_PLATFORM"].includes(i.status))
+        .reduce((s, i) => s + Number(i.amountCommitted), 0),
+    createdAt: (u) => u.createdAt,
+  });
+
   return (
     <div className="p-8">
       <div className="mb-6">
@@ -172,17 +187,17 @@ function AdminInvestisseursPageContent() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500">
-                  <th className="px-5 py-3 text-left font-medium">Investisseur</th>
-                  <th className="px-5 py-3 text-left font-medium">Type</th>
-                  <th className="px-5 py-3 text-left font-medium">Statut</th>
-                  <th className="px-5 py-3 text-left font-medium">Actifs</th>
-                  <th className="px-5 py-3 text-right font-medium">Engagé</th>
-                  <th className="px-5 py-3 text-left font-medium">Inscription</th>
+                  <SortableTh label="Investisseur" sortKey="name" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Type" sortKey="role" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Statut" sortKey="status" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Actifs" sortKey="active" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Engagé" sortKey="engaged" currentKey={sortKey} direction={direction} onSort={toggleSort} align="right" />
+                  <SortableTh label="Inscription" sortKey="createdAt" currentKey={sortKey} direction={direction} onSort={toggleSort} />
                   <th className="px-5 py-3 text-left font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {users.map((u) => {
+                {sortedUsers.map((u) => {
                   const roleConfig = USER_ROLE_CONFIG[u.role] ?? USER_ROLE_CONFIG.INVESTOR;
                   const kycConfig = KYC_STATUS_CONFIG[u.kycStatus] ?? KYC_STATUS_CONFIG.PENDING;
                   const activeInv = u.investments.filter((i) =>

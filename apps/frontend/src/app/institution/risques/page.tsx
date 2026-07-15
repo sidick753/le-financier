@@ -9,6 +9,8 @@ import {
 } from "@/lib/use-institution-settings";
 import { useInstitutionBadges } from "@/lib/institution-badges-context";
 import { NotifBell } from "@/components/ui/notif-bell";
+import { useSortableRows } from "@/lib/use-sortable-rows";
+import { SortableTh } from "@/components/ui/sortable-th";
 
 const AML_TYPE_LABELS: Record<AmlAlertType, string> = {
   TRANSACTION_INHABITUELLE: "Transaction inhabituelle",
@@ -139,6 +141,17 @@ export default function RisquesPage() {
   const conformes = indicateurs.filter((i) => i.status === "conforme").length;
   const attentions = indicateurs.filter((i) => i.status === "attention").length;
   const violations = indicateurs.filter((i) => i.status === "violation").length;
+
+  const { sortedRows: sortedAmlAlerts, sortKey, direction, toggleSort } = useSortableRows(
+    amlAlerts,
+    {
+      client: (a) => a.clientLabel,
+      type: (a) => AML_TYPE_LABELS[a.alertType],
+      amount: (a) => (a.amount === null ? null : Number(a.amount)),
+      detectedAt: (a) => a.detectedAt,
+      status: (a) => a.status,
+    },
+  );
 
   return (
     <>
@@ -325,16 +338,16 @@ export default function RisquesPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500">
-                      <th className="px-5 py-3 text-left font-medium">Client / Contrepartie</th>
-                      <th className="px-5 py-3 text-left font-medium">Type d&apos;alerte</th>
-                      <th className="px-5 py-3 text-right font-medium">Montant</th>
-                      <th className="px-5 py-3 text-left font-medium">Date</th>
-                      <th className="px-5 py-3 text-left font-medium">Statut</th>
+                      <SortableTh label="Client / Contrepartie" sortKey="client" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                      <SortableTh label="Type d'alerte" sortKey="type" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                      <SortableTh label="Montant" sortKey="amount" currentKey={sortKey} direction={direction} onSort={toggleSort} align="right" />
+                      <SortableTh label="Date" sortKey="detectedAt" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                      <SortableTh label="Statut" sortKey="status" currentKey={sortKey} direction={direction} onSort={toggleSort} />
                       <th className="px-5 py-3" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {amlAlerts.map((alert) => {
+                    {sortedAmlAlerts.map((alert) => {
                       const statusConfig = AML_STATUS_CONFIG[alert.status];
                       return (
                         <tr key={alert.id} className="hover:bg-gray-50">

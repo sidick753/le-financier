@@ -5,6 +5,17 @@ import { useAuth } from "@/lib/auth-context";
 import { usePmeData } from "@/lib/use-pme-data";
 import { api } from "@/lib/api";
 import { NotifBell } from "@/components/ui/notif-bell";
+import {
+  SECTEURS,
+  TAILLE_MARCHE,
+  SCALABILITE,
+  MOAT,
+  PART_MARCHE,
+  TRACK_RECORD,
+  COMPLETUDE_EQUIPE,
+  DROITS_INVESTISSEUR,
+  TRANSPARENCE,
+} from "@/lib/credit-profile-options";
 
 type Tab = "entreprise" | "bancaire" | "securite";
 
@@ -26,72 +37,12 @@ function EyeIcon() {
   );
 }
 
-const SECTEURS = [
-  { value: "services_essentiels", label: "Services essentiels / Santé / Éducation" },
-  { value: "agro", label: "Agriculture / Distribution alimentaire" },
-  { value: "commerce_detail", label: "Commerce de détail" },
-  { value: "btp", label: "BTP / Transport & Logistique" },
-  { value: "import_export", label: "Import / Export" },
-  { value: "commerce_mono", label: "Commerce mono / Saisonnier" },
-  { value: "volatil", label: "Secteur volatil" },
-];
-
-const TAILLE_MARCHE = [
-  { value: "grand_croissant", label: "Grand marché en croissance" },
-  { value: "niche_croissante", label: "Niche en croissance" },
-  { value: "grand_mature", label: "Grand marché mature" },
-  { value: "niche_mature", label: "Niche mature" },
-  { value: "incertain", label: "Incertain" },
-];
-
-const SCALABILITE = [
-  { value: "forte", label: "Forte scalabilité" },
-  { value: "moyenne", label: "Scalabilité moyenne" },
-  { value: "faible", label: "Faible scalabilité" },
-];
-
-const MOAT = [
-  { value: "fort", label: "Fort (technologie, marque, réseau)" },
-  { value: "moderate", label: "Modéré" },
-  { value: "faible", label: "Faible" },
-];
-
-const PART_MARCHE = [
-  { value: "leader", label: "Leader" },
-  { value: "challenger", label: "Challenger" },
-  { value: "suiveur", label: "Suiveur" },
-  { value: "marginal", label: "Marginal" },
-];
-
-const TRACK_RECORD = [
-  { value: "succes_anterieur", label: "Succès entrepreneurial antérieur" },
-  { value: "operationnel_solide", label: "Opérationnel solide" },
-  { value: "premiere_aventure", label: "Première aventure" },
-  { value: "signaux_negatifs", label: "Signaux négatifs" },
-];
-
-const COMPLETUDE_EQUIPE = [
-  { value: "complete", label: "Équipe complète" },
-  { value: "presque", label: "Presque complète" },
-  { value: "incomplete", label: "Incomplète" },
-  { value: "solo", label: "Fondateur seul" },
-];
-
-const DROITS_INVESTISSEUR = [
-  { value: "solides", label: "Solides (pacte d'associés complet)" },
-  { value: "standards", label: "Standards" },
-  { value: "limites", label: "Limités" },
-  { value: "absents", label: "Absents" },
-];
-
-const TRANSPARENCE = [
-  { value: "audite", label: "Comptes audités" },
-  { value: "comptes_formels", label: "Comptes formels" },
-  { value: "declaratif", label: "Déclaratif" },
-  { value: "opaque", label: "Opaque" },
-];
-
 interface CreditProfile {
+  sector: string | null;
+  legalForm: string | null;
+  foundedYear: number | null;
+  address: string | null;
+  city: string | null;
   secteurCode: string | null;
   secteurSaisonnalite: boolean | null;
   secteurImportDevises: boolean | null;
@@ -148,6 +99,15 @@ export default function ParametresPage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [sector, setSector] = useState("");
+  const [legalForm, setLegalForm] = useState("");
+  const [foundedYear, setFoundedYear] = useState("");
+  const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
+  const [isSavingIdentity, setIsSavingIdentity] = useState(false);
+  const [savedIdentity, setSavedIdentity] = useState(false);
+  const [identityError, setIdentityError] = useState<string | null>(null);
+
   const [secteurCode, setSecteurCode] = useState("");
   const [secteurSaisonnalite, setSecteurSaisonnalite] = useState(false);
   const [secteurImportDevises, setSecteurImportDevises] = useState(false);
@@ -199,6 +159,11 @@ export default function ParametresPage() {
     api
       .get<CreditProfile>(`/organizations/${organization.id}`, token)
       .then((p) => {
+        setSector(p.sector && p.sector !== "Secteur non renseigné" ? p.sector : "");
+        setLegalForm(p.legalForm ?? "");
+        setFoundedYear(p.foundedYear != null ? String(p.foundedYear) : "");
+        setAddress(p.address ?? "");
+        setCity(p.city ?? "");
         setSecteurCode(p.secteurCode ?? "");
         setSecteurSaisonnalite(p.secteurSaisonnalite ?? false);
         setSecteurImportDevises(p.secteurImportDevises ?? false);
@@ -232,6 +197,32 @@ export default function ParametresPage() {
       .catch((err) => setError(err instanceof Error ? err.message : "Erreur de chargement."))
       .finally(() => setIsLoading(false));
   }, [token, organization]);
+
+  async function handleSaveIdentity() {
+    if (!token || !organization) return;
+    setIsSavingIdentity(true);
+    setSavedIdentity(false);
+    setIdentityError(null);
+    try {
+      await api.patch(
+        `/organizations/${organization.id}/identity`,
+        {
+          sector: sector || undefined,
+          legalForm: legalForm || undefined,
+          foundedYear: foundedYear ? Number(foundedYear) : undefined,
+          address: address || undefined,
+          city: city || undefined,
+        },
+        token,
+      );
+      setSavedIdentity(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      setIdentityError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement.");
+    } finally {
+      setIsSavingIdentity(false);
+    }
+  }
 
   async function handleSave() {
     if (!token || !organization) return;
@@ -271,6 +262,7 @@ export default function ParametresPage() {
         token,
       );
       setSaved(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement.");
     } finally {
@@ -295,6 +287,7 @@ export default function ParametresPage() {
         token,
       );
       setSavedBankInfo(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       setBankInfoError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement.");
     } finally {
@@ -382,6 +375,67 @@ export default function ParametresPage() {
             )}
 
             <div className="space-y-6">
+              {/* Identité de l'entreprise — jamais demandée à l'inscription, complétée ici.
+                  C'est ce que l'admin voit dans la fiche PME (Forme juridique, Année de
+                  création, Ville, Adresse). */}
+              <section className="rounded-xl border border-gray-200 bg-white p-6">
+                <h2 className="mb-1 text-sm font-semibold text-gray-900">Identité de l'entreprise</h2>
+                <p className="mb-4 text-xs text-gray-500">
+                  Visible par notre équipe lors de la vérification KYC et sur votre profil auprès des investisseurs.
+                </p>
+
+                {identityError && (
+                  <div className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{identityError}</div>
+                )}
+                {savedIdentity && (
+                  <div className="mb-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-700">
+                    Identité enregistrée.
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Secteur d'activité</label>
+                    <input type="text" placeholder="Ex : Agroalimentaire" value={sector} onChange={(e) => setSector(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Forme juridique</label>
+                    <input type="text" placeholder="Ex : SARL" value={legalForm} onChange={(e) => setLegalForm(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Année de création</label>
+                    <input type="number" placeholder="Ex : 2019" value={foundedYear} onChange={(e) => setFoundedYear(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Ville</label>
+                    <input type="text" placeholder="Ex : Abidjan" value={city} onChange={(e) => setCity(e.target.value)}
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Adresse</label>
+                  <input type="text" placeholder="Ex : Rue des Jardins, Cocody" value={address} onChange={(e) => setAddress(e.target.value)}
+                    className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                </div>
+
+                <div className="mt-4 flex justify-end">
+                  <button
+                    onClick={handleSaveIdentity}
+                    disabled={isSavingIdentity}
+                    className="rounded-md bg-brand-700 px-5 py-2 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-50"
+                  >
+                    {isSavingIdentity ? "Enregistrement…" : "Enregistrer"}
+                  </button>
+                </div>
+              </section>
+
               {/* Secteur & structure */}
               <section className="rounded-xl border border-gray-200 bg-white p-6">
                 <h2 className="mb-1 text-sm font-semibold text-gray-900">Secteur & structure</h2>

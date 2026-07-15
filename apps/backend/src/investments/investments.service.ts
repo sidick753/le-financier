@@ -23,6 +23,7 @@ export class InvestmentsService {
       investorId,
       dto.amountCommitted,
       dto.proposedReturn,
+      dto.conditions,
     );
 
     const fundingRequest = await this.fundingRepository.findById(dto.fundingRequestId);

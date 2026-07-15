@@ -6,8 +6,21 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { RejectReasonModal } from "@/components/reject-reason-modal";
-import { ORG_STATUS_CONFIG, formatAdminDate, formatCompactAmount, formatFileSize } from "@/lib/admin-ui";
+import { DocumentPreviewModal } from "@/components/document-preview-modal";
+import { ORG_STATUS_CONFIG, formatAdminDate, formatCompactAmount, formatFullAmount, formatFileSize } from "@/lib/admin-ui";
 import { useAdminBadges } from "@/lib/admin-badges-context";
+import {
+  SECTEURS,
+  TAILLE_MARCHE,
+  SCALABILITE,
+  MOAT,
+  PART_MARCHE,
+  TRACK_RECORD,
+  COMPLETUDE_EQUIPE,
+  DROITS_INVESTISSEUR,
+  TRANSPARENCE,
+  labelFor,
+} from "@/lib/credit-profile-options";
 
 const DOC_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   PENDING_REVIEW: { label: "À vérifier", className: "bg-yellow-100 text-yellow-700" },
@@ -32,6 +45,34 @@ interface OrganizationDetail {
   bankAccountHolder: string | null;
   bankAccountNumber: string | null;
   bankSwiftCode: string | null;
+
+  // ── Profil de crédit — saisi par la PME dans Paramètres > Profil entreprise ──
+  secteurCode: string | null;
+  secteurSaisonnalite: boolean | null;
+  secteurImportDevises: boolean | null;
+  secteurSoutienPublic: boolean | null;
+  cashFlowAnnuel: string | null;
+  fluxMobileMoneyMensuel: string | null;
+  autonomieFinanciere: string | null;
+  tauxEndettement: string | null;
+  ratioLiquidite: string | null;
+  tcamCa3ans: string | null;
+  margeBrute: string | null;
+  runwayMois: number | null;
+  nbClientsActifs: number | null;
+  dirigeantExperienceAns: number | null;
+  dirigeantAntecedents: string | null;
+  dirigeantIncidentsLegaux: string | null;
+  experienceSecteurAns: number | null;
+  trackRecord: string | null;
+  completudeEquipe: string | null;
+  droitsInvestisseur: string | null;
+  transparence: string | null;
+  tailleMarche: string | null;
+  scalabilite: string | null;
+  moat: string | null;
+  partMarcheRelative: string | null;
+
   members: Array<{
     id: string;
     role: string;
@@ -75,6 +116,7 @@ export default function AdminPmeDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [modal, setModal] = useState<"reject" | "suspend" | null>(null);
+  const [previewDocId, setPreviewDocId] = useState<string | null>(null);
 
   function load() {
     if (!token) return;
@@ -237,6 +279,51 @@ export default function AdminPmeDetailPage() {
         </div>
       </div>
 
+      {/* Profil de crédit — saisi par la PME dans Paramètres > Profil entreprise,
+          utilisé par le moteur de scoring. Doit rester lisible ici pour que
+          l'admin voie exactement ce que la PME a déclaré. */}
+      <div className="mb-6 space-y-4">
+        <CreditSection title="Secteur & structure">
+          <Field label="Secteur d'activité (scoring)" value={labelFor(SECTEURS, org.secteurCode)} />
+          <BoolField label="Activité saisonnière" value={org.secteurSaisonnalite} />
+          <BoolField label="Import en devises" value={org.secteurImportDevises} />
+          <BoolField label="Soutien public au secteur" value={org.secteurSoutienPublic} />
+        </CreditSection>
+
+        <CreditSection title="Santé financière">
+          <Field label="Cash-flow annuel" value={formatAmount(org.cashFlowAnnuel)} />
+          <Field label="Flux Mobile Money mensuel" value={formatAmount(org.fluxMobileMoneyMensuel)} />
+          <Field label="Autonomie financière" value={formatPercent(org.autonomieFinanciere)} />
+          <Field label="Taux d'endettement" value={formatPercent(org.tauxEndettement)} />
+          <Field label="Ratio de liquidité" value={formatPercent(org.ratioLiquidite)} />
+          <Field label="Nombre de clients actifs" value={org.nbClientsActifs?.toString() ?? "—"} />
+          <Field label="TCAM CA sur 3 ans" value={formatPercent(org.tcamCa3ans)} />
+          <Field label="Marge brute" value={formatPercent(org.margeBrute)} />
+          <Field label="Runway" value={org.runwayMois != null ? `${org.runwayMois} mois` : "—"} />
+        </CreditSection>
+
+        <CreditSection title="Profil du dirigeant">
+          <Field label="Expérience du dirigeant" value={org.dirigeantExperienceAns != null ? `${org.dirigeantExperienceAns} ans` : "—"} />
+          <Field
+            label="Incidents légaux connus"
+            value={org.dirigeantIncidentsLegaux === "connu" ? "Incident(s) connu(s)" : org.dirigeantIncidentsLegaux === "aucun" ? "Aucun" : "—"}
+          />
+          <Field label="Expérience sectorielle" value={org.experienceSecteurAns != null ? `${org.experienceSecteurAns} ans` : "—"} />
+          <Field label="Track record du dirigeant" value={labelFor(TRACK_RECORD, org.trackRecord)} />
+          <Field label="Antécédents du dirigeant" value={org.dirigeantAntecedents || "—"} span2 />
+        </CreditSection>
+
+        <CreditSection title="Équipe, gouvernance & marché">
+          <Field label="Taille du marché" value={labelFor(TAILLE_MARCHE, org.tailleMarche)} />
+          <Field label="Scalabilité" value={labelFor(SCALABILITE, org.scalabilite)} />
+          <Field label="Avantage concurrentiel (moat)" value={labelFor(MOAT, org.moat)} />
+          <Field label="Position sur le marché" value={labelFor(PART_MARCHE, org.partMarcheRelative)} />
+          <Field label="Complétude de l'équipe" value={labelFor(COMPLETUDE_EQUIPE, org.completudeEquipe)} />
+          <Field label="Droits investisseurs" value={labelFor(DROITS_INVESTISSEUR, org.droitsInvestisseur)} />
+          <Field label="Transparence financière" value={labelFor(TRANSPARENCE, org.transparence)} />
+        </CreditSection>
+      </div>
+
       <div className="grid grid-cols-2 gap-4 items-start">
         {/* Membres */}
         <div className="rounded-xl border border-gray-200 bg-white">
@@ -275,16 +362,24 @@ export default function AdminPmeDetailPage() {
             {org.documents.map((doc) => {
               const docConfig = DOC_STATUS_CONFIG[doc.status] ?? DOC_STATUS_CONFIG.PENDING_REVIEW;
               return (
-                <div key={doc.id} className="flex items-center justify-between p-4">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{doc.title ?? doc.fileName}</p>
-                    <p className="text-xs text-gray-500">
+                <div key={doc.id} className="flex items-center justify-between gap-3 p-4">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-gray-900">{doc.title ?? doc.fileName}</p>
+                    <p className="truncate text-xs text-gray-500">
                       {doc.title && `${doc.fileName} · `}{doc.type} · {formatFileSize(doc.sizeBytes)}
                     </p>
                   </div>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${docConfig.className}`}>
-                    {docConfig.label}
-                  </span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${docConfig.className}`}>
+                      {docConfig.label}
+                    </span>
+                    <button
+                      onClick={() => setPreviewDocId(doc.id)}
+                      className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                    >
+                      Voir
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -324,6 +419,10 @@ export default function AdminPmeDetailPage() {
         </div>
       </div>
 
+      {previewDocId && (
+        <DocumentPreviewModal documentId={previewDocId} onClose={() => setPreviewDocId(null)} />
+      )}
+
       {modal === "reject" && (
         <RejectReasonModal
           title="Rejeter cette PME"
@@ -351,6 +450,46 @@ function InfoCard({ label, value }: { label: string; value: string }) {
     <div className="rounded-xl border border-gray-200 bg-white p-4">
       <p className="text-xs text-gray-500">{label}</p>
       <p className="mt-1 text-sm font-medium text-gray-900">{value}</p>
+    </div>
+  );
+}
+
+function formatAmount(value: string | null): string {
+  if (value === null || value === undefined) return "—";
+  return `${formatFullAmount(Number(value))}`;
+}
+
+// Stocké en base sous forme de ratio 0–1, affiché en %.
+function formatPercent(value: string | null): string {
+  if (value === null || value === undefined) return "—";
+  return `${(Number(value) * 100).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} %`;
+}
+
+function CreditSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white">
+      <div className="border-b border-gray-100 p-5">
+        <p className="text-sm font-semibold text-gray-900">{title}</p>
+      </div>
+      <div className="grid grid-cols-4 gap-4 p-5">{children}</div>
+    </div>
+  );
+}
+
+function Field({ label, value, span2 }: { label: string; value: string; span2?: boolean }) {
+  return (
+    <div className={span2 ? "col-span-2" : undefined}>
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className="mt-1 text-sm font-medium text-gray-900 break-words">{value}</p>
+    </div>
+  );
+}
+
+function BoolField({ label, value }: { label: string; value: boolean | null }) {
+  return (
+    <div>
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className="mt-1 text-sm font-medium text-gray-900">{value ? "Oui" : "Non"}</p>
     </div>
   );
 }

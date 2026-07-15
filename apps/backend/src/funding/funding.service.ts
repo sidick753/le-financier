@@ -166,7 +166,15 @@ export class FundingService {
         ? await this.fundingRepository.hasActiveInvestor(id)
         : false;
 
-    return { ...fundingRequest, hasActiveInvestor };
+    // Cet endpoint est consultable publiquement (opportunités PUBLISHED) : les
+    // coordonnées bancaires de virement de la PME ne doivent jamais y figurer,
+    // même si elles sont incluses dans la relation `organization` (utilisée en
+    // interne par d'autres services pour le décaissement).
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- omission volontaire via destructuring
+    const { bankName, bankAccountHolder, bankAccountNumber, bankSwiftCode, ...publicOrganization } =
+      fundingRequest.organization;
+
+    return { ...fundingRequest, organization: publicOrganization, hasActiveInvestor };
   }
 
   async findOneAdmin(id: string) {
@@ -177,7 +185,14 @@ export class FundingService {
     return fundingRequest;
   }
 
-  async findAllPublished(filters?: { category?: string; search?: string }) {
+  async findAllPublished(filters?: {
+    category?: string;
+    search?: string;
+    sort?: string;
+    risk?: string;
+    page?: number;
+    limit?: number;
+  }) {
     return this.fundingRepository.findAllPublished(filters);
   }
 

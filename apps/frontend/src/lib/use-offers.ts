@@ -18,6 +18,7 @@ export interface Offer {
   amountCommitted: string;
   status: string;
   lockedReturn: string | null;
+  conditions: string | null;
   createdAt: string;
   fundingRequest: { title: string; currency: string };
   investor: { firstName: string; lastName: string; email: string };

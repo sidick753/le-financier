@@ -141,6 +141,11 @@ export default function OffresPage() {
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
+                      {offer.conditions && (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                          Conditions jointes
+                        </span>
+                      )}
                       {ballIsInPMECourt && (
                         <span className="rounded-full bg-yellow-100 px-3 py-1 text-xs font-medium text-yellow-700">
                           Votre tour
@@ -157,6 +162,16 @@ export default function OffresPage() {
 
                   {isExpanded && (
                     <div className="border-t border-gray-100 p-5">
+                      {/* Conditions posées par l'investisseur à la création de l'offre */}
+                      {offer.conditions && (
+                        <div className="mb-4 rounded-md bg-gray-50 p-3">
+                          <p className="mb-1 text-xs font-medium text-gray-700">
+                            Conditions de l&apos;investisseur
+                          </p>
+                          <p className="text-xs text-gray-600">{offer.conditions}</p>
+                        </div>
+                      )}
+
                       {/* Historique des propositions */}
                       <p className="mb-3 text-xs font-medium text-gray-700">
                         Historique des propositions
@@ -274,6 +289,9 @@ export default function OffresPage() {
                       <span className="ml-1 text-green-600">· {Number(offer.lockedReturn)}% figé</span>
                     )}
                   </p>
+                  {offer.conditions && (
+                    <p className="mt-0.5 text-xs italic text-gray-400">Conditions : {offer.conditions}</p>
+                  )}
                 </div>
                 <span className={`rounded-full px-3 py-1 text-xs font-medium ${statusInfo.className}`}>
                   {statusInfo.label}

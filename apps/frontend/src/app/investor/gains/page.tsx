@@ -1,6 +1,8 @@
 "use client";
 
 import { useGainsData } from "@/lib/use-gains-data";
+import { useSortableRows } from "@/lib/use-sortable-rows";
+import { SortableTh } from "@/components/ui/sortable-th";
 
 const NATURE_LABELS: Record<string, string> = {
   INTEREST: "Intérêts",
@@ -59,6 +61,14 @@ export default function GainsPage() {
   } = useGainsData();
 
   const currentYear = new Date().getFullYear();
+
+  const { sortedRows: sortedPayments, sortKey, direction, toggleSort } = useSortableRows(payments, {
+    paidAt: (p) => p.paidAt,
+    pme: (p) => p.repaymentSchedule.fundingRequest.organization.legalName,
+    category: (p) => p.repaymentSchedule.fundingRequest.category,
+    nature: (p) => p.repaymentSchedule.nature,
+    amount: (p) => Number(p.amountPaid),
+  });
 
   return (
     <div className="p-8">
@@ -176,16 +186,16 @@ export default function GainsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500">
-                  <th className="px-5 py-3 text-left font-medium">Date</th>
-                  <th className="px-5 py-3 text-left font-medium">PME</th>
-                  <th className="px-5 py-3 text-left font-medium">Type</th>
-                  <th className="px-5 py-3 text-left font-medium">Nature</th>
-                  <th className="px-5 py-3 text-right font-medium">Montant</th>
+                  <SortableTh label="Date" sortKey="paidAt" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="PME" sortKey="pme" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Type" sortKey="category" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Nature" sortKey="nature" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Montant" sortKey="amount" currentKey={sortKey} direction={direction} onSort={toggleSort} align="right" />
                   <th className="px-5 py-3 text-center font-medium">Statut</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {payments.map((payment) => (
+                {sortedPayments.map((payment) => (
                   <tr key={payment.id} className="hover:bg-gray-50">
                     <td className="px-5 py-3 text-xs text-gray-500">
                       {formatDate(payment.paidAt)}

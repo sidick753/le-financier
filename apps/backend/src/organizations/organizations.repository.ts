@@ -5,6 +5,7 @@ import {
   CreateOrganizationData,
   CreditProfileData,
   BankInfoData,
+  IdentityData,
 } from './interfaces/organizations-repository.interface';
 import { CreateUserData } from '../users/interfaces/users-repository.interface';
 
@@ -161,6 +162,13 @@ export class OrganizationsRepository implements IOrganizationsRepository {
   }
 
   async updateBankInfo(id: string, data: BankInfoData) {
+    return this.prisma.organization.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async updateIdentity(id: string, data: IdentityData) {
     return this.prisma.organization.update({
       where: { id },
       data,

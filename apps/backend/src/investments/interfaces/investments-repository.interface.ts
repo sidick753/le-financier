@@ -5,7 +5,7 @@ export interface IInvestmentsRepository {
   findAllByFundingRequestId(fundingRequestId: string): Promise<Investment[]>;
   findAllByInvestorId(investorId: string): Promise<any[]>;
   sumActiveCommitments(fundingRequestId: string): Promise<number>;
-  createNegotiation(fundingRequestId: string, investorId: string, amountCommitted: number, proposedReturn: number): Promise<Investment>;
+  createNegotiation(fundingRequestId: string, investorId: string, amountCommitted: number, proposedReturn: number, conditions?: string): Promise<Investment>;
   counterOffer(investmentId: string, proposedBy: 'INVESTOR' | 'PME', proposedReturn: number): Promise<Investment | null>;
   acceptOffer(investmentId: string, acceptedBy: 'INVESTOR' | 'PME'): Promise<Investment>;
   findByFundingRequestAndInvestor(fundingRequestId: string, investorId: string): Promise<any>;

@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { formatAdminDate, formatCompactAmount } from "@/lib/admin-ui";
+import { useSortableRows } from "@/lib/use-sortable-rows";
+import { SortableTh } from "@/components/ui/sortable-th";
 
 const FILTERS = ["Toutes", "Perçues", "En attente"] as const;
 const FILTER_TO_STATUS: Record<string, string | undefined> = {
@@ -174,6 +176,31 @@ function AdminFinancesPageContent() {
   const pmeShare = stats && stats.total > 0 ? (stats.fundingFees / stats.total) * 100 : 0;
   const investorShare = stats && stats.total > 0 ? (stats.interestFees / stats.total) * 100 : 0;
 
+  const {
+    sortedRows: sortedCommissions,
+    sortKey: commissionSortKey,
+    direction: commissionDirection,
+    toggleSort: toggleCommissionSort,
+  } = useSortableRows(commissions, {
+    createdAt: (c) => c.createdAt,
+    pme: (c) => c.fundingRequest.organization.legalName,
+    type: (c) => c.type,
+    amount: (c) => Number(c.commissionAmount),
+    status: (c) => c.status,
+  });
+
+  const {
+    sortedRows: sortedTopOrganizations,
+    sortKey: topOrgSortKey,
+    direction: topOrgDirection,
+    toggleSort: toggleTopOrgSort,
+  } = useSortableRows(topOrganizations, {
+    legalName: (o) => o.legalName,
+    volume: (o) => o.volume,
+    commissions: (o) => o.commissions,
+    operations: (o) => o.operations,
+  });
+
   return (
     <div className="p-8">
       <div className="mb-6">
@@ -301,15 +328,15 @@ function AdminFinancesPageContent() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500">
-                  <th className="px-5 py-3 text-left font-medium">Date</th>
-                  <th className="px-5 py-3 text-left font-medium">Flux</th>
-                  <th className="px-5 py-3 text-left font-medium">Type</th>
-                  <th className="px-5 py-3 text-right font-medium">Montant</th>
-                  <th className="px-5 py-3 text-center font-medium">Statut</th>
+                  <SortableTh label="Date" sortKey="createdAt" currentKey={commissionSortKey} direction={commissionDirection} onSort={toggleCommissionSort} />
+                  <SortableTh label="Flux" sortKey="pme" currentKey={commissionSortKey} direction={commissionDirection} onSort={toggleCommissionSort} />
+                  <SortableTh label="Type" sortKey="type" currentKey={commissionSortKey} direction={commissionDirection} onSort={toggleCommissionSort} />
+                  <SortableTh label="Montant" sortKey="amount" currentKey={commissionSortKey} direction={commissionDirection} onSort={toggleCommissionSort} align="right" />
+                  <SortableTh label="Statut" sortKey="status" currentKey={commissionSortKey} direction={commissionDirection} onSort={toggleCommissionSort} align="center" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {commissions.map((c) => (
+                {sortedCommissions.map((c) => (
                   <tr key={c.id} className="hover:bg-gray-50">
                     <td className="px-5 py-3 text-xs text-gray-500">
                       {formatAdminDate(c.createdAt)}
@@ -387,14 +414,14 @@ function AdminFinancesPageContent() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500">
-                  <th className="px-5 py-3 text-left font-medium">PME</th>
-                  <th className="px-5 py-3 text-right font-medium">Volume traité</th>
-                  <th className="px-5 py-3 text-right font-medium">Commissions générées</th>
-                  <th className="px-5 py-3 text-right font-medium">Opérations</th>
+                  <SortableTh label="PME" sortKey="legalName" currentKey={topOrgSortKey} direction={topOrgDirection} onSort={toggleTopOrgSort} />
+                  <SortableTh label="Volume traité" sortKey="volume" currentKey={topOrgSortKey} direction={topOrgDirection} onSort={toggleTopOrgSort} align="right" />
+                  <SortableTh label="Commissions générées" sortKey="commissions" currentKey={topOrgSortKey} direction={topOrgDirection} onSort={toggleTopOrgSort} align="right" />
+                  <SortableTh label="Opérations" sortKey="operations" currentKey={topOrgSortKey} direction={topOrgDirection} onSort={toggleTopOrgSort} align="right" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {topOrganizations.map((o) => (
+                {sortedTopOrganizations.map((o) => (
                   <tr key={o.id} className="hover:bg-gray-50">
                     <td className="px-5 py-3 text-xs font-medium text-gray-900">{o.legalName}</td>
                     <td className="px-5 py-3 text-right text-xs text-gray-600">

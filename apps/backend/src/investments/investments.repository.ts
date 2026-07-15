@@ -49,6 +49,7 @@ export class InvestmentsRepository implements IInvestmentsRepository {
     investorId: string,
     amountCommitted: number,
     proposedReturn: number,
+    conditions?: string,
   ) {
     return this.prisma.$transaction(async (tx) => {
       const fundingRequest = await tx.fundingRequest.findUnique({
@@ -93,7 +94,7 @@ export class InvestmentsRepository implements IInvestmentsRepository {
       }
 
       const investment = await tx.investment.create({
-        data: { fundingRequestId, investorId, amountCommitted, status: 'NEGOTIATING' },
+        data: { fundingRequestId, investorId, amountCommitted, status: 'NEGOTIATING', conditions },
       });
 
       await tx.negotiationOffer.create({

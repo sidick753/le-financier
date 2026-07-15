@@ -7,6 +7,8 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { useAdminBadges } from "@/lib/admin-badges-context";
 import { FUNDING_STATUS_CONFIG, formatAdminDate, formatCompactAmount } from "@/lib/admin-ui";
+import { useSortableRows } from "@/lib/use-sortable-rows";
+import { SortableTh } from "@/components/ui/sortable-th";
 
 const CATEGORY_LABELS: Record<string, string> = {
   FACTURE: "Affacturage",
@@ -160,6 +162,22 @@ function AdminOpportunitesPageContent() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  const { sortedRows: sortedFundingRequests, sortKey, direction, toggleSort } = useSortableRows(
+    fundingRequests,
+    {
+      pme: (fr) => fr.organization?.legalName ?? "",
+      category: (fr) => fr.category,
+      amount: (fr) => Number(fr.amountRequested),
+      progress: (fr) => {
+        const requested = Number(fr.amountRequested);
+        const raised = Number(fr.amountRaised ?? 0);
+        return requested > 0 ? Math.min(100, (raised / requested) * 100) : 0;
+      },
+      status: (fr) => fr.status,
+      createdAt: (fr) => fr.createdAt,
+    },
+  );
+
   return (
     <div className="p-8">
       <div className="mb-6">
@@ -223,17 +241,17 @@ function AdminOpportunitesPageContent() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500">
-                  <th className="px-5 py-3 text-left font-medium">PME</th>
-                  <th className="px-5 py-3 text-left font-medium">Type</th>
-                  <th className="px-5 py-3 text-right font-medium">Montant</th>
-                  <th className="px-5 py-3 text-left font-medium">Progression</th>
-                  <th className="px-5 py-3 text-left font-medium">Statut</th>
-                  <th className="px-5 py-3 text-left font-medium">Date</th>
+                  <SortableTh label="PME" sortKey="pme" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Type" sortKey="category" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Montant" sortKey="amount" currentKey={sortKey} direction={direction} onSort={toggleSort} align="right" />
+                  <SortableTh label="Progression" sortKey="progress" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Statut" sortKey="status" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <SortableTh label="Date" sortKey="createdAt" currentKey={sortKey} direction={direction} onSort={toggleSort} />
                   <th className="px-5 py-3 text-left font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {fundingRequests.map((fr) => {
+                {sortedFundingRequests.map((fr) => {
                   const config = FUNDING_STATUS_CONFIG[fr.status] ?? FUNDING_STATUS_CONFIG.DRAFT;
                   const requested = Number(fr.amountRequested);
                   const raised = Number(fr.amountRaised ?? 0);

@@ -55,7 +55,14 @@ export interface IFundingRepository {
   findById(id: string): Promise<FundingRequest | null>;
   findByIdAdmin(id: string): Promise<FundingRequest | null>;
   findAllByOrganizationId(organizationId: string): Promise<FundingRequest[]>;
-  findAllPublished(filters?: { category?: string; search?: string }): Promise<FundingRequest[]>;
+  findAllPublished(filters?: {
+    category?: string;
+    search?: string;
+    sort?: string;
+    risk?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ data: any[]; total: number }>;
   findAllForAdmin(filters?: FundingAdminFilters): Promise<{ data: any[]; total: number }>;
   getAdminStats(): Promise<FundingAdminStats>;
   create(data: CreateFundingRequestData): Promise<FundingRequest>;
