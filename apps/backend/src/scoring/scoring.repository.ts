@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaClient, Prisma } from '@le-financier/database';
-import { ScoringResult } from './scoring.engine';
+import { BAREME_VERSION, ScoringResult } from './scoring.engine';
 
 @Injectable()
 export class ScoringRepository {
@@ -37,7 +37,7 @@ export class ScoringRepository {
 
   async createReport(params: {
     organizationId: string;
-    fundingRequestId: string;
+    fundingRequestId: string | null;
     product: string;
     result: ScoringResult;
   }) {
@@ -47,6 +47,7 @@ export class ScoringRepository {
         organizationId,
         fundingRequestId,
         product,
+        bareme_version: BAREME_VERSION,
         autoScore:   result.autoScore,
         grade:       result.grade,
         gradeCapped: result.gradeCapped,
@@ -132,6 +133,9 @@ export class ScoringRepository {
   // ── Historique scoring ──────────────────────────────────────────────────────
   async findHistory(filters?: { search?: string; page?: number; limit?: number }) {
     const where: Prisma.ScoringReportWhereInput = {
+      // Les rapports ORGANISATION (score PME indépendant, sans demande associée) ne sont
+      // pas des dossiers scorés — l'historique ne doit montrer que le scoring des demandes.
+      product: { not: 'ORGANISATION' },
       ...(filters?.search
         ? { organization: { legalName: { contains: filters.search, mode: 'insensitive' } } }
         : {}),
@@ -158,11 +162,15 @@ export class ScoringRepository {
   }
 
   async getHistoryStats() {
+    // Même exclusion que findHistory — les rapports ORGANISATION fausseraient
+    // le score moyen et les compteurs de dossiers.
+    const notOrganisation: Prisma.ScoringReportWhereInput = { product: { not: 'ORGANISATION' } };
     const [total, published, avgAgg, versions] = await Promise.all([
-      this.prisma.scoringReport.count(),
-      this.prisma.scoringReport.count({ where: { status: 'VALIDATED' } }),
-      this.prisma.scoringReport.aggregate({ _avg: { autoScore: true } }),
+      this.prisma.scoringReport.count({ where: notOrganisation }),
+      this.prisma.scoringReport.count({ where: { ...notOrganisation, status: 'VALIDATED' } }),
+      this.prisma.scoringReport.aggregate({ where: notOrganisation, _avg: { autoScore: true } }),
       this.prisma.scoringReport.findMany({
+        where: notOrganisation,
         select: { bareme_version: true },
         distinct: ['bareme_version'],
       }),

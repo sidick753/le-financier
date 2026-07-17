@@ -119,7 +119,7 @@ export class InvestmentsController {
     description: `Valide le justificatif de virement soumis par l'investisseur.
 - Génère l'échéancier de remboursement.
 - Recalcule \`amountRaised\` de la demande à partir des seuls virements validés.
-- Si 100% est atteint, la demande passe automatiquement en **FUNDED** (le décaissement vers la PME reste une action admin séparée, voir \`PATCH /funding-requests/:id/disburse\`).`,
+- Si 100% est atteint, la demande passe automatiquement en **FUNDED**. Le versement à la PME reste une action séparée : la PME réclame (\`POST /funding-requests/:id/claims\`), un admin valide (\`PATCH /funding-requests/claims/:claimId/approve\`) — réclamable dès qu'un investissement est validé, pas besoin d'attendre 100%.`,
   })
   @ApiParam({ name: 'id', description: 'UUID de l\'engagement' })
   @ApiResponse({ status: 200, description: 'Virement validé.' })

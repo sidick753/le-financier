@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { RejectReasonModal } from "@/components/reject-reason-modal";
 import { DocumentPreviewModal } from "@/components/document-preview-modal";
+import { ScoringSnapshotModal } from "@/components/scoring-snapshot-modal";
 import { ORG_STATUS_CONFIG, formatAdminDate, formatCompactAmount, formatFullAmount, formatFileSize } from "@/lib/admin-ui";
 import { useAdminBadges } from "@/lib/admin-badges-context";
 import {
@@ -26,6 +27,14 @@ const DOC_STATUS_CONFIG: Record<string, { label: string; className: string }> = 
   PENDING_REVIEW: { label: "À vérifier", className: "bg-yellow-100 text-yellow-700" },
   APPROVED: { label: "Approuvé", className: "bg-green-100 text-green-700" },
   REJECTED: { label: "Rejeté", className: "bg-red-100 text-red-700" },
+};
+
+const GRADE_BADGE_CLASSNAMES: Record<string, string> = {
+  "A+": "bg-green-100 text-green-700",
+  A: "bg-green-100 text-green-700",
+  BBB: "bg-yellow-100 text-yellow-700",
+  BB: "bg-orange-100 text-orange-700",
+  B: "bg-red-100 text-red-700",
 };
 
 interface OrganizationDetail {
@@ -117,6 +126,8 @@ export default function AdminPmeDetailPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [modal, setModal] = useState<"reject" | "suspend" | null>(null);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
+  const [scoreLoading, setScoreLoading] = useState(false);
+  const [snapshotReportId, setSnapshotReportId] = useState<string | null>(null);
 
   function load() {
     if (!token) return;
@@ -165,6 +176,16 @@ export default function AdminPmeDetailPage() {
     }
   }
 
+  async function handleRecomputeScore() {
+    setScoreLoading(true);
+    try {
+      await api.post(`/scoring/compute-organisation/${id}`, {}, token!);
+      load();
+    } finally {
+      setScoreLoading(false);
+    }
+  }
+
   if (isLoading) {
     return <div className="p-8 text-sm text-gray-400">Chargement...</div>;
   }
@@ -175,6 +196,7 @@ export default function AdminPmeDetailPage() {
 
   const config = ORG_STATUS_CONFIG[org.verificationStatus] ?? ORG_STATUS_CONFIG.PENDING;
   const owner = org.members.find((m) => m.role === "OWNER") ?? org.members[0];
+  const pmeReport = org.scoringReports.find((r) => r.product === "ORGANISATION");
 
   return (
     <div className="p-8">
@@ -277,6 +299,45 @@ export default function AdminPmeDetailPage() {
             <p className="mt-1 text-sm font-medium text-gray-900">{org.bankSwiftCode ?? "—"}</p>
           </div>
         </div>
+      </div>
+
+      {/* Score PME indépendant — calculé une fois pour la PME (pas par demande), sert de
+          critère commun au scoring de chaque demande de financement (FACTURE/PRET/EQUITY). */}
+      <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm font-semibold text-gray-900">Score PME indépendant</p>
+          <div className="flex items-center gap-3">
+            {pmeReport && (
+              <button
+                onClick={() => setSnapshotReportId(pmeReport.id)}
+                className="text-xs font-medium text-brand-700 hover:underline"
+              >
+                Voir le détail
+              </button>
+            )}
+            <button
+              onClick={handleRecomputeScore}
+              disabled={scoreLoading}
+              className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              {scoreLoading ? "Calcul…" : "Recalculer"}
+            </button>
+          </div>
+        </div>
+        {pmeReport ? (
+          <div className="flex items-center gap-4">
+            <span className={`rounded-full px-3 py-1 text-sm font-bold ${GRADE_BADGE_CLASSNAMES[pmeReport.grade ?? ""] ?? "bg-gray-100 text-gray-600"}`}>
+              {pmeReport.grade ?? "—"}
+            </span>
+            <p className="text-2xl font-bold text-gray-900">
+              {Math.round(Number(pmeReport.autoScore))}
+              <span className="text-sm font-normal text-gray-400">/100</span>
+            </p>
+            <p className="text-xs text-gray-400">Calculé le {formatAdminDate(pmeReport.createdAt)}</p>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400">Score pas encore calculé pour cette PME.</p>
+        )}
       </div>
 
       {/* Profil de crédit — saisi par la PME dans Paramètres > Profil entreprise,
@@ -421,6 +482,10 @@ export default function AdminPmeDetailPage() {
 
       {previewDocId && (
         <DocumentPreviewModal documentId={previewDocId} onClose={() => setPreviewDocId(null)} />
+      )}
+
+      {snapshotReportId && (
+        <ScoringSnapshotModal reportId={snapshotReportId} onClose={() => setSnapshotReportId(null)} />
       )}
 
       {modal === "reject" && (

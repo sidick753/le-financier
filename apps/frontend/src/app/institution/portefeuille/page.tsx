@@ -1,9 +1,11 @@
 "use client";
 
+import { Fragment, useState } from "react";
 import { useInstitutionData, isRecentlyCreated } from "@/lib/use-institution-data";
 import { NotifBell } from "@/components/ui/notif-bell";
 import { useSortableRows } from "@/lib/use-sortable-rows";
 import { SortableTh } from "@/components/ui/sortable-th";
+import { ScheduleTimeline } from "@/components/repayment-schedule-timeline";
 
 const CATEGORY_LABELS: Record<string, string> = {
   FACTURE: "Affacturage",
@@ -50,6 +52,7 @@ function BarChart({ data }: { data: { label: string; total: number }[] }) {
 export default function InstitutionPortefeuillePage() {
   const { investments, isLoading, totalDeployed, avgReturn, activeInvestments } =
     useInstitutionData();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const deployedInvestments = investments.filter((i) =>
     ["COMMITTED", "SETTLED_OFF_PLATFORM"].includes(i.status),
@@ -174,6 +177,7 @@ export default function InstitutionPortefeuillePage() {
                   <SortableTh label="Progression" sortKey="progress" currentKey={sortKey} direction={direction} onSort={toggleSort} />
                   <SortableTh label="Statut" sortKey="status" currentKey={sortKey} direction={direction} onSort={toggleSort} />
                   <SortableTh label="Échéance" sortKey="createdAt" currentKey={sortKey} direction={direction} onSort={toggleSort} />
+                  <th className="px-5 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -189,52 +193,90 @@ export default function InstitutionPortefeuillePage() {
                   const progress = requested > 0 ? Math.min(100, (raised / requested) * 100) : 0;
 
                   const isNew = isRecentlyCreated(inv.createdAt);
+                  const isExpanded = expandedId === inv.id;
 
                   return (
-                    <tr key={inv.id} className="cursor-pointer hover:bg-gray-50">
-                      <td className="px-5 py-3">
-                        <p className="font-medium text-gray-900">
-                          {inv.fundingRequest.organization.legalName}
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          {inv.fundingRequest.organization.sector}
-                        </p>
-                      </td>
-                      <td className="px-5 py-3 text-xs text-gray-600">
-                        {CATEGORY_LABELS[inv.fundingRequest.category] ?? inv.fundingRequest.category}
-                      </td>
-                      <td className="px-5 py-3 text-right text-xs font-medium text-gray-900">
-                        {formatAmount(capital)} FCFA
-                      </td>
-                      <td className="px-5 py-3 text-right text-xs">
-                        <p className="font-medium text-gray-900">{formatAmount(estimatedVal)} FCFA</p>
-                        {gain > 0 && (
-                          <p className="text-green-600">+{formatAmount(gain)} M</p>
-                        )}
-                      </td>
-                      <td className="px-5 py-3 text-center text-xs font-bold text-green-600">
-                        {rate > 0 ? `${rate}%` : "—"}
-                      </td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="h-1.5 w-20 rounded-full bg-gray-100">
-                            <div
-                              className="h-1.5 rounded-full bg-brand-700"
-                              style={{ width: `${progress}%` }}
-                            />
+                    <Fragment key={inv.id}>
+                      <tr
+                        onClick={() => setExpandedId(isExpanded ? null : inv.id)}
+                        className="cursor-pointer hover:bg-gray-50"
+                      >
+                        <td className="px-5 py-3">
+                          <p className="font-medium text-gray-900">
+                            {inv.fundingRequest.organization.legalName}
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            {inv.fundingRequest.organization.sector}
+                          </p>
+                        </td>
+                        <td className="px-5 py-3 text-xs text-gray-600">
+                          {CATEGORY_LABELS[inv.fundingRequest.category] ?? inv.fundingRequest.category}
+                        </td>
+                        <td className="px-5 py-3 text-right text-xs font-medium text-gray-900">
+                          {formatAmount(capital)} FCFA
+                        </td>
+                        <td className="px-5 py-3 text-right text-xs">
+                          <p className="font-medium text-gray-900">{formatAmount(estimatedVal)} FCFA</p>
+                          {gain > 0 && (
+                            <p className="text-green-600">+{formatAmount(gain)} M</p>
+                          )}
+                        </td>
+                        <td className="px-5 py-3 text-center text-xs font-bold text-green-600">
+                          {rate > 0 ? `${rate}%` : "—"}
+                        </td>
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 w-20 rounded-full bg-gray-100">
+                              <div
+                                className="h-1.5 rounded-full bg-brand-700"
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-gray-400">{progress.toFixed(0)}%</span>
                           </div>
-                          <span className="text-xs text-gray-400">{progress.toFixed(0)}%</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3">
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${isNew ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
-                          {isNew ? "Nouveau" : "En cours"}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-xs text-gray-500">
-                        {formatDate(inv.createdAt)}
-                      </td>
-                    </tr>
+                        </td>
+                        <td className="px-5 py-3">
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${isNew ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
+                            {isNew ? "Nouveau" : "En cours"}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-xs text-gray-500">
+                          {formatDate(inv.createdAt)}
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <svg
+                            width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                            className={`inline-block shrink-0 text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                          >
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr className="bg-gray-50/60">
+                          <td colSpan={9} className="px-5 py-4">
+                            <div className="mb-3 flex items-center justify-between">
+                              <p className="text-xs font-semibold text-gray-900">
+                                {inv.fundingRequest.title}
+                              </p>
+                              <a
+                                href={`/investor/opportunites/${inv.fundingRequest.id}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-xs font-medium text-brand-700 hover:underline"
+                              >
+                                Voir le dossier complet de l&apos;opportunité →
+                              </a>
+                            </div>
+                            <div className="rounded-lg border border-gray-200 bg-white">
+                              <p className="px-5 pt-4 text-xs font-semibold text-gray-900">
+                                Évolution du remboursement
+                              </p>
+                              <ScheduleTimeline investmentId={inv.id} />
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
               </tbody>

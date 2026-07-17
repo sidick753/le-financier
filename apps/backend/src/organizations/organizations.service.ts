@@ -4,10 +4,14 @@ import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateCreditProfileDto } from './dto/update-credit-profile.dto';
 import { UpdateBankInfoDto } from './dto/update-bank-info.dto';
 import { UpdateIdentityDto } from './dto/update-identity.dto';
+import { ScoringService } from '../scoring/scoring.service';
 
 @Injectable()
 export class OrganizationsService {
-  constructor(private organizationsRepository: OrganizationsRepository) {}
+  constructor(
+    private organizationsRepository: OrganizationsRepository,
+    private scoringService: ScoringService,
+  ) {}
 
   async create(dto: CreateOrganizationDto, ownerId: string) {
     const existing = await this.organizationsRepository.findByRegistrationNumber(
@@ -85,7 +89,18 @@ export class OrganizationsService {
       throw new ForbiddenException("Vous n'avez pas accès à cette organisation.");
     }
 
-    return this.organizationsRepository.updateCreditProfile(id, dto);
+    const updated = await this.organizationsRepository.updateCreditProfile(id, dto);
+
+    // Recalcul immédiat (attendu, pas fire-and-forget) pour que la PME voie son score
+    // à jour dès la sauvegarde — une erreur de scoring ne doit pas faire échouer la
+    // sauvegarde du profil, donc on logue sans relancer.
+    try {
+      await this.scoringService.computeOrganizationScore(id);
+    } catch (err) {
+      console.error(`[ScoringService] Erreur calcul du score PME ${id}:`, err);
+    }
+
+    return updated;
   }
 
   async updateBankInfo(id: string, userId: string, dto: UpdateBankInfoDto) {

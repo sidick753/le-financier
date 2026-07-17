@@ -73,6 +73,11 @@ export interface IFundingRepository {
   ): Promise<FundingRequest>;
   update(id: string, data: UpdateFundingRequestData): Promise<FundingRequest>;
   delete(id: string): Promise<FundingRequest>;
-  disburse(id: string, adminId: string): Promise<FundingRequest>;
   hasActiveInvestor(fundingRequestId: string): Promise<boolean>;
+  getClaimableAmount(fundingRequestId: string): Promise<number>;
+  requestFundingClaim(fundingRequestId: string, userId: string, amount?: number): Promise<any>;
+  approveFundingClaim(claimId: string, adminId: string): Promise<any>;
+  rejectFundingClaim(claimId: string, adminId: string, reason: string): Promise<any>;
+  findClaimsForFundingRequest(fundingRequestId: string): Promise<any[]>;
+  findPendingFundingClaims(): Promise<any[]>;
 }

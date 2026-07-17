@@ -33,6 +33,19 @@ export class RepaymentService {
     return this.repaymentRepository.findScheduleByFundingRequestId(fundingRequestId);
   }
 
+  // Échéancier détaillé d'un investissement précis — réservé à l'investisseur
+  // propriétaire (vue "évolution" sur sa page portefeuille).
+  async getScheduleForInvestment(investmentId: string, investorId: string) {
+    const owner = await this.repaymentRepository.findInvestmentOwner(investmentId);
+    if (!owner) {
+      throw new NotFoundException('Investissement introuvable.');
+    }
+    if (owner.investorId !== investorId) {
+      throw new ForbiddenException("Vous n'avez pas accès à cet investissement.");
+    }
+    return this.repaymentRepository.findScheduleByInvestmentId(investmentId);
+  }
+
   async getMyPayments(investorId: string) {
     return this.repaymentRepository.findPaymentsByInvestorId(investorId);
   }
@@ -61,6 +74,7 @@ export class RepaymentService {
     const payment = await this.repaymentRepository.confirmPayment(
       scheduleId,
       userId,
+      dto.amount,
       dto.proofDocumentId,
     );
 
@@ -72,8 +86,10 @@ export class RepaymentService {
     return payment;
   }
 
-  // [ADMIN] Valide la preuve : paiement confirmé, échéance soldée, reversement net
-  // à l'investisseur effectué dans le même geste (voir repayment.repository.approvePayment).
+  // [ADMIN] Valide la preuve d'une tranche : le montant devient disponible sur le
+  // compte plateforme. L'investisseur doit ensuite le réclamer (voir requestClaim) —
+  // il peut le faire dès maintenant, sans attendre que l'échéance soit intégralement
+  // soldée (voir repayment.repository.approvePayment).
   async approvePayment(paymentId: string, adminId: string) {
     const payment = await this.repaymentRepository.findPaymentById(paymentId);
     if (!payment) {
@@ -87,8 +103,8 @@ export class RepaymentService {
 
     await this.notificationsService.notify(
       payment.repaymentSchedule.investment.investorId,
-      'Remboursement reçu',
-      `Un remboursement de ${Number(payment.amountPaid).toLocaleString('fr-FR')} F CFA vous a été reversé.`,
+      'Remboursement validé',
+      `Un remboursement de ${Number(payment.amountPaid).toLocaleString('fr-FR')} F CFA a été validé et est disponible à la réclamation.`,
     );
 
     return approved;
@@ -117,6 +133,71 @@ export class RepaymentService {
 
   async getPendingPayments() {
     return this.repaymentRepository.findPendingPayments();
+  }
+
+  async getClaimableAmount(scheduleId: string, investorId: string) {
+    const owner = await this.repaymentRepository.findScheduleInvestor(scheduleId);
+    if (!owner) {
+      throw new NotFoundException('Échéance introuvable.');
+    }
+    if (owner.investorId !== investorId) {
+      throw new ForbiddenException("Vous n'avez pas accès à cette échéance.");
+    }
+    return this.repaymentRepository.getClaimableAmountForSchedule(scheduleId);
+  }
+
+  async getClaimsForSchedule(scheduleId: string, investorId: string) {
+    const owner = await this.repaymentRepository.findScheduleInvestor(scheduleId);
+    if (!owner) {
+      throw new NotFoundException('Échéance introuvable.');
+    }
+    if (owner.investorId !== investorId) {
+      throw new ForbiddenException("Vous n'avez pas accès à cette échéance.");
+    }
+    return this.repaymentRepository.findClaimsForSchedule(scheduleId);
+  }
+
+  // Investisseur : réclame tout ou partie des remboursements déjà validés sur une
+  // échéance, avant même qu'elle soit intégralement soldée.
+  async requestClaim(scheduleId: string, investorId: string, amount?: number) {
+    const claim = await this.repaymentRepository.requestRepaymentClaim(scheduleId, investorId, amount);
+
+    await this.notificationsService.notifyAdmins(
+      'Réclamation de remboursement à valider',
+      `Un investisseur réclame ${Number(claim.amountRequested).toLocaleString('fr-FR')} F CFA sur une échéance de remboursement.`,
+    );
+
+    return claim;
+  }
+
+  // [ADMIN] Valide la réclamation et verse le net à l'investisseur.
+  async approveClaim(claimId: string, adminId: string) {
+    const approved = await this.repaymentRepository.approveRepaymentClaim(claimId, adminId);
+
+    await this.notificationsService.notify(
+      approved.requestedById,
+      'Réclamation de remboursement validée',
+      `Votre réclamation de ${Number(approved.amountRequested).toLocaleString('fr-FR')} F CFA a été validée et versée.`,
+    );
+
+    return approved;
+  }
+
+  // [ADMIN] Rejette la réclamation.
+  async rejectClaim(claimId: string, adminId: string, reason: string) {
+    const rejected = await this.repaymentRepository.rejectRepaymentClaim(claimId, adminId, reason);
+
+    await this.notificationsService.notify(
+      rejected.requestedById,
+      'Réclamation de remboursement rejetée',
+      `Votre réclamation a été rejetée : ${reason}`,
+    );
+
+    return rejected;
+  }
+
+  async getPendingClaims() {
+    return this.repaymentRepository.findPendingRepaymentClaims();
   }
 
   async getAllCommissions(filters?: {

@@ -4,6 +4,7 @@ import { FundingRepository } from './funding.repository';
 import { OrganizationsRepository } from '../organizations/organizations.repository';
 import { ScoringService } from '../scoring/scoring.service';
 import { DocumentsService } from '../documents/documents.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateFundingRequestDto } from './dto/create-funding-request.dto';
 import { UpdateFundingRequestDto } from './dto/update-funding-request.dto';
 import { FundingAdminFilters } from './interfaces/funding-repository.interface';
@@ -16,6 +17,7 @@ export class FundingService {
     private organizationsRepository: OrganizationsRepository,
     private scoringService: ScoringService,
     private documentsService: DocumentsService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async create(dto: CreateFundingRequestDto, userId: string) {
@@ -293,12 +295,69 @@ export class FundingService {
     return this.fundingRepository.updateStatus(id, 'PUBLISHED');
   }
 
-  async disburse(id: string, adminId: string) {
-    const fr = await this.fundingRepository.findById(id);
-    if (!fr) throw new NotFoundException('Demande introuvable.');
-    if (fr.status !== 'FUNDED') {
-      throw new BadRequestException('Seule une demande entièrement financée (FUNDED) peut être décaissée.');
-    }
-    return this.fundingRepository.disburse(id, adminId);
+  // PME : montant déjà validé par un admin mais pas encore réclamé — disponible dès
+  // qu'un investissement est validé, pas besoin d'attendre le financement complet.
+  async getClaimableAmount(id: string, userId: string) {
+    const fundingRequest = await this.fundingRepository.findById(id);
+    if (!fundingRequest) throw new NotFoundException('Demande introuvable.');
+    const isMember = await this.organizationsRepository.isMember(fundingRequest.organizationId, userId);
+    if (!isMember) throw new ForbiddenException("Vous n'avez pas accès à cette demande.");
+    return this.fundingRepository.getClaimableAmount(id);
+  }
+
+  async getClaimsForFundingRequest(id: string, userId: string) {
+    const fundingRequest = await this.fundingRepository.findById(id);
+    if (!fundingRequest) throw new NotFoundException('Demande introuvable.');
+    const isMember = await this.organizationsRepository.isMember(fundingRequest.organizationId, userId);
+    if (!isMember) throw new ForbiddenException("Vous n'avez pas accès à cette demande.");
+    return this.fundingRepository.findClaimsForFundingRequest(id);
+  }
+
+  // PME : réclame tout ou partie des fonds déjà validés sur son dossier, avant même
+  // qu'il soit intégralement financé.
+  async requestClaim(id: string, userId: string, amount?: number) {
+    const fundingRequest = await this.fundingRepository.findById(id);
+    if (!fundingRequest) throw new NotFoundException('Demande introuvable.');
+    const isMember = await this.organizationsRepository.isMember(fundingRequest.organizationId, userId);
+    if (!isMember) throw new ForbiddenException("Vous n'avez pas accès à cette demande.");
+
+    const claim = await this.fundingRepository.requestFundingClaim(id, userId, amount);
+
+    await this.notificationsService.notifyAdmins(
+      'Réclamation de financement à valider',
+      `La PME réclame ${Number(claim.amountRequested).toLocaleString('fr-FR')} F CFA sur "${fundingRequest.title}".`,
+    );
+
+    return claim;
+  }
+
+  // [ADMIN] Valide la réclamation : commission prélevée, versement net à la PME.
+  async approveClaim(claimId: string, adminId: string) {
+    const approved = await this.fundingRepository.approveFundingClaim(claimId, adminId);
+
+    await this.notificationsService.notify(
+      approved.requestedById,
+      'Réclamation de financement validée',
+      `Votre réclamation de ${Number(approved.amountRequested).toLocaleString('fr-FR')} F CFA a été validée et versée.`,
+    );
+
+    return approved;
+  }
+
+  // [ADMIN] Rejette la réclamation.
+  async rejectClaim(claimId: string, adminId: string, reason: string) {
+    const rejected = await this.fundingRepository.rejectFundingClaim(claimId, adminId, reason);
+
+    await this.notificationsService.notify(
+      rejected.requestedById,
+      'Réclamation de financement rejetée',
+      `Votre réclamation a été rejetée : ${reason}`,
+    );
+
+    return rejected;
+  }
+
+  async getPendingClaims() {
+    return this.fundingRepository.findPendingFundingClaims();
   }
 }

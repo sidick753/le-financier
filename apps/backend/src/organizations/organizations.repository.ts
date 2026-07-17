@@ -14,7 +14,16 @@ export class OrganizationsRepository implements IOrganizationsRepository {
   private prisma = new PrismaClient();
 
   async findById(id: string) {
-    return this.prisma.organization.findUnique({ where: { id } });
+    return this.prisma.organization.findUnique({
+      where: { id },
+      include: {
+        scoringReports: {
+          where: { product: 'ORGANISATION' },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
   }
 
   async findByIdAdmin(id: string) {

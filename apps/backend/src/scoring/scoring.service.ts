@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ScoringRepository } from './scoring.repository';
 import {
-  BAREME_VERSION, scoreFacture, scorePret, scoreEquity, ScoringResult,
+  BAREME_VERSION, scoreFacture, scorePret, scoreEquity, scoreOrganisation, ScoringResult,
   CRITERIA_BY_PRODUCT, WeightCriterion, WeightMap,
 } from './scoring.engine';
 import { SCORING_FIELDS_BY_PRODUCT, ORG_PROFILE_FIELDS_BY_PRODUCT } from './scoring-fields';
@@ -52,6 +52,12 @@ export class ScoringService {
     ]);
     const weightMap = await this.getWeightMap(product);
 
+    // Score PME indépendant, calculé à la volée sur l'instantané `organization` de ce calcul
+    // (jamais lu depuis un rapport persisté séparément) — garantit que le score utilisé ici
+    // est toujours exactement celui du profil au moment du calcul, sans notion de fraîcheur.
+    const orgWeightMap = await this.getWeightMap('ORGANISATION');
+    const orgScore = this.computeOrganisationResult(organization, orgWeightMap);
+
     let result: ScoringResult;
 
     // Champs absents des deux sources → ratio non évaluable pour chaque critère, donc
@@ -66,41 +72,18 @@ export class ScoringService {
         tauxImpaye12m:       input?.tauxImpaye12m       ? Number(input.tauxImpaye12m)       : null,
         partPlusGrosClient:  input?.partPlusGrosClient  ? Number(input.partPlusGrosClient)  : null,
         nbClientsActifs:     organization?.nbClientsActifs ?? null,
-      }, weightMap);
+      }, orgScore, weightMap);
     } else if (product === 'PRET') {
       result = scorePret({
         cashFlowAnnuel:          organization?.cashFlowAnnuel          ? Number(organization.cashFlowAnnuel)          : null,
         fluxMobileMoneyMensuel:  organization?.fluxMobileMoneyMensuel  ? Number(organization.fluxMobileMoneyMensuel)  : null,
-        autonomieFinanciere:     organization?.autonomieFinanciere      ? Number(organization.autonomieFinanciere)      : null,
-        tauxEndettement:         organization?.tauxEndettement          ? Number(organization.tauxEndettement)          : null,
-        ratioLiquidite:          organization?.ratioLiquidite           ? Number(organization.ratioLiquidite)           : null,
         garantieType:            input?.garantieType ?? null,
         garantieCouverture:      input?.garantieCouverture       ? Number(input.garantieCouverture)       : null,
-        dirigeantExperienceAns:  organization?.dirigeantExperienceAns ?? null,
-        dirigeantAntecedents:    organization?.dirigeantAntecedents ?? null,
-        dirigeantIncidentsLegaux: organization?.dirigeantIncidentsLegaux ?? null,
-        secteurCode:             organization?.secteurCode ?? null,
-        secteurSaisonnalite:     organization?.secteurSaisonnalite ?? null,
-        secteurImportDevises:    organization?.secteurImportDevises ?? null,
-        secteurSoutienPublic:    organization?.secteurSoutienPublic ?? null,
         amountRequested,
         durationMonths,
-      }, weightMap);
+      }, orgScore, weightMap);
     } else if (product === 'EQUITY') {
-      result = scoreEquity({
-        tcamCa3ans:           organization?.tcamCa3ans           ? Number(organization.tcamCa3ans)           : null,
-        tailleMarche:         organization?.tailleMarche ?? null,
-        scalabilite:          organization?.scalabilite ?? null,
-        experienceSecteurAns: organization?.experienceSecteurAns ?? null,
-        trackRecord:          organization?.trackRecord ?? null,
-        completudeEquipe:     organization?.completudeEquipe ?? null,
-        moat:                 organization?.moat ?? null,
-        partMarcheRelative:   organization?.partMarcheRelative ?? null,
-        runwayMois:           organization?.runwayMois ?? null,
-        margeBrute:           organization?.margeBrute            ? Number(organization.margeBrute)            : null,
-        droitsInvestisseur:   organization?.droitsInvestisseur ?? null,
-        transparence:         organization?.transparence ?? null,
-      }, weightMap);
+      result = scoreEquity(orgScore, weightMap);
     } else {
       this.logger.warn(`Produit inconnu pour le scoring : ${product}`);
       return;
@@ -111,6 +94,56 @@ export class ScoringService {
     this.logger.log(
       `Scoring calculé — ${product} | ${fundingRequestId} | score=${result.autoScore} grade=${result.grade} conf=${result.confidence}`,
     );
+  }
+
+  // ── Score PME indépendant ───────────────────────────────────────────────────
+  // Calcule le score à partir du profil Organization déjà chargé — pas d'accès DB ici,
+  // réutilisable aussi bien en mémoire (computeAndSaveOrThrow) qu'avant persistance
+  // (computeOrganizationScore).
+  private computeOrganisationResult(organization: any, weightMap: WeightMap): ScoringResult {
+    return scoreOrganisation({
+      autonomieFinanciere:      organization?.autonomieFinanciere      ? Number(organization.autonomieFinanciere)      : null,
+      tauxEndettement:          organization?.tauxEndettement          ? Number(organization.tauxEndettement)          : null,
+      dirigeantExperienceAns:   organization?.dirigeantExperienceAns ?? null,
+      dirigeantAntecedents:     organization?.dirigeantAntecedents ?? null,
+      dirigeantIncidentsLegaux: organization?.dirigeantIncidentsLegaux ?? null,
+      secteurCode:              organization?.secteurCode ?? null,
+      secteurSaisonnalite:      organization?.secteurSaisonnalite ?? null,
+      secteurImportDevises:     organization?.secteurImportDevises ?? null,
+      secteurSoutienPublic:     organization?.secteurSoutienPublic ?? null,
+      tcamCa3ans:               organization?.tcamCa3ans ? Number(organization.tcamCa3ans) : null,
+      tailleMarche:             organization?.tailleMarche ?? null,
+      scalabilite:              organization?.scalabilite ?? null,
+      experienceSecteurAns:     organization?.experienceSecteurAns ?? null,
+      trackRecord:              organization?.trackRecord ?? null,
+      completudeEquipe:         organization?.completudeEquipe ?? null,
+      moat:                     organization?.moat ?? null,
+      partMarcheRelative:       organization?.partMarcheRelative ?? null,
+      runwayMois:               organization?.runwayMois ?? null,
+      margeBrute:               organization?.margeBrute ? Number(organization.margeBrute) : null,
+      droitsInvestisseur:       organization?.droitsInvestisseur ?? null,
+      transparence:             organization?.transparence ?? null,
+    }, weightMap);
+  }
+
+  // Calcule ET persiste le score PME (product='ORGANISATION', fundingRequestId=null) —
+  // seuls deux déclencheurs appellent cette méthode : la sauvegarde du profil de crédit
+  // par la PME, et un recalcul manuel admin. Le scoring par demande (ci-dessus) calcule
+  // le score PME à la volée sans jamais persister de rapport supplémentaire, pour éviter
+  // de polluer l'historique admin de doublons quasi identiques.
+  async computeOrganizationScore(organizationId: string): Promise<ScoringResult> {
+    const organization = await this.scoringRepository.findOrganizationProfile(organizationId);
+    const weightMap = await this.getWeightMap('ORGANISATION');
+    const result = this.computeOrganisationResult(organization, weightMap);
+    await this.scoringRepository.createReport({
+      organizationId, fundingRequestId: null, product: 'ORGANISATION', result,
+    });
+    this.logger.log(`Score PME calculé — ${organizationId} | score=${result.autoScore} grade=${result.grade}`);
+    return result;
+  }
+
+  async computeForAdminOrganization(organizationId: string): Promise<void> {
+    await this.computeOrganizationScore(organizationId);
   }
 
   // ── Déclenchement manuel depuis l'interface admin ─────────────────────────

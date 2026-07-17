@@ -107,6 +107,14 @@ export class ScoringController {
     return { message: 'Scoring lancé avec succès.' };
   }
 
+  @ApiOperation({ summary: '[ADMIN] Déclencher manuellement le calcul du score PME indépendant' })
+  @ApiParam({ name: 'organizationId', description: 'UUID de la PME' })
+  @Post('compute-organisation/:organizationId')
+  async computeManualOrganization(@Param('organizationId') organizationId: string) {
+    await this.scoringService.computeForAdminOrganization(organizationId);
+    return { message: 'Scoring PME lancé avec succès.' };
+  }
+
   @ApiOperation({ summary: '[ADMIN] Détail complet d\'un rapport de scoring' })
   @ApiParam({ name: 'reportId', description: 'UUID du rapport' })
   @Get('report/:reportId')

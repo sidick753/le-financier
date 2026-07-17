@@ -109,9 +109,8 @@ export function useInstitutionData() {
     refresh();
   }, [refresh]);
 
-  const totalDeployed = investments
-    .filter((i) => ["COMMITTED", "SETTLED_OFF_PLATFORM"].includes(i.status))
-    .reduce((s, i) => s + Number(i.amountCommitted), 0);
+  const deployedInvestments = investments.filter((i) => i.status === "SETTLED_OFF_PLATFORM");
+  const totalDeployed = deployedInvestments.reduce((s, i) => s + Number(i.amountCommitted), 0);
 
   const activeInvestments = investments.filter((i) =>
     ["COMMITTED", "NEGOTIATING", "SETTLED_OFF_PLATFORM"].includes(i.status),
@@ -125,7 +124,7 @@ export function useInstitutionData() {
         Math.max(1, activeInvestments.filter((i) => i.lockedReturn).length)
       : 0;
 
-  const byCategory = activeInvestments.reduce<Record<string, number>>((acc, inv) => {
+  const byCategory = deployedInvestments.reduce<Record<string, number>>((acc, inv) => {
     const cat = inv.fundingRequest.category;
     acc[cat] = (acc[cat] ?? 0) + Number(inv.amountCommitted);
     return acc;

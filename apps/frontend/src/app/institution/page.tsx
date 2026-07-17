@@ -1,6 +1,10 @@
 "use client";
 
-import { useInstitutionData, GRADE_CLASSNAMES } from "@/lib/use-institution-data";
+import { ReactNode } from "react";
+import { useInstitutionData, isRecentlyCreated, GRADE_CLASSNAMES } from "@/lib/use-institution-data";
+import { useInstitutionSettings } from "@/lib/use-institution-settings";
+import { useInstitutionBadges } from "@/lib/institution-badges-context";
+import { computeIndicatorStatus } from "@/lib/risk-indicators";
 import { useRouter } from "next/navigation";
 import { NotifBell } from "@/components/ui/notif-bell";
 import { useSortableRows } from "@/lib/use-sortable-rows";
@@ -13,10 +17,29 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const STATUS_PIPELINE: Record<string, { label: string; className: string }> = {
+  INTERESTED: { label: "Due diligence", className: "bg-purple-100 text-purple-700" },
   NEGOTIATING: { label: "En analyse", className: "bg-yellow-100 text-yellow-700" },
   COMMITTED: { label: "Approuvé", className: "bg-green-100 text-green-700" },
+  SETTLEMENT_SUBMITTED: { label: "Virement en validation", className: "bg-indigo-100 text-indigo-700" },
   SETTLED_OFF_PLATFORM: { label: "Réglé", className: "bg-blue-100 text-blue-700" },
-  INTERESTED: { label: "Due diligence", className: "bg-purple-100 text-purple-700" },
+  CANCELLED: { label: "Annulé", className: "bg-gray-100 text-gray-500" },
+  REJECTED: { label: "Rejeté", className: "bg-red-100 text-red-700" },
+};
+
+type AlertTone = "red" | "yellow" | "blue";
+
+interface DashboardAlert {
+  id: string;
+  tone: AlertTone;
+  message: ReactNode;
+  actionLabel: string;
+  onAction: () => void;
+}
+
+const ALERT_TONE_CLASSNAMES: Record<AlertTone, { box: string; text: string; action: string }> = {
+  red: { box: "border-red-200 bg-red-50", text: "text-red-800", action: "text-red-700" },
+  yellow: { box: "border-yellow-200 bg-yellow-50", text: "text-yellow-800", action: "text-yellow-700" },
+  blue: { box: "border-blue-200 bg-blue-50", text: "text-blue-800", action: "text-blue-700" },
 };
 
 function formatAmount(v: number) {
@@ -30,11 +53,93 @@ function formatDate(d: string) {
 }
 
 export default function InstitutionOverviewPage() {
-  const { investments, isLoading, totalDeployed, activeInvestments, avgReturn, byCategory } =
+  const { investments, opportunities, isLoading, totalDeployed, activeInvestments, avgReturn, byCategory } =
     useInstitutionData();
+  const { riskIndicators, amlStats, members, isLoading: isSettingsLoading } = useInstitutionSettings();
+  const { badges } = useInstitutionBadges();
   const router = useRouter();
 
   const totalByCategory = Object.values(byCategory).reduce((s, v) => s + v, 0);
+
+  const engagedFundingRequestIds = new Set(investments.map((inv) => inv.fundingRequest.id));
+  const newOpportunities = opportunities.filter(
+    (opp) => isRecentlyCreated(opp.createdAt) && !engagedFundingRequestIds.has(opp.id),
+  );
+
+  const nplIndicator = riskIndicators?.npl;
+  const nplValue = nplIndicator?.disponible && nplIndicator.value !== null ? nplIndicator.value : null;
+  const nplStatus = nplValue !== null ? computeIndicatorStatus(nplValue, 5, true) : "non_disponible";
+
+  const garantiesIndicator = riskIndicators?.couvertureGaranties;
+  const garantiesValue =
+    garantiesIndicator?.disponible && garantiesIndicator.value !== null ? garantiesIndicator.value : null;
+  const garantiesStatus = garantiesValue !== null ? computeIndicatorStatus(garantiesValue, 80, false) : "non_disponible";
+
+  const now = new Date();
+  const activeThisMonth = activeInvestments.filter((inv) => {
+    const d = new Date(inv.createdAt);
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }).length;
+
+  const alerts: DashboardAlert[] = [];
+  if (amlStats.alertesActives > 0) {
+    const n = amlStats.alertesActives;
+    alerts.push({
+      id: "aml",
+      tone: "red",
+      message: (
+        <>
+          🔴 <strong>{n} alerte{n > 1 ? "s" : ""} AML / LAB-CFT active{n > 1 ? "s" : ""}</strong> — nécessite
+          {n > 1 ? "nt" : ""} une revue.
+        </>
+      ),
+      actionLabel: "Voir",
+      onAction: () => router.push("/institution/risques"),
+    });
+  }
+  if (garantiesStatus === "violation" || garantiesStatus === "attention") {
+    alerts.push({
+      id: "garanties",
+      tone: garantiesStatus === "violation" ? "red" : "yellow",
+      message: (
+        <>
+          ⚠️ <strong>Couverture des garanties</strong> à {garantiesValue}% — sous le seuil BCEAO (80%).
+        </>
+      ),
+      actionLabel: "Voir détail",
+      onAction: () => router.push("/institution/risques"),
+    });
+  }
+  if (badges.portefeuille > 0) {
+    const n = badges.portefeuille;
+    alerts.push({
+      id: "negociations",
+      tone: "yellow",
+      message: (
+        <>
+          📨 <strong>{n} négociation{n > 1 ? "s" : ""} en attente</strong> de votre réponse.
+        </>
+      ),
+      actionLabel: "Répondre",
+      onAction: () => router.push("/institution/portefeuille"),
+    });
+  }
+  if (newOpportunities.length > 0) {
+    const n = newOpportunities.length;
+    alerts.push({
+      id: "opportunites",
+      tone: "blue",
+      message: (
+        <>
+          ⭐ <strong>{n} nouvelle{n > 1 ? "s" : ""} opportunité{n > 1 ? "s" : ""}</strong> disponible
+          {n > 1 ? "s" : ""} dans le Deal Flow.
+        </>
+      ),
+      actionLabel: "Consulter",
+      onAction: () => router.push("/institution/deal-flow"),
+    });
+  }
+  const alertsLoading = isLoading || isSettingsLoading;
 
   const { sortedRows: sortedInvestments, sortKey, direction, toggleSort } = useSortableRows(
     investments,
@@ -71,30 +176,24 @@ export default function InstitutionOverviewPage() {
 
       <div className="p-8 pb-16">
         {/* Alertes */}
-        <div className="mb-6 space-y-2">
-          <div className="flex items-center justify-between rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-2.5">
-            <p className="text-xs text-yellow-800">
-              ⚠️ <strong>Garantie en portefeuille</strong> — Vérifiez vos couvertures de garantie.
-            </p>
-            <button className="text-xs text-yellow-700 underline">Voir dossier</button>
+        {alerts.length > 0 && (
+          <div className="mb-6 space-y-2">
+            {alerts.map((alert) => {
+              const tone = ALERT_TONE_CLASSNAMES[alert.tone];
+              return (
+                <div
+                  key={alert.id}
+                  className={`flex items-center justify-between rounded-lg border px-4 py-2.5 ${tone.box}`}
+                >
+                  <p className={`text-xs ${tone.text}`}>{alert.message}</p>
+                  <button onClick={alert.onAction} className={`text-xs underline ${tone.action}`}>
+                    {alert.actionLabel}
+                  </button>
+                </div>
+              );
+            })}
           </div>
-          <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-2.5">
-            <p className="text-xs text-red-800">
-              🔴 <strong>Rapport BCEAO trimestriel</strong> à soumettre avant le 30/06/2026
-            </p>
-            <button onClick={() => router.push("/institution/risques")} className="text-xs text-red-700 underline">
-              Compléter
-            </button>
-          </div>
-          <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5">
-            <p className="text-xs text-blue-800">
-              ⭐ <strong>Nouvelle opportunité premium</strong> disponible dans le Deal Flow
-            </p>
-            <button onClick={() => router.push("/institution/deal-flow")} className="text-xs text-blue-700 underline">
-              Consulter
-            </button>
-          </div>
-        </div>
+        )}
 
         {/* 4 KPI */}
       <div className="mb-6 grid grid-cols-4 gap-4">
@@ -103,15 +202,13 @@ export default function InstitutionOverviewPage() {
           value={isLoading ? "…" : `${formatAmount(totalDeployed)} FCFA`}
           hint={`${totalDeployed.toLocaleString("fr-FR")} F CFA`}
           icon="🏛️"
-          trend="+1.8% vs trim. précédent"
-          trendUp
         />
         <KpiCard
           label="Dossiers actifs"
           value={isLoading ? "…" : String(activeInvestments.length)}
           hint="PME partenaires"
           icon="📋"
-          trend={`+${Math.max(0, activeInvestments.length - 30)} ce mois`}
+          trend={isLoading ? undefined : `+${activeThisMonth} ce mois`}
           trendUp
         />
         <KpiCard
@@ -119,16 +216,22 @@ export default function InstitutionOverviewPage() {
           value={isLoading ? "…" : `${avgReturn.toFixed(1)}%`}
           hint="Après provisions LCR"
           icon="📈"
-          trend="-0.3% vs objectif"
-          trendUp={false}
         />
         <KpiCard
           label="Taux de défaut (NPL)"
-          value="1.2%"
+          value={alertsLoading ? "…" : nplValue !== null ? `${nplValue}%` : "N/D"}
           hint="Seuil BCEAO : 5%"
           icon="✓"
-          trend="Conforme"
-          trendUp
+          trend={
+            alertsLoading || nplValue === null
+              ? undefined
+              : nplStatus === "conforme"
+                ? "Conforme"
+                : nplStatus === "attention"
+                  ? "Attention"
+                  : "Violation"
+          }
+          trendUp={nplStatus === "conforme"}
         />
       </div>
 
@@ -172,7 +275,7 @@ export default function InstitutionOverviewPage() {
                 <tbody className="divide-y divide-gray-100">
                   {sortedInvestments.slice(0, 5).map((inv) => {
                     const statusConfig =
-                      STATUS_PIPELINE[inv.status] ?? STATUS_PIPELINE.NEGOTIATING;
+                      STATUS_PIPELINE[inv.status] ?? { label: inv.status, className: "bg-gray-100 text-gray-500" };
                     const report = inv.fundingRequest.scoringReports[0];
                     return (
                       <tr key={inv.id} className="hover:bg-gray-50">
@@ -258,9 +361,24 @@ export default function InstitutionOverviewPage() {
             <p className="mb-3 text-sm font-semibold text-gray-900">Accès rapide</p>
             <div className="space-y-2">
               {[
-                { icon: "📄", label: "Rapport BCEAO Q2 2026", hint: "À soumettre avant 30/06", href: "/institution/risques", urgent: true },
-                { icon: "📊", label: "Analyse de portefeuille", hint: "Dernière MàJ aujourd'hui", href: "/institution/portefeuille" },
-                { icon: "👥", label: "Gestion des analystes", hint: "4 membres actifs", href: "/institution/equipe" },
+                {
+                  icon: "🛡️",
+                  label: "Alertes AML / LAB-CFT",
+                  hint: isSettingsLoading
+                    ? "…"
+                    : amlStats.alertesActives > 0
+                      ? `${amlStats.alertesActives} alerte${amlStats.alertesActives > 1 ? "s" : ""} active${amlStats.alertesActives > 1 ? "s" : ""}`
+                      : "Aucune alerte active",
+                  href: "/institution/risques",
+                  urgent: amlStats.alertesActives > 0,
+                },
+                { icon: "📊", label: "Analyse de portefeuille", hint: "Suivi de la performance", href: "/institution/portefeuille" },
+                {
+                  icon: "👥",
+                  label: "Gestion des analystes",
+                  hint: isSettingsLoading ? "…" : `${members.length} membre${members.length > 1 ? "s" : ""} actif${members.length > 1 ? "s" : ""}`,
+                  href: "/institution/equipe",
+                },
               ].map((item) => (
                 <button
                   key={item.label}
@@ -298,7 +416,7 @@ export default function InstitutionOverviewPage() {
                 <div>
                   <p className="text-xs font-medium text-gray-900">
                     Engagement sur {inv.fundingRequest.organization.legalName} —{" "}
-                    {CATEGORY_LABELS[inv.fundingRequest.category]} {formatAmount(Number(inv.amountCommitted))}M
+                    {CATEGORY_LABELS[inv.fundingRequest.category]} {formatAmount(Number(inv.amountCommitted))} FCFA
                   </p>
                   <p className="text-xs text-gray-400">{formatDate(inv.createdAt)}</p>
                 </div>
@@ -313,7 +431,7 @@ export default function InstitutionOverviewPage() {
 }
 
 function KpiCard({ label, value, hint, icon, trend, trendUp }: {
-  label: string; value: string; hint: string; icon: string; trend: string; trendUp: boolean;
+  label: string; value: string; hint: string; icon: string; trend?: string; trendUp?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5">
@@ -323,9 +441,11 @@ function KpiCard({ label, value, hint, icon, trend, trendUp }: {
       </div>
       <p className="text-2xl font-bold text-gray-900">{value}</p>
       <p className="mt-0.5 text-xs text-gray-400">{hint}</p>
-      <p className={`mt-1 text-xs font-medium ${trendUp ? "text-green-600" : "text-red-500"}`}>
-        {trend}
-      </p>
+      {trend && (
+        <p className={`mt-1 text-xs font-medium ${trendUp ? "text-green-600" : "text-red-500"}`}>
+          {trend}
+        </p>
+      )}
     </div>
   );
 }

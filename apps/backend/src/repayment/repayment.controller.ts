@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RejectionReasonDto } from '../common/dto/rejection-reason.dto';
+import { RequestClaimDto } from '../common/dto/request-claim.dto';
 import { parsePositiveInt } from '../common/pagination.util';
 
 @UseGuards(JwtAuthGuard)
@@ -27,6 +28,11 @@ export class RepaymentController {
     return this.repaymentService.getScheduleForFundingRequest(id);
   }
 
+  @Get('investment/:investmentId')
+  getScheduleForInvestment(@Param('investmentId') investmentId: string, @Request() req) {
+    return this.repaymentService.getScheduleForInvestment(investmentId, req.user.id);
+  }
+
   @Post('schedule/:scheduleId/confirm')
   confirmPayment(
     @Param('scheduleId') scheduleId: string,
@@ -41,6 +47,53 @@ export class RepaymentController {
   @Get('admin/pending')
   getPendingPayments() {
     return this.repaymentService.getPendingPayments();
+  }
+
+  // Investisseur : montant validé sur cette échéance, pas encore réclamé.
+  @Get('schedule/:scheduleId/claimable')
+  getClaimableAmount(@Param('scheduleId') scheduleId: string, @Request() req) {
+    return this.repaymentService.getClaimableAmount(scheduleId, req.user.id);
+  }
+
+  @Get('schedule/:scheduleId/claims')
+  getClaimsForSchedule(@Param('scheduleId') scheduleId: string, @Request() req) {
+    return this.repaymentService.getClaimsForSchedule(scheduleId, req.user.id);
+  }
+
+  // Investisseur : réclame tout ou partie du montant déjà validé sur cette échéance,
+  // avant même qu'elle soit intégralement soldée.
+  @Post('schedule/:scheduleId/claims')
+  requestClaim(
+    @Param('scheduleId') scheduleId: string,
+    @Body() dto: RequestClaimDto,
+    @Request() req,
+  ) {
+    return this.repaymentService.requestClaim(scheduleId, req.user.id, dto.amount);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Get('admin/claims/pending')
+  getPendingClaims() {
+    return this.repaymentService.getPendingClaims();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Patch('claims/:claimId/approve')
+  approveClaim(@Param('claimId') claimId: string, @Request() req) {
+    return this.repaymentService.approveClaim(claimId, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Patch('claims/:claimId/reject')
+  rejectClaim(
+    @Param('claimId') claimId: string,
+    @Body() dto: RejectionReasonDto,
+    @Request() req,
+  ) {
+    return this.repaymentService.rejectClaim(claimId, req.user.id, dto.reason);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

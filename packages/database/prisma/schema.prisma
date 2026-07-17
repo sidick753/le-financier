@@ -55,6 +55,8 @@ model User {
   settlementValidations      Investment[]          @relation("InvestmentSettlementValidator")
   fundingRequestsDisbursed   FundingRequest[]       @relation("FundingRequestDisburser")
   repaymentPaymentsValidated RepaymentPayment[]     @relation("RepaymentPaymentValidator")
+  payoutClaimsRequested      PayoutClaim[]          @relation("PayoutClaimRequester")
+  payoutClaimsDecided        PayoutClaim[]          @relation("PayoutClaimDecider")
 
   @@index([role])
   @@map("users")
@@ -334,6 +336,7 @@ model FundingRequest {
   watchlist          Watchlist[]
   repaymentSchedules RepaymentSchedule[]
   commissions        Commission[]
+  payoutClaims       PayoutClaim[]
 
   @@index([organizationId])
   @@index([status])
@@ -679,9 +682,21 @@ enum RepaymentNature {
 
 enum RepaymentScheduleStatus {
   PENDING
+  PARTIALLY_PAID // une ou plusieurs tranches validées, mais amountDue pas encore atteint
   PAID
   OVERDUE
   CANCELLED
+}
+
+enum PayoutClaimDirection {
+  FUNDING_TO_PME         // la PME réclame les fonds investisseurs déjà validés sur son dossier
+  REPAYMENT_TO_INVESTOR  // l'investisseur réclame les remboursements PME déjà validés sur une échéance
+}
+
+enum PayoutClaimStatus {
+  REQUESTED // demandé par le bénéficiaire, en attente de décision admin
+  PAID      // validé par un admin et versé (même geste, pas de virement automatisé réel)
+  REJECTED
 }
 
 enum RepaymentPaymentStatus {
@@ -718,7 +733,8 @@ model RepaymentSchedule {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  payments RepaymentPayment[]
+  payments     RepaymentPayment[]
+  payoutClaims PayoutClaim[]
 
   @@index([fundingRequestId])
   @@index([investmentId])
@@ -741,13 +757,14 @@ model RepaymentPayment {
   confirmedById String
   confirmedBy   User   @relation(fields: [confirmedById], references: [id])
 
-  // Validé par (admin) — la validation vaut aussi décaissement net vers l'investisseur
-  // (pas de bundle multi-investisseurs à ce niveau, contrairement au financement)
+  // Validé par (admin) — rend le montant disponible à la réclamation par l'investisseur
+  // (voir PayoutClaim, direction REPAYMENT_TO_INVESTOR) ; la validation ne constitue plus
+  // elle-même le décaissement, qui n'intervient qu'à l'approbation de la réclamation.
   validatedById   String?
   validatedBy     User?     @relation("RepaymentPaymentValidator", fields: [validatedById], references: [id])
   validatedAt     DateTime?
   rejectionReason String?
-  disbursedAt     DateTime?
+  disbursedAt     DateTime? // Non utilisé depuis le passage au flux PayoutClaim — jamais renseigné.
 
   createdAt DateTime @default(now())
 
@@ -755,6 +772,43 @@ model RepaymentPayment {
 
   @@index([repaymentScheduleId])
   @@map("repayment_payments")
+}
+
+// Réclamation d'un versement par le bénéficiaire final (PME pour un financement,
+// investisseur pour un remboursement) sur des fonds déjà validés par un admin
+// (Investment.SETTLED_OFF_PLATFORM / RepaymentPayment.CONFIRMED) mais pas encore
+// intégralement collectés (amountRequested pas encore atteint). Permet un
+// versement avant complétion — chaque réclamation est décomptée du disponible.
+model PayoutClaim {
+  id        String               @id @default(uuid())
+  direction PayoutClaimDirection
+
+  fundingRequestId String?
+  fundingRequest   FundingRequest? @relation(fields: [fundingRequestId], references: [id], onDelete: Cascade)
+
+  repaymentScheduleId String?
+  repaymentSchedule   RepaymentSchedule? @relation(fields: [repaymentScheduleId], references: [id], onDelete: Cascade)
+
+  amountRequested Decimal  @db.Decimal(14, 2) // montant brut réclamé, prélevé sur le disponible
+  amountNet       Decimal? @db.Decimal(14, 2) // versé net de commission, rempli à l'approbation
+
+  status PayoutClaimStatus @default(REQUESTED)
+
+  requestedById String
+  requestedBy   User     @relation("PayoutClaimRequester", fields: [requestedById], references: [id])
+  requestedAt   DateTime @default(now())
+
+  decidedById     String?
+  decidedBy       User?     @relation("PayoutClaimDecider", fields: [decidedById], references: [id])
+  decidedAt       DateTime?
+  rejectionReason String?
+
+  createdAt DateTime @default(now())
+
+  @@index([fundingRequestId])
+  @@index([repaymentScheduleId])
+  @@index([status])
+  @@map("payout_claims")
 }
 
 model Commission {

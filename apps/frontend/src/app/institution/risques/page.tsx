@@ -11,6 +11,7 @@ import { useInstitutionBadges } from "@/lib/institution-badges-context";
 import { NotifBell } from "@/components/ui/notif-bell";
 import { useSortableRows } from "@/lib/use-sortable-rows";
 import { SortableTh } from "@/components/ui/sortable-th";
+import { computeIndicatorStatus, type IndicatorStatus } from "@/lib/risk-indicators";
 
 const AML_TYPE_LABELS: Record<AmlAlertType, string> = {
   TRANSACTION_INHABITUELLE: "Transaction inhabituelle",
@@ -37,8 +38,6 @@ function formatDateAml(d: string) {
 }
 
 type RisqueTab = "prudentiels" | "reglementaires" | "aml";
-
-type IndicatorStatus = "conforme" | "attention" | "violation" | "non_disponible";
 
 interface IndicatorDef {
   code: string;
@@ -114,17 +113,6 @@ const INDICATOR_DEFS: IndicatorDef[] = [
   },
 ];
 
-function computeStatus(value: number, seuil: number, plusBas: boolean): IndicatorStatus {
-  if (plusBas) {
-    if (value <= seuil) return "conforme";
-    if (value <= seuil * 1.2) return "attention";
-    return "violation";
-  }
-  if (value >= seuil) return "conforme";
-  if (value >= seuil * 0.85) return "attention";
-  return "violation";
-}
-
 export default function RisquesPage() {
   const { riskIndicators, amlAlerts, amlStats, isLoading, refresh, resolveAmlAlert } = useInstitutionSettings();
   const { refreshBadges } = useInstitutionBadges();
@@ -135,7 +123,7 @@ export default function RisquesPage() {
     if (!data || !data.disponible || data.value === null) {
       return { ...def, value: null, status: "non_disponible" as IndicatorStatus };
     }
-    return { ...def, value: data.value, status: computeStatus(data.value, def.seuil, def.plusBas) };
+    return { ...def, value: data.value, status: computeIndicatorStatus(data.value, def.seuil, def.plusBas) };
   });
 
   const conformes = indicateurs.filter((i) => i.status === "conforme").length;

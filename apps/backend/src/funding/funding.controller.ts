@@ -8,6 +8,7 @@ import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RejectionReasonDto } from '../common/dto/rejection-reason.dto';
+import { RequestClaimDto } from '../common/dto/request-claim.dto';
 import { parsePositiveInt } from '../common/pagination.util';
 
 @ApiTags('Funding Requests')
@@ -250,19 +251,69 @@ export class FundingController {
 
   @ApiBearerAuth('jwt')
   @ApiOperation({
-    summary: '[ADMIN] Décaisser vers la PME (FUNDED → CLOSED)',
-    description: `Verse les fonds accumulés (validés admin) à la PME, commission de financement déduite.
-- Réservé aux dossiers en statut **FUNDED** (100% des virements validés).
-- \`disbursedAmount\` = \`amountRaised\` - somme des commissions FUNDING_FEE en attente sur ce dossier.
-- Les commissions correspondantes passent en \`COLLECTED\`.`,
+    summary: 'Montant disponible à réclamer',
+    description: "Montant déjà validé par un admin (amountRaised) mais pas encore réclamé par la PME. Réservé aux membres de l'organisation propriétaire.",
   })
   @ApiParam({ name: 'id', description: 'UUID de la demande' })
-  @ApiResponse({ status: 200, description: 'Décaissé — statut mis à jour → CLOSED' })
-  @ApiResponse({ status: 400, description: 'La demande n\'est pas en FUNDED' })
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/claimable')
+  getClaimableAmount(@Param('id') id: string, @Request() req) {
+    return this.fundingService.getClaimableAmount(id, req.user.id);
+  }
+
+  @ApiBearerAuth('jwt')
+  @ApiOperation({ summary: 'Historique des réclamations de ce dossier' })
+  @ApiParam({ name: 'id', description: 'UUID de la demande' })
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/claims')
+  getClaims(@Param('id') id: string, @Request() req) {
+    return this.fundingService.getClaimsForFundingRequest(id, req.user.id);
+  }
+
+  @ApiBearerAuth('jwt')
+  @ApiOperation({
+    summary: 'Réclamer les fonds disponibles',
+    description: `Réclame tout ou partie des fonds déjà validés par un admin sur ce dossier.
+- Ne nécessite plus d'attendre le statut **FUNDED** (100%) : réclamable dès qu'un investissement est validé.
+- Montant optionnel : si omis, réclame la totalité du disponible.
+- Nécessite ensuite une validation admin (\`PATCH /funding-requests/claims/:claimId/approve\`) avant versement effectif.`,
+  })
+  @ApiParam({ name: 'id', description: 'UUID de la demande' })
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/claims')
+  requestClaim(@Param('id') id: string, @Body() dto: RequestClaimDto, @Request() req) {
+    return this.fundingService.requestClaim(id, req.user.id, dto.amount);
+  }
+
+  @ApiBearerAuth('jwt')
+  @ApiOperation({ summary: '[ADMIN] Réclamations de financement en attente' })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
-  @Patch(':id/disburse')
-  disburse(@Param('id') id: string, @Request() req) {
-    return this.fundingService.disburse(id, req.user.id);
+  @Get('admin/claims/pending')
+  getPendingClaims() {
+    return this.fundingService.getPendingClaims();
+  }
+
+  @ApiBearerAuth('jwt')
+  @ApiOperation({
+    summary: '[ADMIN] Valider une réclamation de financement',
+    description: 'Verse le net (commission de financement déduite) à la PME. Clôture le dossier (CLOSED) si le financement est complet (FUNDED) et intégralement réclamé.',
+  })
+  @ApiParam({ name: 'claimId', description: 'UUID de la réclamation' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Patch('claims/:claimId/approve')
+  approveClaim(@Param('claimId') claimId: string, @Request() req) {
+    return this.fundingService.approveClaim(claimId, req.user.id);
+  }
+
+  @ApiBearerAuth('jwt')
+  @ApiOperation({ summary: '[ADMIN] Rejeter une réclamation de financement' })
+  @ApiParam({ name: 'claimId', description: 'UUID de la réclamation' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Patch('claims/:claimId/reject')
+  rejectClaim(@Param('claimId') claimId: string, @Body() dto: RejectionReasonDto, @Request() req) {
+    return this.fundingService.rejectClaim(claimId, req.user.id, dto.reason);
   }
 }

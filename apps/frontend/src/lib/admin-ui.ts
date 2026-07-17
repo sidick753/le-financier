@@ -19,10 +19,18 @@ export const FUNDING_STATUS_CONFIG: Record<string, { label: string; className: s
   DRAFT: { label: "Brouillon", className: "bg-gray-100 text-gray-600" },
   UNDER_REVIEW: { label: "En attente", className: "bg-yellow-100 text-yellow-700" },
   PUBLISHED: { label: "Publiée", className: "bg-blue-100 text-blue-700" },
-  FUNDED: { label: "Financée (à décaisser)", className: "bg-purple-100 text-purple-700" },
-  CLOSED: { label: "Décaissée", className: "bg-gray-100 text-gray-600" },
+  FUNDED: { label: "Financée (réclamable)", className: "bg-purple-100 text-purple-700" },
+  CLOSED: { label: "Intégralement réclamée", className: "bg-gray-100 text-gray-600" },
   REJECTED: { label: "Rejetée", className: "bg-red-100 text-red-700" },
   CANCELLED: { label: "Suspendue", className: "bg-orange-100 text-orange-700" },
+};
+
+// PayoutClaim.status — partagé par les 3 vues de réclamation (financement côté admin/PME,
+// remboursement côté investisseur) pour éviter que les libellés/couleurs ne divergent.
+export const CLAIM_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
+  REQUESTED: { label: "En attente de validation", className: "bg-amber-50 text-amber-700" },
+  PAID: { label: "Versée", className: "bg-green-50 text-green-700" },
+  REJECTED: { label: "Rejetée", className: "bg-red-50 text-red-600" },
 };
 
 export function formatAdminDate(dateString: string) {

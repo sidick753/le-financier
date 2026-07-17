@@ -11,7 +11,8 @@
     "studio": "prisma studio --port 4555",
     "seed": "DOTENV_CONFIG_PATH=../../.env ts-node -r dotenv/config prisma/seed.ts",
     "seed:admin": "DOTENV_CONFIG_PATH=../../.env ts-node -r dotenv/config prisma/seed-admin.ts",
-    "db:reset:keep-admin": "DOTENV_CONFIG_PATH=../../.env ts-node -r dotenv/config prisma/reset-keep-admin.ts"
+    "db:reset:keep-admin": "DOTENV_CONFIG_PATH=../../.env ts-node -r dotenv/config prisma/reset-keep-admin.ts",
+    "db:reconcile-pending-commissions": "DOTENV_CONFIG_PATH=../../.env ts-node -r dotenv/config prisma/reconcile-pending-commissions.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0"

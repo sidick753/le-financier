@@ -24,7 +24,10 @@ export class WatchlistRepository {
       where: { investorId },
       include: {
         fundingRequest: {
-          include: { organization: { select: { legalName: true } } },
+          include: {
+            organization: { select: { legalName: true } },
+            scoringReports: { orderBy: { createdAt: 'desc' }, take: 1 },
+          },
         },
       },
       orderBy: { createdAt: 'desc' },

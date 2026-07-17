@@ -8,7 +8,7 @@ import { api } from "@/lib/api";
 import { useAdminBadges } from "@/lib/admin-badges-context";
 import { RejectReasonModal } from "@/components/reject-reason-modal";
 import { DocumentPreviewModal } from "@/components/document-preview-modal";
-import { FUNDING_STATUS_CONFIG, formatAdminDate, formatFullAmount, formatFileSize } from "@/lib/admin-ui";
+import { FUNDING_STATUS_CONFIG, CLAIM_STATUS_CONFIG, formatAdminDate, formatFullAmount, formatFileSize } from "@/lib/admin-ui";
 
 const CATEGORY_LABELS: Record<string, string> = {
   FACTURE: "Affacturage",
@@ -25,6 +25,16 @@ const INVESTMENT_STATUS_CONFIG: Record<string, { label: string; className: strin
   CANCELLED: { label: "Annulé", className: "bg-gray-100 text-gray-500" },
   REJECTED: { label: "Rejeté", className: "bg-red-100 text-red-700" },
 };
+
+interface PayoutClaimRow {
+  id: string;
+  amountRequested: string;
+  amountNet: string | null;
+  status: "REQUESTED" | "PAID" | "REJECTED";
+  requestedAt: string;
+  rejectionReason: string | null;
+  requestedBy: { firstName: string; lastName: string };
+}
 
 interface InvestmentRow {
   id: string;
@@ -77,6 +87,7 @@ interface FundingRequestDetail {
     confidence: string;
   }>;
   investments: InvestmentRow[];
+  payoutClaims: PayoutClaimRow[];
 }
 
 export default function AdminOpportuniteDetailPage() {
@@ -93,6 +104,8 @@ export default function AdminOpportuniteDetailPage() {
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
   const [settlementActionId, setSettlementActionId] = useState<string | null>(null);
   const [rejectSettlementFor, setRejectSettlementFor] = useState<string | null>(null);
+  const [claimActionId, setClaimActionId] = useState<string | null>(null);
+  const [rejectClaimFor, setRejectClaimFor] = useState<string | null>(null);
 
   function load() {
     if (!token) return;
@@ -151,17 +164,27 @@ export default function AdminOpportuniteDetailPage() {
     }
   }
 
-  async function handleDisburse() {
-    if (!confirm("Confirmer le décaissement des fonds vers la PME (commission déduite) ?")) {
-      return;
-    }
-    setActionLoading(true);
+  async function handleApproveClaim(claimId: string) {
+    setClaimActionId(claimId);
     try {
-      await api.patch(`/funding-requests/${id}/disburse`, {}, token!);
+      await api.patch(`/funding-requests/claims/${claimId}/approve`, {}, token!);
       load();
       refreshBadges();
     } finally {
-      setActionLoading(false);
+      setClaimActionId(null);
+    }
+  }
+
+  async function handleRejectClaim(reason: string) {
+    if (!rejectClaimFor) return;
+    setClaimActionId(rejectClaimFor);
+    try {
+      await api.patch(`/funding-requests/claims/${rejectClaimFor}/reject`, { reason }, token!);
+      setRejectClaimFor(null);
+      load();
+      refreshBadges();
+    } finally {
+      setClaimActionId(null);
     }
   }
 
@@ -248,15 +271,6 @@ export default function AdminOpportuniteDetailPage() {
               </button>
             </>
           )}
-          {fr.status === "FUNDED" && (
-            <button
-              onClick={handleDisburse}
-              disabled={actionLoading}
-              className="rounded-md bg-brand-700 px-4 py-2 text-xs font-medium text-white hover:bg-brand-800 disabled:opacity-50"
-            >
-              Décaisser vers la PME
-            </button>
-          )}
           {["PUBLISHED", "FUNDED"].includes(fr.status) && (
             <button
               onClick={handleCancel}
@@ -287,23 +301,26 @@ export default function AdminOpportuniteDetailPage() {
 
       {fr.status === "FUNDED" && (
         <div className="mb-6 rounded-xl border border-purple-100 bg-purple-50 p-4">
-          <p className="text-xs font-semibold text-purple-700">100% financé — en attente de décaissement</p>
+          <p className="text-xs font-semibold text-purple-700">100% financé</p>
           <p className="mt-1 text-sm text-purple-600">
-            Tous les virements requis ont été validés. Cliquez sur « Décaisser vers la PME » pour verser les
-            fonds ({formatFullAmount(raised)}, commission déduite){" "}
+            Tous les virements requis ont été validés ({formatFullAmount(raised)}). La PME peut désormais
+            réclamer les fonds (en une ou plusieurs fois) depuis son tableau de bord — retrouvez ses
+            réclamations ci-dessous à valider{" "}
             {hasBankInfo
-              ? `sur le compte ${fr.organization.bankName ?? ""} de ${fr.organization.bankAccountHolder ?? fr.organization.legalName}.`
+              ? `pour versement sur le compte ${fr.organization.bankName ?? ""} de ${fr.organization.bankAccountHolder ?? fr.organization.legalName}.`
               : "— aucune information bancaire renseignée par la PME."}
           </p>
         </div>
       )}
 
-      {fr.status === "CLOSED" && fr.disbursedAt && (
+      {fr.disbursedAt && Number(fr.disbursedAmount) > 0 && (
         <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50 p-4">
-          <p className="text-xs font-semibold text-gray-700">Décaissé</p>
+          <p className="text-xs font-semibold text-gray-700">
+            {fr.status === "CLOSED" ? "Intégralement réclamée" : "Décaissement partiel"}
+          </p>
           <p className="mt-1 text-sm text-gray-600">
-            {formatFullAmount(Number(fr.disbursedAmount))} versés à la PME le {formatAdminDate(fr.disbursedAt)}
-            {" "}(commission déduite du montant levé de {formatFullAmount(raised)}).
+            {formatFullAmount(Number(fr.disbursedAmount))} versés à la PME (dernière réclamation le{" "}
+            {formatAdminDate(fr.disbursedAt)}, commission déduite du montant levé de {formatFullAmount(raised)}).
           </p>
         </div>
       )}
@@ -420,6 +437,65 @@ export default function AdminOpportuniteDetailPage() {
         </div>
       </div>
 
+      {/* Réclamations de la PME */}
+      <div className="mt-4 rounded-xl border border-gray-200 bg-white">
+        <div className="border-b border-gray-100 p-5">
+          <p className="text-sm font-semibold text-gray-900">Réclamations</p>
+          <p className="mt-0.5 text-xs text-gray-500">
+            La PME peut réclamer les fonds déjà validés à tout moment, même avant 100% financé.
+          </p>
+        </div>
+        <div className="divide-y divide-gray-100">
+          {fr.payoutClaims.length === 0 && (
+            <p className="p-5 text-sm text-gray-400">Aucune réclamation pour l'instant.</p>
+          )}
+          {fr.payoutClaims.map((claim) => {
+            const claimConfig = CLAIM_STATUS_CONFIG[claim.status] ?? CLAIM_STATUS_CONFIG.REQUESTED;
+            const isPending = claimActionId === claim.id;
+            return (
+              <div key={claim.id} className="flex items-center justify-between gap-4 p-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">
+                    {formatFullAmount(Number(claim.amountRequested))}
+                    {claim.amountNet ? ` · net ${formatFullAmount(Number(claim.amountNet))}` : ""}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Réclamé par {claim.requestedBy.firstName} {claim.requestedBy.lastName} le{" "}
+                    {formatAdminDate(claim.requestedAt)}
+                  </p>
+                  {claim.status === "REJECTED" && claim.rejectionReason && (
+                    <p className="mt-1 text-xs text-red-600">Motif : {claim.rejectionReason}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {claim.status === "REQUESTED" && (
+                    <>
+                      <button
+                        onClick={() => handleApproveClaim(claim.id)}
+                        disabled={isPending}
+                        className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                      >
+                        Valider
+                      </button>
+                      <button
+                        onClick={() => setRejectClaimFor(claim.id)}
+                        disabled={isPending}
+                        className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        Rejeter
+                      </button>
+                    </>
+                  )}
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${claimConfig.className}`}>
+                    {claimConfig.label}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Documents */}
       <div className="mt-4 rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
@@ -470,6 +546,16 @@ export default function AdminOpportuniteDetailPage() {
           isSubmitting={settlementActionId === rejectSettlementFor}
           onClose={() => setRejectSettlementFor(null)}
           onConfirm={handleRejectSettlement}
+        />
+      )}
+
+      {rejectClaimFor && (
+        <RejectReasonModal
+          title="Rejeter cette réclamation"
+          confirmLabel="Confirmer le rejet"
+          isSubmitting={claimActionId === rejectClaimFor}
+          onClose={() => setRejectClaimFor(null)}
+          onConfirm={handleRejectClaim}
         />
       )}
 

@@ -5,9 +5,17 @@ import { FundingRepository } from './funding.repository';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { ScoringModule } from '../scoring/scoring.module';
 import { DocumentsModule } from '../documents/documents.module';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { PayoutClaimsModule } from '../payout-claims/payout-claims.module';
 
 @Module({
-  imports: [OrganizationsModule, ScoringModule, forwardRef(() => DocumentsModule)],
+  imports: [
+    OrganizationsModule,
+    ScoringModule,
+    forwardRef(() => DocumentsModule),
+    NotificationsModule,
+    PayoutClaimsModule,
+  ],
   controllers: [FundingController],
   providers: [FundingService, FundingRepository],
   exports: [FundingRepository],

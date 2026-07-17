@@ -25,14 +25,29 @@ interface PendingPayment {
   };
 }
 
+interface PendingClaim {
+  id: string;
+  amountRequested: string;
+  requestedAt: string;
+  requestedBy: { firstName: string; lastName: string };
+  repaymentSchedule: {
+    dueDate: string;
+    nature: string;
+    fundingRequest: { id: string; title: string };
+  };
+}
+
 export default function AdminRemboursementsPage() {
   const { token } = useAuth();
   const { refreshBadges } = useAdminBadges();
 
   const [payments, setPayments] = useState<PendingPayment[] | null>(null);
+  const [claims, setClaims] = useState<PendingClaim[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
   const [rejectFor, setRejectFor] = useState<string | null>(null);
+  const [claimActionId, setClaimActionId] = useState<string | null>(null);
+  const [rejectClaimFor, setRejectClaimFor] = useState<string | null>(null);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
 
   function load() {
@@ -41,6 +56,10 @@ export default function AdminRemboursementsPage() {
       .get<PendingPayment[]>("/repayments/admin/pending", token)
       .then(setPayments)
       .catch(() => setError("Impossible de charger les remboursements en attente."));
+    api
+      .get<PendingClaim[]>("/repayments/admin/claims/pending", token)
+      .then(setClaims)
+      .catch(() => setError("Impossible de charger les réclamations en attente."));
   }
 
   useEffect(load, [token]);
@@ -66,6 +85,30 @@ export default function AdminRemboursementsPage() {
       refreshBadges();
     } finally {
       setActionId(null);
+    }
+  }
+
+  async function handleApproveClaim(claimId: string) {
+    setClaimActionId(claimId);
+    try {
+      await api.patch(`/repayments/claims/${claimId}/approve`, {}, token!);
+      load();
+      refreshBadges();
+    } finally {
+      setClaimActionId(null);
+    }
+  }
+
+  async function handleRejectClaim(reason: string) {
+    if (!rejectClaimFor) return;
+    setClaimActionId(rejectClaimFor);
+    try {
+      await api.patch(`/repayments/claims/${rejectClaimFor}/reject`, { reason }, token!);
+      setRejectClaimFor(null);
+      load();
+      refreshBadges();
+    } finally {
+      setClaimActionId(null);
     }
   }
 
@@ -140,6 +183,63 @@ export default function AdminRemboursementsPage() {
         </div>
       )}
 
+      <h2 className="mb-1 mt-10 text-xl font-semibold text-gray-900">Réclamations investisseur à valider</h2>
+      <p className="mb-6 text-sm text-gray-500">
+        Un investisseur peut réclamer les remboursements déjà validés, même avant qu'une échéance soit
+        intégralement soldée (paiement en plusieurs tranches).
+      </p>
+
+      {claims && claims.length === 0 && (
+        <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-400">
+          Aucune réclamation en attente de validation.
+        </div>
+      )}
+
+      {claims && claims.length > 0 && (
+        <div className="rounded-xl border border-gray-200 bg-white">
+          <div className="divide-y divide-gray-100">
+            {claims.map((c) => {
+              const isPending = claimActionId === c.id;
+              return (
+                <div key={c.id} className="flex items-center justify-between gap-4 p-4">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      <Link
+                        href={`/admin/opportunites/${c.repaymentSchedule.fundingRequest.id}`}
+                        className="hover:text-brand-700 hover:underline"
+                      >
+                        {c.repaymentSchedule.fundingRequest.title}
+                      </Link>
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Réclamé par {c.requestedBy.firstName} {c.requestedBy.lastName} ·{" "}
+                      {formatFullAmount(Number(c.amountRequested))}
+                      {" · "}le {formatAdminDate(c.requestedAt)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleApproveClaim(c.id)}
+                      disabled={isPending}
+                      className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                    >
+                      Valider
+                    </button>
+                    <button
+                      onClick={() => setRejectClaimFor(c.id)}
+                      disabled={isPending}
+                      className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      Rejeter
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {rejectFor && (
         <RejectReasonModal
           title="Rejeter la preuve de remboursement"
@@ -147,6 +247,16 @@ export default function AdminRemboursementsPage() {
           isSubmitting={actionId === rejectFor}
           onClose={() => setRejectFor(null)}
           onConfirm={handleReject}
+        />
+      )}
+
+      {rejectClaimFor && (
+        <RejectReasonModal
+          title="Rejeter cette réclamation"
+          confirmLabel="Confirmer le rejet"
+          isSubmitting={claimActionId === rejectClaimFor}
+          onClose={() => setRejectClaimFor(null)}
+          onConfirm={handleRejectClaim}
         />
       )}
 

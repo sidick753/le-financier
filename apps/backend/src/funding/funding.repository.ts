@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaClient, Prisma } from '@le-financier/database';
 import {
   IFundingRepository,
@@ -7,6 +7,9 @@ import {
   FundingAdminFilters,
 } from './interfaces/funding-repository.interface';
 import { ALL_SCORING_FIELDS } from '../scoring/scoring-fields';
+import { PayoutClaimsRepository } from '../payout-claims/payout-claims.repository';
+
+const FUNDING_FEE_RATE = 0.02;
 
 function hasScoringData(data: CreateFundingRequestData): boolean {
   return ALL_SCORING_FIELDS.some((field) => data[field] !== undefined && data[field] !== null);
@@ -37,11 +40,24 @@ function gradeToRiskBucket(grade: string | null | undefined): 'FAIBLE' | 'MODERE
 export class FundingRepository implements IFundingRepository {
   private prisma = new PrismaClient();
 
+  constructor(private payoutClaims: PayoutClaimsRepository) {}
+
   async findById(id: string) {
     return this.prisma.fundingRequest.findUnique({
       where: { id },
       include: {
-        organization: true,
+        organization: {
+          include: {
+            // Score PME indépendant (product='ORGANISATION') — distinct du score de
+            // CETTE demande (scoringReports ci-dessous), utile à l'investisseur pour
+            // évaluer la PME elle-même au-delà du dossier précis.
+            scoringReports: {
+              where: { product: 'ORGANISATION' },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
+          },
+        },
         scoringReports: { orderBy: { createdAt: 'desc' }, take: 1 },
         // Détail propre à CETTE demande (débiteur pour une facture, garantie
         // pour un prêt) — utile à l'investisseur pour évaluer le dossier,
@@ -63,6 +79,11 @@ export class FundingRepository implements IFundingRepository {
             investor: { select: { id: true, firstName: true, lastName: true, email: true } },
           },
           orderBy: { createdAt: 'desc' },
+        },
+        payoutClaims: {
+          where: { direction: 'FUNDING_TO_PME' },
+          include: { requestedBy: { select: { firstName: true, lastName: true } } },
+          orderBy: { requestedAt: 'desc' },
         },
       },
     });
@@ -214,38 +235,146 @@ export class FundingRepository implements IFundingRepository {
     return this.prisma.fundingRequest.delete({ where: { id } });
   }
 
-  // [ADMIN] Décaisse les fonds accumulés (validés admin) vers la PME, en retirant
-  // la commission de financement due sur ce dossier (FUNDED → CLOSED).
-  // La garde de statut (doit être FUNDED) est faite en amont par le service.
-  async disburse(id: string, adminId: string) {
+  // PME : montant déjà validé par un admin (amountRaised) mais pas encore réclamé.
+  // Disponible dès qu'un investissement est validé — pas besoin d'attendre FUNDED.
+  async getClaimableAmount(fundingRequestId: string) {
+    const fundingRequest = await this.prisma.fundingRequest.findUniqueOrThrow({
+      where: { id: fundingRequestId },
+    });
+    // Même restriction de statut que requestFundingClaim : sans elle, un dossier
+    // CANCELLED/REJECTED avec des investissements déjà validés afficherait un solde
+    // réclamable que la soumission rejetterait ensuite avec un 409.
+    if (!['PUBLISHED', 'FUNDED'].includes(fundingRequest.status)) {
+      return 0;
+    }
+    const claimed = await this.payoutClaims.sumClaimed(this.prisma as any, 'FUNDING_TO_PME', { fundingRequestId });
+    return Number(fundingRequest.amountRaised) - claimed;
+  }
+
+  // PME : réclame tout ou partie des fonds déjà validés, avant même que le dossier
+  // soit intégralement financé (FUNDED).
+  async requestFundingClaim(fundingRequestId: string, userId: string, amount?: number) {
     return this.prisma.$transaction(async (tx) => {
-      const fundingRequest = await tx.fundingRequest.findUniqueOrThrow({ where: { id } });
+      // Verrou de ligne : empêche deux réclamations concurrentes de lire le même
+      // disponible avant que l'une des deux n'ait inséré la sienne.
+      await tx.$queryRaw`SELECT id FROM funding_requests WHERE id = ${fundingRequestId} FOR UPDATE`;
 
-      const pendingCommissions = await tx.commission.findMany({
-        where: { fundingRequestId: id, type: 'FUNDING_FEE', status: 'PENDING' },
-      });
-      const totalCommission = pendingCommissions.reduce(
-        (sum, c) => sum + Number(c.commissionAmount),
-        0,
-      );
-      const disbursedAmount = Number(fundingRequest.amountRaised) - totalCommission;
-
-      if (pendingCommissions.length > 0) {
-        await tx.commission.updateMany({
-          where: { id: { in: pendingCommissions.map((c) => c.id) } },
-          data: { status: 'COLLECTED' },
-        });
+      const fundingRequest = await tx.fundingRequest.findUnique({ where: { id: fundingRequestId } });
+      if (!fundingRequest) throw new ConflictException('Demande introuvable.');
+      if (!['PUBLISHED', 'FUNDED'].includes(fundingRequest.status)) {
+        throw new ConflictException("Cette demande n'est pas éligible à une réclamation.");
       }
 
-      return tx.fundingRequest.update({
-        where: { id },
+      const claimed = await this.payoutClaims.sumClaimed(tx, 'FUNDING_TO_PME', { fundingRequestId });
+      const available = Number(fundingRequest.amountRaised) - claimed;
+
+      return this.payoutClaims.validateAndCreate(
+        tx,
+        'FUNDING_TO_PME',
+        { fundingRequestId },
+        available,
+        amount,
+        userId,
+      );
+    });
+  }
+
+  // [ADMIN] Valide la réclamation : commission de financement prélevée au prorata du
+  // montant réclamé, versement net à la PME. Dossier clôturé (CLOSED) dès que le
+  // financement est complet (FUNDED) ET intégralement réclamé.
+  async approveFundingClaim(claimId: string, adminId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const claim = await tx.payoutClaim.findUnique({ where: { id: claimId } });
+      if (!claim || claim.direction !== 'FUNDING_TO_PME' || !claim.fundingRequestId) {
+        throw new ConflictException('Réclamation introuvable.');
+      }
+      if (claim.status !== 'REQUESTED') {
+        throw new ConflictException("Cette réclamation n'est pas en attente de décision.");
+      }
+
+      // Verrou de ligne : empêche une approbation concurrente (ou une nouvelle demande)
+      // de recalculer le disponible sur un état déjà obsolète.
+      await tx.$queryRaw`SELECT id FROM funding_requests WHERE id = ${claim.fundingRequestId} FOR UPDATE`;
+
+      const fundingRequest = await tx.fundingRequest.findUniqueOrThrow({
+        where: { id: claim.fundingRequestId },
+      });
+      const claimed = await this.payoutClaims.sumClaimed(
+        tx,
+        'FUNDING_TO_PME',
+        { fundingRequestId: claim.fundingRequestId },
+        ['REQUESTED', 'PAID'],
+        claimId,
+      );
+      const available = Number(fundingRequest.amountRaised) - claimed;
+      if (Number(claim.amountRequested) > available) {
+        throw new ConflictException('Le montant validé disponible a changé, réclamation à revoir.');
+      }
+
+      const commissionAmount = Number(claim.amountRequested) * FUNDING_FEE_RATE;
+      const amountNet = Number(claim.amountRequested) - commissionAmount;
+
+      await tx.commission.create({
         data: {
-          status: 'CLOSED',
+          type: 'FUNDING_FEE',
+          fundingRequestId: claim.fundingRequestId,
+          baseAmount: claim.amountRequested,
+          rate: FUNDING_FEE_RATE,
+          commissionAmount,
+          status: 'COLLECTED',
+        },
+      });
+
+      const updatedClaim = await this.payoutClaims.markPaid(tx, claimId, amountNet, adminId);
+
+      // CLOSED doit refléter un décaissement réellement complet : on ne compte ici que
+      // les réclamations déjà PAID (jamais celles encore REQUESTED, qui peuvent être
+      // rejetées) — sans quoi un dossier pourrait passer CLOSED alors qu'une autre
+      // réclamation en attente n'a pas encore été décaissée, et rester bloqué CLOSED
+      // si celle-ci est ensuite rejetée.
+      const paidSum = await this.payoutClaims.sumClaimed(
+        tx,
+        'FUNDING_TO_PME',
+        { fundingRequestId: claim.fundingRequestId },
+        ['PAID'],
+        claimId,
+      );
+      const totalPaidGross = paidSum + Number(claim.amountRequested);
+      const newStatus =
+        fundingRequest.status === 'FUNDED' && totalPaidGross >= Number(fundingRequest.amountRaised)
+          ? 'CLOSED'
+          : fundingRequest.status;
+
+      await tx.fundingRequest.update({
+        where: { id: claim.fundingRequestId },
+        data: {
+          status: newStatus,
           disbursedAt: new Date(),
-          disbursedAmount,
+          disbursedAmount: Number(fundingRequest.disbursedAmount ?? 0) + amountNet,
           disbursedById: adminId,
         },
       });
+
+      return updatedClaim;
+    });
+  }
+
+  async rejectFundingClaim(claimId: string, adminId: string, reason: string) {
+    return this.payoutClaims.reject(claimId, 'FUNDING_TO_PME', adminId, reason);
+  }
+
+  async findClaimsForFundingRequest(fundingRequestId: string) {
+    return this.payoutClaims.findMany('FUNDING_TO_PME', { fundingRequestId });
+  }
+
+  async findPendingFundingClaims() {
+    return this.prisma.payoutClaim.findMany({
+      where: { direction: 'FUNDING_TO_PME', status: 'REQUESTED' },
+      include: {
+        fundingRequest: { select: { id: true, title: true, currency: true } },
+        requestedBy: { select: { firstName: true, lastName: true } },
+      },
+      orderBy: { requestedAt: 'asc' },
     });
   }
 

@@ -8,15 +8,23 @@ export interface IRepaymentRepository {
     category: string;
   }): Promise<void>;
   findScheduleByInvestmentId(investmentId: string): Promise<any[]>;
+  findInvestmentOwner(investmentId: string): Promise<{ investorId: string } | null>;
   findScheduleByFundingRequestId(fundingRequestId: string): Promise<any[]>;
   findScheduleById(scheduleId: string): Promise<any | null>;
   findUpcomingByInvestorId(investorId: string, limit?: number): Promise<any[]>;
-  confirmPayment(scheduleId: string, userId: string, proofDocumentId?: string): Promise<any>;
+  confirmPayment(scheduleId: string, userId: string, amount?: number, proofDocumentId?: string): Promise<any>;
   findPaymentById(paymentId: string): Promise<any | null>;
   approvePayment(paymentId: string, adminId: string): Promise<any>;
   rejectPayment(paymentId: string, adminId: string, reason: string): Promise<any>;
   findPendingPayments(): Promise<any[]>;
   findPaymentsByInvestorId(investorId: string): Promise<any[]>;
+  getClaimableAmountForSchedule(scheduleId: string): Promise<number>;
+  findScheduleInvestor(scheduleId: string): Promise<{ investorId: string } | null>;
+  requestRepaymentClaim(scheduleId: string, investorId: string, amount?: number): Promise<any>;
+  approveRepaymentClaim(claimId: string, adminId: string): Promise<any>;
+  rejectRepaymentClaim(claimId: string, adminId: string, reason: string): Promise<any>;
+  findClaimsForSchedule(scheduleId: string): Promise<any[]>;
+  findPendingRepaymentClaims(): Promise<any[]>;
   findCommissionsByFundingRequestId(fundingRequestId: string): Promise<any[]>;
   findAllCommissions(filters?: {
     type?: string;

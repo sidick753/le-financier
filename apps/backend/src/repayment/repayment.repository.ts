@@ -1,14 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaClient, Prisma } from '@le-financier/database';
 import { generateSchedule } from './repayment-schedule.generator';
 import { IRepaymentRepository } from './interfaces/repayment-repository.interface';
+import { PayoutClaimsRepository } from '../payout-claims/payout-claims.repository';
 
-const FUNDING_FEE_RATE = 0.02;
 const INTEREST_FEE_RATE = 0.03;
 
 @Injectable()
 export class RepaymentRepository implements IRepaymentRepository {
   private prisma = new PrismaClient();
+
+  constructor(private payoutClaims: PayoutClaimsRepository) {}
 
   async generateScheduleForInvestment(params: {
     investmentId: string;
@@ -24,21 +26,10 @@ export class RepaymentRepository implements IRepaymentRepository {
       for (const entry of entries) {
         await tx.repaymentSchedule.create({ data: entry });
       }
-
-      const fundingCommission = params.amountCommitted * FUNDING_FEE_RATE;
-      await tx.commission.create({
-        data: {
-          type: 'FUNDING_FEE',
-          fundingRequestId: params.fundingRequestId,
-          baseAmount: params.amountCommitted,
-          rate: FUNDING_FEE_RATE,
-          commissionAmount: fundingCommission,
-          // Due, mais collectée seulement au décaissement (FundingRepository.disburse) —
-          // c'est là que la plateforme prélève effectivement sa part sur le virement sortant.
-          status: 'PENDING',
-        },
-      });
     });
+    // La commission FUNDING_FEE n'est plus créée ici : elle est désormais calculée
+    // et collectée au prorata de chaque réclamation PME (voir FundingRepository.approveClaim),
+    // pour rester cohérente avec un décaissement qui peut désormais être partiel.
   }
 
   async findScheduleByInvestmentId(investmentId: string) {
@@ -46,6 +37,13 @@ export class RepaymentRepository implements IRepaymentRepository {
       where: { investmentId },
       include: { payments: true },
       orderBy: { dueDate: 'asc' },
+    });
+  }
+
+  async findInvestmentOwner(investmentId: string) {
+    return this.prisma.investment.findUnique({
+      where: { id: investmentId },
+      select: { investorId: true },
     });
   }
 
@@ -66,7 +64,7 @@ export class RepaymentRepository implements IRepaymentRepository {
     return this.prisma.repaymentSchedule.findMany({
       where: {
         investment: { investorId },
-        status: 'PENDING',
+        status: { in: ['PENDING', 'PARTIALLY_PAID'] },
         dueDate: { gte: new Date() },
       },
       include: {
@@ -92,8 +90,15 @@ export class RepaymentRepository implements IRepaymentRepository {
 
   // Soumission par la PME : dépose une preuve de virement sur le compte plateforme,
   // en attente de validation admin. Ne touche pas l'échéance ni la commission.
-  async confirmPayment(scheduleId: string, userId: string, proofDocumentId?: string) {
+  // Le montant peut être partiel (paiement en plusieurs tranches) — s'il est omis,
+  // couvre tout le solde restant dû (comportement historique).
+  async confirmPayment(scheduleId: string, userId: string, amount?: number, proofDocumentId?: string) {
     return this.prisma.$transaction(async (tx) => {
+      // Verrou de ligne : empêche deux soumissions concurrentes de lire le même solde
+      // restant avant que l'une des deux n'ait inséré sa tranche (voir aussi le calcul
+      // de `remaining` ci-dessous, qui doit englober PENDING_VALIDATION pour la même raison).
+      await tx.$queryRaw`SELECT id FROM repayment_schedules WHERE id = ${scheduleId} FOR UPDATE`;
+
       const schedule = await tx.repaymentSchedule.findUnique({
         where: { id: scheduleId },
       });
@@ -101,10 +106,27 @@ export class RepaymentRepository implements IRepaymentRepository {
       if (!schedule) throw new Error('Échéance introuvable.');
       if (schedule.status === 'PAID') throw new Error('Cette échéance est déjà payée.');
 
+      // Solde restant = montant dû - tranches déjà validées OU en attente de validation.
+      // Une tranche PENDING_VALIDATION peut encore être confirmée par un admin : elle doit
+      // donc déjà être décomptée, sans quoi deux soumissions successives peuvent ensemble
+      // dépasser amountDue avant qu'un admin n'ait statué sur la première.
+      const pendingSum = await tx.repaymentPayment.aggregate({
+        where: { repaymentScheduleId: scheduleId, status: { in: ['CONFIRMED', 'PENDING_VALIDATION'] } },
+        _sum: { amountPaid: true },
+      });
+      const remaining = Number(schedule.amountDue) - Number(pendingSum._sum.amountPaid ?? 0);
+      const resolvedAmount = amount ?? remaining;
+
+      if (resolvedAmount <= 0 || resolvedAmount > remaining) {
+        throw new ConflictException(
+          `Montant invalide. Il reste ${remaining} à régler sur cette échéance.`,
+        );
+      }
+
       return tx.repaymentPayment.create({
         data: {
           repaymentScheduleId: scheduleId,
-          amountPaid: schedule.amountDue,
+          amountPaid: resolvedAmount,
           paidAt: new Date(),
           status: 'PENDING_VALIDATION',
           confirmedById: userId,
@@ -114,9 +136,12 @@ export class RepaymentRepository implements IRepaymentRepository {
     });
   }
 
-  // [ADMIN] Valide la preuve : paiement confirmé, échéance soldée, commission d'intérêt
-  // collectée et reversement net à l'investisseur considéré effectué dans le même geste
-  // (pas de bundle multi-investisseurs à ce niveau, contrairement au décaissement du financement).
+  // [ADMIN] Valide la preuve d'une tranche : la commission d'intérêt est prélevée au
+  // prorata de cette tranche (même ratio intérêt/principal que l'échéance entière), et
+  // l'échéance passe PARTIALLY_PAID tant que le cumul validé n'atteint pas amountDue,
+  // puis PAID. Ne verse plus directement l'investisseur : celui-ci doit désormais
+  // réclamer le montant validé (voir requestRepaymentClaim/approveRepaymentClaim),
+  // ce qui permet une réclamation avant que l'échéance soit intégralement soldée.
   async approvePayment(paymentId: string, adminId: string) {
     return this.prisma.$transaction(async (tx) => {
       const payment = await tx.repaymentPayment.findUnique({
@@ -135,13 +160,22 @@ export class RepaymentRepository implements IRepaymentRepository {
           status: 'CONFIRMED',
           validatedById: adminId,
           validatedAt: now,
-          disbursedAt: now,
         },
       });
 
+      const schedule = payment.repaymentSchedule;
+      const amountDue = Number(schedule.amountDue);
+      const amountPaid = Number(payment.amountPaid);
+
+      const confirmedSum = await tx.repaymentPayment.aggregate({
+        where: { repaymentScheduleId: schedule.id, status: 'CONFIRMED' },
+        _sum: { amountPaid: true },
+      });
+      const totalConfirmed = Number(confirmedSum._sum.amountPaid ?? 0);
+
       await tx.repaymentSchedule.update({
-        where: { id: payment.repaymentScheduleId },
-        data: { status: 'PAID' },
+        where: { id: schedule.id },
+        data: { status: totalConfirmed >= amountDue ? 'PAID' : 'PARTIALLY_PAID' },
       });
 
       if (payment.proofDocumentId) {
@@ -151,19 +185,22 @@ export class RepaymentRepository implements IRepaymentRepository {
         });
       }
 
-      const interestAmount = Number(payment.repaymentSchedule.interestAmount);
-      if (interestAmount > 0) {
-        const interestCommission = interestAmount * INTEREST_FEE_RATE;
+      // Portion d'intérêt de cette tranche précise, au même ratio que l'échéance entière
+      // (interestAmount / amountDue) — évite de recompter l'intérêt plein à chaque tranche.
+      const interestRatio = amountDue > 0 ? Number(schedule.interestAmount) / amountDue : 0;
+      const trancheInterest = amountPaid * interestRatio;
+      if (trancheInterest > 0) {
+        const interestCommission = trancheInterest * INTEREST_FEE_RATE;
         await tx.commission.create({
           data: {
             type: 'INTEREST_FEE',
-            fundingRequestId: payment.repaymentSchedule.fundingRequestId,
+            fundingRequestId: schedule.fundingRequestId,
             repaymentPaymentId: payment.id,
-            baseAmount: interestAmount,
+            baseAmount: trancheInterest,
             rate: INTEREST_FEE_RATE,
             commissionAmount: interestCommission,
-            // Collectée immédiatement : le reversement net à l'investisseur se fait dans
-            // le même geste que la validation, contrairement au décaissement du financement.
+            // Collectée immédiatement sur la tranche validée, indépendamment du moment
+            // où l'investisseur réclamera effectivement les fonds correspondants.
             status: 'COLLECTED',
           },
         });
@@ -198,6 +235,131 @@ export class RepaymentRepository implements IRepaymentRepository {
           rejectionReason: reason,
         },
       });
+    });
+  }
+
+  // Investisseur : montant validé (CONFIRMED) sur cette échéance mais pas encore
+  // couvert par une réclamation en cours ou déjà payée — ce qui reste "à réclamer".
+  async getClaimableAmountForSchedule(scheduleId: string) {
+    const [confirmedSum, claimed] = await Promise.all([
+      this.prisma.repaymentPayment.aggregate({
+        where: { repaymentScheduleId: scheduleId, status: 'CONFIRMED' },
+        _sum: { amountPaid: true },
+      }),
+      this.payoutClaims.sumClaimed(this.prisma as any, 'REPAYMENT_TO_INVESTOR', { repaymentScheduleId: scheduleId }),
+    ]);
+    return Number(confirmedSum._sum.amountPaid ?? 0) - claimed;
+  }
+
+  async findScheduleInvestor(scheduleId: string) {
+    const schedule = await this.prisma.repaymentSchedule.findUnique({
+      where: { id: scheduleId },
+      include: { investment: { select: { investorId: true } } },
+    });
+    return schedule ? { investorId: schedule.investment.investorId } : null;
+  }
+
+  // Investisseur : réclame tout ou partie du montant déjà validé par un admin sur cette
+  // échéance, avant même qu'elle soit intégralement soldée (PARTIALLY_PAID accepté).
+  async requestRepaymentClaim(scheduleId: string, investorId: string, amount?: number) {
+    return this.prisma.$transaction(async (tx) => {
+      // Verrou de ligne : empêche deux réclamations concurrentes de lire le même
+      // disponible avant que l'une des deux n'ait inséré la sienne.
+      await tx.$queryRaw`SELECT id FROM repayment_schedules WHERE id = ${scheduleId} FOR UPDATE`;
+
+      const schedule = await tx.repaymentSchedule.findUnique({
+        where: { id: scheduleId },
+        include: { investment: { select: { investorId: true } } },
+      });
+      if (!schedule) throw new ConflictException('Échéance introuvable.');
+      if (schedule.investment.investorId !== investorId) {
+        throw new ConflictException("Cette échéance n'appartient pas à cet investisseur.");
+      }
+
+      const confirmedSum = await tx.repaymentPayment.aggregate({
+        where: { repaymentScheduleId: scheduleId, status: 'CONFIRMED' },
+        _sum: { amountPaid: true },
+      });
+      const claimed = await this.payoutClaims.sumClaimed(tx, 'REPAYMENT_TO_INVESTOR', { repaymentScheduleId: scheduleId });
+      const available = Number(confirmedSum._sum.amountPaid ?? 0) - claimed;
+
+      return this.payoutClaims.validateAndCreate(
+        tx,
+        'REPAYMENT_TO_INVESTOR',
+        { repaymentScheduleId: scheduleId },
+        available,
+        amount,
+        investorId,
+      );
+    });
+  }
+
+  // [ADMIN] Valide la réclamation et verse le net — la commission d'intérêt a déjà été
+  // collectée au prorata à la validation des tranches (voir approvePayment), donc le net
+  // ici applique simplement le même ratio au montant réclamé.
+  async approveRepaymentClaim(claimId: string, adminId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const claim = await tx.payoutClaim.findUnique({
+        where: { id: claimId },
+        include: { repaymentSchedule: true },
+      });
+      if (!claim || claim.direction !== 'REPAYMENT_TO_INVESTOR' || !claim.repaymentSchedule) {
+        throw new ConflictException('Réclamation introuvable.');
+      }
+      if (claim.status !== 'REQUESTED') {
+        throw new ConflictException("Cette réclamation n'est pas en attente de décision.");
+      }
+
+      // Verrou de ligne : empêche une approbation concurrente (ou une nouvelle demande)
+      // de recalculer le disponible sur un état déjà obsolète.
+      await tx.$queryRaw`SELECT id FROM repayment_schedules WHERE id = ${claim.repaymentSchedule.id} FOR UPDATE`;
+
+      const schedule = claim.repaymentSchedule;
+      const confirmedSum = await tx.repaymentPayment.aggregate({
+        where: { repaymentScheduleId: schedule.id, status: 'CONFIRMED' },
+        _sum: { amountPaid: true },
+      });
+      const claimed = await this.payoutClaims.sumClaimed(
+        tx,
+        'REPAYMENT_TO_INVESTOR',
+        { repaymentScheduleId: schedule.id },
+        ['REQUESTED', 'PAID'],
+        claimId,
+      );
+      const available = Number(confirmedSum._sum.amountPaid ?? 0) - claimed;
+      if (Number(claim.amountRequested) > available) {
+        throw new ConflictException('Le montant validé disponible a changé, réclamation à revoir.');
+      }
+
+      const amountDue = Number(schedule.amountDue);
+      const interestRatio = amountDue > 0 ? Number(schedule.interestAmount) / amountDue : 0;
+      const amountNet = Number(claim.amountRequested) * (1 - interestRatio * INTEREST_FEE_RATE);
+
+      return this.payoutClaims.markPaid(tx, claimId, amountNet, adminId);
+    });
+  }
+
+  async rejectRepaymentClaim(claimId: string, adminId: string, reason: string) {
+    return this.payoutClaims.reject(claimId, 'REPAYMENT_TO_INVESTOR', adminId, reason);
+  }
+
+  async findClaimsForSchedule(scheduleId: string) {
+    return this.payoutClaims.findMany('REPAYMENT_TO_INVESTOR', { repaymentScheduleId: scheduleId });
+  }
+
+  async findPendingRepaymentClaims() {
+    return this.prisma.payoutClaim.findMany({
+      where: { direction: 'REPAYMENT_TO_INVESTOR', status: 'REQUESTED' },
+      include: {
+        repaymentSchedule: {
+          include: {
+            fundingRequest: { select: { id: true, title: true } },
+            investment: { include: { investor: { select: { firstName: true, lastName: true } } } },
+          },
+        },
+        requestedBy: { select: { firstName: true, lastName: true } },
+      },
+      orderBy: { requestedAt: 'asc' },
     });
   }
 

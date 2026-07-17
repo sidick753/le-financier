@@ -42,15 +42,19 @@ export function AdminBadgesProvider({ children }: { children: ReactNode }) {
       api.get<{ pending: number }>("/institutions/admin/stats", token),
       api.get<{ count: number }>("/scoring/pending-count", token),
       api.get<unknown[]>("/repayments/admin/pending", token),
+      // Réclamations en attente (PayoutClaim) — introduites par le flux de décaissement
+      // partiel, rattachées respectivement aux sections Opportunités et Remboursements.
+      api.get<unknown[]>("/funding-requests/admin/claims/pending", token),
+      api.get<unknown[]>("/repayments/admin/claims/pending", token),
     ])
-      .then(([pme, investisseurs, opportunites, partenaires, scoring, pendingPayments]) => {
+      .then(([pme, investisseurs, opportunites, partenaires, scoring, pendingPayments, pendingFundingClaims, pendingRepaymentClaims]) => {
         setBadges({
           pme: pme.pending,
           investisseurs: investisseurs.pendingKyc,
-          opportunites: opportunites.underReview,
+          opportunites: opportunites.underReview + pendingFundingClaims.length,
           partenaires: partenaires.pending,
           scoring: scoring.count,
-          remboursements: pendingPayments.length,
+          remboursements: pendingPayments.length + pendingRepaymentClaims.length,
         });
       })
       .catch(() => {});

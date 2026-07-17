@@ -9,6 +9,7 @@ import { NotifBell } from "@/components/ui/notif-bell";
 import { DocumentPreviewModal } from "@/components/document-preview-modal";
 import { FundingDocument, DOCUMENT_TYPE_LABELS, DOCUMENT_STATUS_CONFIG, formatFileSize } from "@/lib/document-labels";
 import { EDITABLE_STATUSES } from "@/lib/funding-status";
+import { CLAIM_STATUS_CONFIG } from "@/lib/admin-ui";
 
 // ── config ────────────────────────────────────────────────────────────────────
 
@@ -27,6 +28,15 @@ const CATEGORY_LABELS: Record<string, string> = {
   PRET: "Prêt MLT",
   EQUITY: "Equity",
 };
+
+interface PayoutClaimRow {
+  id: string;
+  amountRequested: string;
+  amountNet: string | null;
+  status: "REQUESTED" | "PAID" | "REJECTED";
+  requestedAt: string;
+  rejectionReason: string | null;
+}
 
 interface FundingRequestDetail {
   id: string;
@@ -83,6 +93,17 @@ export default function DemandeDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
+  const [claimable, setClaimable] = useState<number | null>(null);
+  const [claims, setClaims] = useState<PayoutClaimRow[]>([]);
+  const [claimAmount, setClaimAmount] = useState("");
+  const [claimSubmitting, setClaimSubmitting] = useState(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
+
+  function loadClaims() {
+    if (!token || !id) return;
+    api.get<number>(`/funding-requests/${id}/claimable`, token).then(setClaimable).catch(() => {});
+    api.get<PayoutClaimRow[]>(`/funding-requests/${id}/claims`, token).then(setClaims).catch(() => {});
+  }
 
   useEffect(() => {
     if (!token || !id) return;
@@ -95,7 +116,24 @@ export default function DemandeDetailPage() {
       .get<FundingDocument[]>(`/documents/funding-request/${id}`, token)
       .then(setDocuments)
       .catch(() => {});
+    loadClaims();
   }, [token, id]);
+
+  async function handleRequestClaim() {
+    if (!token || !id) return;
+    setClaimError(null);
+    setClaimSubmitting(true);
+    try {
+      const amount = claimAmount.trim() ? Number(claimAmount) : undefined;
+      await api.post(`/funding-requests/${id}/claims`, { amount }, token);
+      setClaimAmount("");
+      loadClaims();
+    } catch (err) {
+      setClaimError(err instanceof Error ? err.message : "Erreur lors de la réclamation.");
+    } finally {
+      setClaimSubmitting(false);
+    }
+  }
 
   async function handleDelete() {
     if (!token || !id) return;
@@ -244,6 +282,72 @@ export default function DemandeDetailPage() {
                 <p className="text-[15px] font-semibold text-slate-900">{fmtDate(request.createdAt)}</p>
               </div>
             </div>
+
+            {/* Réclamation des fonds */}
+            {["PUBLISHED", "FUNDED", "CLOSED"].includes(request.status) && (
+              <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-6">
+                <h2 className="mb-1 text-[14px] font-semibold text-slate-900">Réclamer les fonds</h2>
+                <p className="mb-3 text-[12px] text-slate-500">
+                  Les virements des investisseurs sont d'abord validés par un admin sur le compte de la
+                  plateforme. Vous pouvez réclamer le montant déjà validé à tout moment, même avant que la
+                  demande soit intégralement financée — chaque réclamation est ensuite validée par un admin
+                  avant versement (commission déduite).
+                </p>
+
+                <div className="mb-4 rounded-xl bg-slate-50 px-4 py-3">
+                  <p className="text-[11px] text-slate-500">Disponible à réclamer</p>
+                  <p className="text-[16px] font-semibold text-slate-900">
+                    {claimable === null ? "—" : fmtAmount(claimable, request.currency)}
+                  </p>
+                </div>
+
+                {claimable !== null && claimable > 0 && (
+                  <div className="mb-4 flex flex-wrap items-center gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      max={claimable}
+                      placeholder={`Tout (${fmtAmount(claimable, request.currency)})`}
+                      value={claimAmount}
+                      onChange={(e) => setClaimAmount(e.target.value)}
+                      className="h-9 w-56 rounded-[9px] border border-slate-200 px-3 text-[13px] text-slate-900 outline-none focus:border-blue-400"
+                    />
+                    <button
+                      onClick={handleRequestClaim}
+                      disabled={claimSubmitting}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-[9px] bg-blue-600 px-4 text-[13px] font-medium text-white shadow-[0_6px_16px_rgba(37,99,235,0.22)] transition hover:-translate-y-px hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {claimSubmitting ? "Envoi..." : "Réclamer"}
+                    </button>
+                  </div>
+                )}
+                {claimError && <p className="mb-3 text-[12px] text-red-600">{claimError}</p>}
+
+                {claims.length > 0 && (
+                  <div className="-mx-6 divide-y divide-slate-100 border-t border-slate-100">
+                    {claims.map((claim) => {
+                      const ccfg = CLAIM_STATUS_CONFIG[claim.status] ?? CLAIM_STATUS_CONFIG.REQUESTED;
+                      return (
+                        <div key={claim.id} className="flex items-center justify-between gap-3 px-6 py-3">
+                          <div>
+                            <p className="text-[13px] font-medium text-slate-900">
+                              {fmtAmount(claim.amountRequested, request.currency)}
+                            </p>
+                            <p className="text-[11px] text-slate-500">{fmtDate(claim.requestedAt)}</p>
+                            {claim.status === "REJECTED" && claim.rejectionReason && (
+                              <p className="mt-0.5 text-[11px] text-red-600">{claim.rejectionReason}</p>
+                            )}
+                          </div>
+                          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${ccfg.className}`}>
+                            {ccfg.label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Scoring */}
             {report && (

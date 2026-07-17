@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useInvestorData, type MyInvestment } from "@/lib/use-investor-data";
 import { useNegotiationSocket } from "@/lib/use-negotiation-socket";
 import { NotifBell } from "@/components/ui/notif-bell";
+import { ScheduleTimeline } from "@/components/repayment-schedule-timeline";
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
@@ -134,6 +135,7 @@ function StatusBadge({ status }: { status: string }) {
 // ── investment card ───────────────────────────────────────────────────────────
 
 function InvestmentCard({ inv }: { inv: MyInvestment }) {
+  const [expanded, setExpanded] = useState(false);
   const rate        = getEffectiveReturn(inv);
   const progress    = getTimeProgress(inv);
   const dur         = inv.fundingRequest.durationMonths;
@@ -150,7 +152,12 @@ function InvestmentCard({ inv }: { inv: MyInvestment }) {
     : null;
 
   return (
-    <div className="border-b border-slate-100 p-5 last:border-b-0">
+    <div className="border-b border-slate-100 last:border-b-0">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full p-5 text-left transition hover:bg-slate-50/60"
+      >
       {/* Header row */}
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
@@ -166,7 +173,15 @@ function InvestmentCard({ inv }: { inv: MyInvestment }) {
             )}
           </div>
         </div>
-        <StatusBadge status={inv.status} />
+        <div className="flex items-center gap-2">
+          <StatusBadge status={inv.status} />
+          <svg
+            width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+            className={`shrink-0 text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </div>
       </div>
 
       {/* Details grid */}
@@ -222,17 +237,19 @@ function InvestmentCard({ inv }: { inv: MyInvestment }) {
           </div>
         </div>
       )}
+      </button>
 
       {/* Bottom action / status section */}
+      <div className="px-5 pb-5">
       {isSettled && total != null ? (
-        <div className="flex items-center justify-between rounded-[8px] bg-green-50 px-4 py-2.5">
+        <div className="flex items-center justify-between rounded-lg bg-green-50 px-4 py-2.5">
           <p className="text-[12px] font-medium text-green-700">
             Investissement remboursé avec succès
           </p>
           <p className="text-[12px] font-semibold text-green-700">Reçu : {fmtFull(total)}</p>
         </div>
       ) : nextPayment ? (
-        <div className="flex items-center justify-between rounded-[8px] bg-blue-50 px-4 py-2.5">
+        <div className="flex items-center justify-between rounded-lg bg-blue-50 px-4 py-2.5">
           <div className="flex items-center gap-2">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
               <rect x="3" y="4" width="18" height="18" rx="2" />
@@ -250,12 +267,12 @@ function InvestmentCard({ inv }: { inv: MyInvestment }) {
       ) : pmeHasBall ? (
         <a
           href={`/investor/opportunites/${inv.fundingRequest.id}`}
-          className="block rounded-[8px] bg-yellow-50 px-4 py-2.5 text-[12px] font-medium text-yellow-700 hover:bg-yellow-100"
+          className="block rounded-lg bg-yellow-50 px-4 py-2.5 text-[12px] font-medium text-yellow-700 hover:bg-yellow-100"
         >
           Répondre à la contre-proposition de la PME →
         </a>
       ) : isNeg ? (
-        <div className="flex items-center justify-between rounded-[8px] bg-slate-50 px-4 py-2.5">
+        <div className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-2.5">
           <p className="text-[12px] text-slate-500">En attente de réponse de la PME…</p>
           <a
             href={`/investor/opportunites/${inv.fundingRequest.id}`}
@@ -265,6 +282,23 @@ function InvestmentCard({ inv }: { inv: MyInvestment }) {
           </a>
         </div>
       ) : null}
+
+      {/* Toujours visible : accès au dossier complet de l'opportunité (description, scoring, documents PME) */}
+      <a
+        href={`/investor/opportunites/${inv.fundingRequest.id}`}
+        className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-blue-600 hover:underline"
+      >
+        Voir le dossier de l&apos;opportunité →
+      </a>
+      </div>
+
+      {/* Évolution — échéancier de remboursement (dates, statuts, réclamation), chargé au dépliage */}
+      {expanded && (
+        <div className="border-t border-slate-100 bg-slate-50/50">
+          <p className="px-5 pt-4 text-[12px] font-semibold text-slate-900">Évolution du remboursement</p>
+          <ScheduleTimeline investmentId={inv.id} />
+        </div>
+      )}
     </div>
   );
 }
@@ -282,7 +316,9 @@ export default function PortefeuillePage() {
     const committed = investments.filter((i) =>
       ["COMMITTED", "SETTLED_OFF_PLATFORM"].includes(i.status) && i.lockedReturn,
     );
-    const totalCommitted = active.reduce((s, i) => s + Number(i.amountCommitted), 0);
+    const settled = investments.filter((i) => i.status === "SETTLED_OFF_PLATFORM");
+    // Capital réellement investi = viré et validé par un admin (SETTLED_OFF_PLATFORM), pas un simple engagement
+    const totalCommitted = settled.reduce((s, i) => s + Number(i.amountCommitted), 0);
     const avgReturn =
       committed.length > 0
         ? committed.reduce((s, i) => s + Number(i.lockedReturn), 0) / committed.length
@@ -291,17 +327,16 @@ export default function PortefeuillePage() {
       (s, i) => s + (Number(i.amountCommitted) * Number(i.lockedReturn)) / 100,
       0,
     );
-    const settled = investments.filter((i) => i.status === "SETTLED_OFF_PLATFORM");
     const pmeCount = new Set(active.map((i) => i.fundingRequest.organization.legalName)).size;
     const catCount = new Set(active.map((i) => i.fundingRequest.category)).size;
 
     return { active, totalCommitted, avgReturn, totalGains, settled, pmeCount, catCount };
   }, [investments]);
 
-  // Allocation by category
+  // Allocation by category (même base que le capital investi : uniquement le réglé/validé)
   const allocation = useMemo(() => {
     const byCategory: Record<string, number> = {};
-    stats.active.forEach((inv) => {
+    stats.settled.forEach((inv) => {
       const cat = inv.fundingRequest.category;
       byCategory[cat] = (byCategory[cat] ?? 0) + Number(inv.amountCommitted);
     });
@@ -438,7 +473,7 @@ export default function PortefeuillePage() {
               </p>
 
               {allocation.length === 0 ? (
-                <p className="text-[12px] text-slate-400">Aucun engagement actif.</p>
+                <p className="text-[12px] text-slate-400">Aucun capital investi validé pour le moment.</p>
               ) : (
                 <>
                   <div className="mb-5 flex justify-center">

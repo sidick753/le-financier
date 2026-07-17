@@ -5,9 +5,10 @@ import { RepaymentRepository } from './repayment.repository';
 import { FundingModule } from '../funding/funding.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { PayoutClaimsModule } from '../payout-claims/payout-claims.module';
 
 @Module({
-  imports: [FundingModule, OrganizationsModule, NotificationsModule],
+  imports: [FundingModule, OrganizationsModule, NotificationsModule, PayoutClaimsModule],
   controllers: [RepaymentController],
   providers: [RepaymentService, RepaymentRepository],
   exports: [RepaymentService],

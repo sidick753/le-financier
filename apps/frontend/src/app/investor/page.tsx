@@ -130,16 +130,17 @@ function LineChartPlaceholder() {
 export default function InvestorDashboardPage() {
   const { investments, opportunities, isLoading, error } = useInvestorData();
 
-  const totalCommitted = investments.reduce((s, i) => s + Number(i.amountCommitted), 0);
+  const settledInvestments = investments.filter((i) => i.status === "SETTLED_OFF_PLATFORM");
+  const totalCommitted = settledInvestments.reduce((s, i) => s + Number(i.amountCommitted), 0);
   const activeCount = investments.filter((i) =>
     ["COMMITTED", "SETTLED_OFF_PLATFORM"].includes(i.status),
   ).length;
   const pmeCount = new Set(investments.map((i) => i.fundingRequest.organization.legalName)).size;
 
-  // Répartition du portefeuille
+  // Répartition du portefeuille (capital réellement investi, i.e. viré et validé)
   const donutSegments = useMemo(() => {
     const totals: Record<string, number> = {};
-    for (const inv of investments) {
+    for (const inv of settledInvestments) {
       const cat = inv.fundingRequest.category;
       totals[cat] = (totals[cat] ?? 0) + Number(inv.amountCommitted);
     }
