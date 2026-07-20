@@ -2,6 +2,19 @@ import { Injectable } from '@nestjs/common';
 import { PrismaClient, Prisma } from '@le-financier/database';
 import { IUsersRepository, CreateUserData } from './interfaces/users-repository.interface';
 
+const PUBLIC_USER_SELECT = {
+  id: true,
+  email: true,
+  firstName: true,
+  lastName: true,
+  phone: true,
+  cniNumber: true,
+  role: true,
+  kycStatus: true,
+  isActive: true,
+  createdAt: true,
+} satisfies Prisma.UserSelect;
+
 @Injectable()
 export class UsersRepository implements IUsersRepository {
   private prisma = new PrismaClient();
@@ -12,6 +25,14 @@ export class UsersRepository implements IUsersRepository {
 
   async findById(id: string) {
     return this.prisma.user.findUnique({ where: { id } });
+  }
+
+  async findByIdPublic(id: string) {
+    return this.prisma.user.findUnique({ where: { id }, select: PUBLIC_USER_SELECT });
+  }
+
+  async updateProfile(id: string, data: { firstName?: string; lastName?: string; phone?: string; cniNumber?: string }) {
+    return this.prisma.user.update({ where: { id }, data, select: PUBLIC_USER_SELECT });
   }
 
   async findAdminIds() {
@@ -131,18 +152,7 @@ export class UsersRepository implements IUsersRepository {
     return this.prisma.user.update({
       where: { id },
       data: { kycStatus: status },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        phone: true,
-        cniNumber: true,
-        role: true,
-        kycStatus: true,
-        isActive: true,
-        createdAt: true,
-      },
+      select: PUBLIC_USER_SELECT,
     });
   }
 

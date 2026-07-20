@@ -279,6 +279,17 @@ export class InvestmentsService {
       `Votre virement de ${Number(investment.amountCommitted).toLocaleString('fr-FR')} F CFA sur "${fundingRequest?.title ?? 'une demande'}" a été validé.`,
     );
 
+    if (fundingRequest) {
+      const owner = await this.fundingRepository.findOrganizationOwner(fundingRequest.organizationId);
+      if (owner) {
+        await this.notificationsService.notify(
+          owner.userId,
+          'Financement confirmé',
+          `Un virement de ${Number(investment.amountCommitted).toLocaleString('fr-FR')} F CFA a été validé sur "${fundingRequest.title}".`,
+        );
+      }
+    }
+
     return approved;
   }
 

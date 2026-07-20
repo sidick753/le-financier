@@ -475,6 +475,7 @@ model Document {
   sizeBytes  Int
 
   status            DocumentStatus @default(PENDING_REVIEW)
+  rejectionReason   String?
   kycRequirementKey String?
 
   uploadedById String

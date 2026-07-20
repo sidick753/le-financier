@@ -3,22 +3,14 @@
 import { useEffect, useState } from "react";
 import { useInstitutionSettings } from "@/lib/use-institution-settings";
 import { NotifBell } from "@/components/ui/notif-bell";
+import { PersonalProfileSection } from "@/components/ui/personal-profile-section";
+import { PasswordSecuritySection } from "@/components/ui/password-security-section";
+import { EyeIcon } from "@/components/ui/eye-icon";
+import { INPUT_GRAY as INPUT } from "@/components/ui/form-styles";
 
-type Tab = "institution" | "limites" | "securite";
-
-const INPUT =
-  "w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900";
+type Tab = "profil" | "institution" | "limites" | "securite";
 
 const SECTEURS_DISPONIBLES = ["Tabac", "Armement", "Jeux", "Alcool"];
-
-function EyeIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
 
 function RefreshIcon() {
   return (
@@ -30,9 +22,9 @@ function RefreshIcon() {
 }
 
 export default function InstitutionParametresPage() {
-  const { institution, isLoading, updateProfile, updateLimits, regenerateApiKey, changePassword } =
+  const { institution, isLoading, updateProfile, updateLimits, regenerateApiKey } =
     useInstitutionSettings();
-  const [tab, setTab] = useState<Tab>("institution");
+  const [tab, setTab] = useState<Tab>("profil");
 
   const [nomInstitution, setNomInstitution] = useState("");
   const [type, setType] = useState("");
@@ -48,13 +40,6 @@ export default function InstitutionParametresPage() {
   const [ticketMax, setTicketMax] = useState("");
   const [secteursExclus, setSecteursExclus] = useState<Record<string, boolean>>({});
   const [savedLimites, setSavedLimites] = useState(false);
-
-  const [motDePasseActuel, setMotDePasseActuel] = useState("");
-  const [nouveauMotDePasse, setNouveauMotDePasse] = useState("");
-  const [confirmerMotDePasse, setConfirmerMotDePasse] = useState("");
-  const [showMotDePasseActuel, setShowMotDePasseActuel] = useState(false);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [passwordSuccess, setPasswordSuccess] = useState(false);
 
   const [revealedApiKey, setRevealedApiKey] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -101,24 +86,6 @@ export default function InstitutionParametresPage() {
     setTimeout(() => setSavedLimites(false), 2000);
   }
 
-  async function handleChangePassword() {
-    setPasswordError(null);
-    setPasswordSuccess(false);
-    if (nouveauMotDePasse !== confirmerMotDePasse) {
-      setPasswordError("Les deux mots de passe ne correspondent pas.");
-      return;
-    }
-    try {
-      await changePassword(motDePasseActuel, nouveauMotDePasse);
-      setMotDePasseActuel("");
-      setNouveauMotDePasse("");
-      setConfirmerMotDePasse("");
-      setPasswordSuccess(true);
-    } catch (err) {
-      setPasswordError(err instanceof Error ? err.message : "Erreur inconnue.");
-    }
-  }
-
   async function handleRegenerateKey() {
     const plainKey = await regenerateApiKey();
     if (plainKey) {
@@ -148,6 +115,7 @@ export default function InstitutionParametresPage() {
       <div className="p-8 pb-16">
         <div className="mb-6 flex gap-6 border-b border-gray-200">
         {[
+          { id: "profil", label: "Mon profil" },
           { id: "institution", label: "Institution" },
           { id: "limites", label: "Limites & Mandats" },
           { id: "securite", label: "Sécurité & API" },
@@ -165,6 +133,8 @@ export default function InstitutionParametresPage() {
           </button>
         ))}
       </div>
+
+      {tab === "profil" && <PersonalProfileSection />}
 
       {tab === "institution" && (
         <div className="max-w-2xl rounded-xl border border-gray-200 bg-white p-6">
@@ -264,55 +234,7 @@ export default function InstitutionParametresPage() {
 
       {tab === "securite" && (
         <div className="max-w-2xl space-y-5">
-          <div className="rounded-xl border border-gray-200 bg-white p-6">
-            <p className="mb-4 text-sm font-semibold text-gray-900">Changement de mot de passe admin</p>
-            <div className="space-y-4">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-700">Mot de passe actuel</label>
-                <div className="relative">
-                  <input
-                    type={showMotDePasseActuel ? "text" : "password"}
-                    value={motDePasseActuel}
-                    onChange={(e) => setMotDePasseActuel(e.target.value)}
-                    className={`${INPUT} pr-10`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowMotDePasseActuel((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    <EyeIcon />
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-700">Nouveau mot de passe</label>
-                <input
-                  type="password"
-                  value={nouveauMotDePasse}
-                  onChange={(e) => setNouveauMotDePasse(e.target.value)}
-                  className={INPUT}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-700">Confirmer le nouveau mot de passe</label>
-                <input
-                  type="password"
-                  value={confirmerMotDePasse}
-                  onChange={(e) => setConfirmerMotDePasse(e.target.value)}
-                  className={INPUT}
-                />
-              </div>
-              {passwordError && <p className="text-xs text-red-600">{passwordError}</p>}
-              {passwordSuccess && <p className="text-xs text-green-600">✓ Mot de passe mis à jour.</p>}
-              <button
-                onClick={handleChangePassword}
-                className="rounded-md bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800"
-              >
-                Changer le mot de passe
-              </button>
-            </div>
-          </div>
+          <PasswordSecuritySection />
 
           <div className="rounded-xl border border-gray-200 bg-white p-6">
             <p className="mb-2 text-sm font-semibold text-gray-900">Clé API</p>

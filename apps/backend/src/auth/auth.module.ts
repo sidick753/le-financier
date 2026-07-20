@@ -9,12 +9,14 @@ import { RolesGuard } from './guards/roles.guard';
 import { UsersModule } from '../users/users.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { InstitutionsModule } from '../institutions/institutions.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     UsersModule,
     OrganizationsModule,
     InstitutionsModule,
+    NotificationsModule,
     PassportModule,
     JwtModule.registerAsync({
       useFactory: (config: ConfigService) => ({

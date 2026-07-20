@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Delete,
   Param,
   Body,
@@ -26,6 +27,9 @@ import {
 import { DocumentsService } from './documents.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RejectionReasonDto } from '../common/dto/rejection-reason.dto';
 import { OrganizationsRepository } from '../organizations/organizations.repository';
 import { FundingRepository } from '../funding/funding.repository';
 
@@ -172,6 +176,30 @@ Le fichier est stocké dans l'object storage (S3/MinIO).`,
     @Request() req,
   ) {
     return this.documentsService.findAllByFundingRequestForUser(fundingRequestId, req.user.id);
+  }
+
+  @ApiOperation({ summary: '[Admin] Valider un document', description: "Passe le document en APPROVED. Il ne pourra ensuite plus être supprimé par un membre de l'organisation." })
+  @ApiParam({ name: 'id', description: 'UUID du document' })
+  @ApiResponse({ status: 200, description: 'Statut mis à jour à APPROVED' })
+  @ApiResponse({ status: 400, description: 'Document déjà traité' })
+  @ApiResponse({ status: 404, description: 'Document introuvable' })
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Patch('admin/:id/approve')
+  approve(@Param('id') id: string) {
+    return this.documentsService.approve(id);
+  }
+
+  @ApiOperation({ summary: '[Admin] Rejeter un document', description: 'Passe le document en REJECTED avec un motif communiqué au déposant.' })
+  @ApiParam({ name: 'id', description: 'UUID du document' })
+  @ApiResponse({ status: 200, description: 'Statut mis à jour à REJECTED' })
+  @ApiResponse({ status: 400, description: 'Document déjà traité' })
+  @ApiResponse({ status: 404, description: 'Document introuvable' })
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Patch('admin/:id/reject')
+  reject(@Param('id') id: string, @Body() dto: RejectionReasonDto) {
+    return this.documentsService.reject(id, dto.reason);
   }
 
   @ApiOperation({

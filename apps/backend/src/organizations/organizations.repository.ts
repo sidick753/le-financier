@@ -99,6 +99,12 @@ export class OrganizationsRepository implements IOrganizationsRepository {
     return member !== null;
   }
 
+  async findOwnerMember(organizationId: string) {
+    return this.prisma.organizationMember.findFirst({
+      where: { organizationId, role: 'OWNER' },
+    });
+  }
+
   async findAll(filters?: { status?: string; search?: string; page?: number; limit?: number }) {
     const where: Prisma.OrganizationWhereInput = {
       ...(filters?.status ? { verificationStatus: filters.status as any } : {}),

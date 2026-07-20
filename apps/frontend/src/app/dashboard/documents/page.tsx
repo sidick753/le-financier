@@ -1,9 +1,14 @@
 "use client";
 
+import { useEffect, useState, useCallback } from "react";
+import { useAuth } from "@/lib/auth-context";
 import { useKycStatus } from "@/lib/use-kyc-status";
 import { usePmeData } from "@/lib/use-pme-data";
+import { api } from "@/lib/api";
 import { UploadZone } from "@/components/upload-zone";
 import { NotifBell } from "@/components/ui/notif-bell";
+import { DocumentPreviewModal } from "@/components/document-preview-modal";
+import { DOCUMENT_TYPE_LABELS, DOCUMENT_STATUS_CONFIG, formatFileSize, type FundingDocument } from "@/lib/document-labels";
 
 const STATUS_STYLES: Record<string, { icon: React.ReactNode; label: string; badgeClass: string }> = {
   VALIDATED: {
@@ -36,8 +41,30 @@ const STATUS_STYLES: Record<string, { icon: React.ReactNode; label: string; badg
 };
 
 export default function DocumentsPage() {
+  const { token } = useAuth();
   const { organization } = usePmeData();
   const { items, isLoading, refresh } = useKycStatus();
+
+  const [documents, setDocuments] = useState<FundingDocument[]>([]);
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(true);
+  const [previewDocId, setPreviewDocId] = useState<string | null>(null);
+
+  const refreshDocuments = useCallback(() => {
+    if (!token || !organization) {
+      setIsLoadingDocuments(false);
+      return;
+    }
+    setIsLoadingDocuments(true);
+    api
+      .get<FundingDocument[]>(`/documents/organization/${organization.id}`, token)
+      .then(setDocuments)
+      .catch(() => {})
+      .finally(() => setIsLoadingDocuments(false));
+  }, [token, organization]);
+
+  useEffect(() => {
+    refreshDocuments();
+  }, [refreshDocuments]);
 
   const validated = items.filter((i) => i.status === "VALIDATED").length;
   const total = items.length;
@@ -98,10 +125,53 @@ export default function DocumentsPage() {
                         organizationId={organization.id}
                         documentType={item.documentType}
                         kycRequirementKey={item.key}
-                        onUploaded={refresh}
+                        onUploaded={() => { refresh(); refreshDocuments(); }}
                         compact
                       />
                     )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Bloc tous les documents — visibles quel que soit leur statut */}
+        <div className="mb-5 overflow-hidden rounded-[18px] border border-slate-200 bg-white">
+          <div className="border-b border-slate-100 px-5 py-4">
+            <p className="text-[13px] font-bold text-slate-900">Mes documents</p>
+            <p className="mt-0.5 text-[11px] text-slate-500">
+              Tous les documents déposés pour votre entreprise, quel que soit leur statut de vérification.
+            </p>
+          </div>
+
+          {isLoadingDocuments && <p className="p-5 text-[13px] text-slate-400">Chargement...</p>}
+
+          {!isLoadingDocuments && documents.length === 0 && (
+            <p className="p-5 text-[13px] text-slate-400">Aucun document déposé pour le moment.</p>
+          )}
+
+          <div className="divide-y divide-slate-100">
+            {documents.map((doc) => {
+              const dcfg = DOCUMENT_STATUS_CONFIG[doc.status] ?? DOCUMENT_STATUS_CONFIG.PENDING_REVIEW;
+              return (
+                <div key={doc.id} className="flex items-center justify-between gap-3 px-5 py-3.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-medium text-slate-900">{doc.title ?? doc.fileName}</p>
+                    <p className="mt-0.5 truncate text-[11px] text-slate-400">
+                      {DOCUMENT_TYPE_LABELS[doc.type] ?? doc.type} · {formatFileSize(doc.sizeBytes)}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${dcfg.badgeClass}`}>
+                      {dcfg.label}
+                    </span>
+                    <button
+                      onClick={() => setPreviewDocId(doc.id)}
+                      className="rounded-[8px] border border-slate-200 px-3 py-1.5 text-[12px] font-medium text-slate-600 transition hover:bg-slate-50"
+                    >
+                      Voir
+                    </button>
                   </div>
                 </div>
               );
@@ -142,7 +212,7 @@ export default function DocumentsPage() {
               <UploadZone
                 organizationId={organization.id}
                 documentType="OTHER"
-                onUploaded={refresh}
+                onUploaded={() => { refresh(); refreshDocuments(); }}
                 requireTitle
               />
             ) : (
@@ -152,6 +222,10 @@ export default function DocumentsPage() {
         </div>
 
       </div>
+
+      {previewDocId && (
+        <DocumentPreviewModal documentId={previewDocId} onClose={() => setPreviewDocId(null)} />
+      )}
     </>
   );
 }

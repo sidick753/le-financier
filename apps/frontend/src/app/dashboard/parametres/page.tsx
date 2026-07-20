@@ -5,6 +5,9 @@ import { useAuth } from "@/lib/auth-context";
 import { usePmeData } from "@/lib/use-pme-data";
 import { api } from "@/lib/api";
 import { NotifBell } from "@/components/ui/notif-bell";
+import { PersonalProfileSection } from "@/components/ui/personal-profile-section";
+import { PasswordSecuritySection } from "@/components/ui/password-security-section";
+import { INPUT_GRAY } from "@/components/ui/form-styles";
 import {
   SECTEURS,
   TAILLE_MARCHE,
@@ -17,25 +20,14 @@ import {
   TRANSPARENCE,
 } from "@/lib/credit-profile-options";
 
-type Tab = "entreprise" | "bancaire" | "securite";
+type Tab = "profil" | "entreprise" | "bancaire" | "securite";
 
 const TABS: { id: Tab; label: string }[] = [
+  { id: "profil", label: "Mon profil" },
   { id: "entreprise", label: "Profil entreprise" },
   { id: "bancaire", label: "Informations bancaires" },
   { id: "securite", label: "Sécurité" },
 ];
-
-const INPUT_GRAY =
-  "w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-brand-700 focus:outline-none";
-
-function EyeIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
 
 interface CreditProfile {
   sector: string | null;
@@ -92,7 +84,7 @@ export default function ParametresPage() {
   const { token } = useAuth();
   const { organization, isLoading: orgLoading } = usePmeData();
 
-  const [tab, setTab] = useState<Tab>("entreprise");
+  const [tab, setTab] = useState<Tab>("profil");
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -144,14 +136,6 @@ export default function ParametresPage() {
   const [isSavingBankInfo, setIsSavingBankInfo] = useState(false);
   const [savedBankInfo, setSavedBankInfo] = useState(false);
   const [bankInfoError, setBankInfoError] = useState<string | null>(null);
-
-  const [motDePasseActuel, setMotDePasseActuel] = useState("");
-  const [nouveauMotDePasse, setNouveauMotDePasse] = useState("");
-  const [confirmerMotDePasse, setConfirmerMotDePasse] = useState("");
-  const [showMotDePasseActuel, setShowMotDePasseActuel] = useState(false);
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [passwordSuccess, setPasswordSuccess] = useState(false);
 
   useEffect(() => {
     if (!token || !organization) return;
@@ -295,32 +279,6 @@ export default function ParametresPage() {
     }
   }
 
-  async function handleChangePassword() {
-    if (!token) return;
-    setPasswordError(null);
-    setPasswordSuccess(false);
-    if (nouveauMotDePasse !== confirmerMotDePasse) {
-      setPasswordError("Les deux mots de passe ne correspondent pas.");
-      return;
-    }
-    setIsChangingPassword(true);
-    try {
-      await api.patch(
-        "/auth/change-password",
-        { currentPassword: motDePasseActuel, newPassword: nouveauMotDePasse },
-        token,
-      );
-      setMotDePasseActuel("");
-      setNouveauMotDePasse("");
-      setConfirmerMotDePasse("");
-      setPasswordSuccess(true);
-    } catch (err) {
-      setPasswordError(err instanceof Error ? err.message : "Erreur lors du changement de mot de passe.");
-    } finally {
-      setIsChangingPassword(false);
-    }
-  }
-
   if (orgLoading || isLoading) {
     return <div className="p-8 text-sm text-gray-400">Chargement...</div>;
   }
@@ -345,9 +303,9 @@ export default function ParametresPage() {
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`pb-3 text-[13px] font-medium transition ${
+              className={`pb-3 text-sm font-medium transition ${
                 tab === t.id
-                  ? "border-b-2 border-blue-600 text-blue-600"
+                  ? "border-b-2 border-brand-700 text-brand-700"
                   : "text-slate-500 hover:text-slate-700"
               }`}
             >
@@ -355,6 +313,8 @@ export default function ParametresPage() {
             </button>
           ))}
         </div>
+
+        {tab === "profil" && <PersonalProfileSection />}
 
         {tab === "entreprise" && (
           <div>
@@ -739,60 +699,7 @@ export default function ParametresPage() {
           </div>
         )}
 
-        {tab === "securite" && (
-          <div className="max-w-2xl">
-            <section className="rounded-xl border border-gray-200 bg-white p-6">
-              <p className="mb-4 text-sm font-semibold text-gray-900">Changement de mot de passe</p>
-              <div className="space-y-4">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-700">Mot de passe actuel</label>
-                  <div className="relative">
-                    <input
-                      type={showMotDePasseActuel ? "text" : "password"}
-                      value={motDePasseActuel}
-                      onChange={(e) => setMotDePasseActuel(e.target.value)}
-                      className={`${INPUT_GRAY} pr-10`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowMotDePasseActuel((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      <EyeIcon />
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-700">Nouveau mot de passe</label>
-                  <input
-                    type="password"
-                    value={nouveauMotDePasse}
-                    onChange={(e) => setNouveauMotDePasse(e.target.value)}
-                    className={INPUT_GRAY}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-700">Confirmer le nouveau mot de passe</label>
-                  <input
-                    type="password"
-                    value={confirmerMotDePasse}
-                    onChange={(e) => setConfirmerMotDePasse(e.target.value)}
-                    className={INPUT_GRAY}
-                  />
-                </div>
-                {passwordError && <p className="text-xs text-red-600">{passwordError}</p>}
-                {passwordSuccess && <p className="text-xs text-green-600">✓ Mot de passe mis à jour.</p>}
-                <button
-                  onClick={handleChangePassword}
-                  disabled={isChangingPassword}
-                  className="rounded-md bg-brand-700 px-4 py-2 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-50"
-                >
-                  {isChangingPassword ? "Modification…" : "Changer le mot de passe"}
-                </button>
-              </div>
-            </section>
-          </div>
-        )}
+        {tab === "securite" && <PasswordSecuritySection />}
       </div>
     </>
   );

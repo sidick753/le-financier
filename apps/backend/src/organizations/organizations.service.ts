@@ -6,12 +6,14 @@ import { UpdateBankInfoDto } from './dto/update-bank-info.dto';
 import { UpdateIdentityDto } from './dto/update-identity.dto';
 import { UpdateComplianceDto } from './dto/update-compliance.dto';
 import { ScoringService } from '../scoring/scoring.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class OrganizationsService {
   constructor(
     private organizationsRepository: OrganizationsRepository,
     private scoringService: ScoringService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async create(dto: CreateOrganizationDto, ownerId: string) {
@@ -76,7 +78,20 @@ export class OrganizationsService {
     if (!organization) {
       throw new NotFoundException('Organisation introuvable.');
     }
-    return this.organizationsRepository.updateVerificationStatus(id, status, rejectionReason);
+    const updated = await this.organizationsRepository.updateVerificationStatus(id, status, rejectionReason);
+
+    const owner = await this.organizationsRepository.findOwnerMember(id);
+    if (owner) {
+      await this.notificationsService.notify(
+        owner.userId,
+        status === 'VERIFIED' ? 'Organisation vérifiée' : 'Vérification rejetée',
+        status === 'VERIFIED'
+          ? `${organization.legalName} a été vérifiée avec succès.`
+          : `La vérification de ${organization.legalName} a été rejetée : ${rejectionReason ?? 'raison non précisée'}`,
+      );
+    }
+
+    return updated;
   }
 
   async updateCompliance(id: string, dto: UpdateComplianceDto) {

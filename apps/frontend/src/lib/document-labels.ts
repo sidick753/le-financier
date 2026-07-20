@@ -2,6 +2,7 @@ export interface FundingDocument {
   id: string;
   type: string;
   fileName: string;
+  title?: string | null;
   sizeBytes: number;
   status: string;
   createdAt: string;

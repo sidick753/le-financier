@@ -73,6 +73,7 @@ export interface IOrganizationsRepository {
     orgData: CreateOrganizationData,
   ): Promise<{ user: User; organization: Organization }>;
   isMember(organizationId: string, userId: string): Promise<boolean>;
+  findOwnerMember(organizationId: string): Promise<{ userId: string } | null>;
   countByStatus(): Promise<{
     total: number;
     verified: number;

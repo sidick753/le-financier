@@ -15,8 +15,9 @@ export class StorageService {
 
   constructor() {
     this.bucket = process.env.MINIO_BUCKET ?? 'le-financier-documents';
+    const useSSL = process.env.MINIO_USE_SSL === 'true';
     this.client = new S3Client({
-      endpoint: `http://${process.env.MINIO_ENDPOINT ?? 'localhost'}:${process.env.MINIO_PORT ?? 4300}`,
+      endpoint: `${useSSL ? 'https' : 'http'}://${process.env.MINIO_ENDPOINT ?? 'localhost'}:${process.env.MINIO_PORT ?? 4300}`,
       region: 'us-east-1',
       credentials: {
         accessKeyId: process.env.MINIO_ROOT_USER ?? '',

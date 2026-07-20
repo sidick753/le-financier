@@ -48,6 +48,7 @@ interface AuthContextValue {
   registerPmeOwner: (data: RegisterData) => Promise<AuthResponse>;
   registerInvestor: (data: RegisterData) => Promise<AuthResponse>;
   registerInstitution: (data: RegisterData) => Promise<AuthResponse>;
+  updateUser: (data: Partial<Pick<User, "firstName" | "lastName">>) => void;
   logout: () => void;
 }
 
@@ -162,6 +163,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return response;
   }
 
+  function updateUser(data: Partial<Pick<User, "firstName" | "lastName">>) {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...data };
+      sessionStorage.setItem("user", JSON.stringify(next));
+      return next;
+    });
+  }
+
   function logout() {
     const refreshToken = sessionStorage.getItem("refreshToken");
     if (refreshToken) {
@@ -181,6 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         registerPmeOwner,
         registerInvestor,
         registerInstitution,
+        updateUser,
         logout,
       }}
     >

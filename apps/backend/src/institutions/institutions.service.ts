@@ -6,15 +6,28 @@ import { UpdateInstitutionProfileDto } from './dto/update-institution-profile.dt
 import { UpdateInstitutionLimitsDto } from './dto/update-institution-limits.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 import { AmlAlertType } from '@le-financier/database';
 
 // Seuil par défaut de "transaction inhabituelle" quand l'institution n'a pas
 // déclaré de ticketMax — utilisé par InstitutionsService.evaluateInvestmentSettlement.
 const SEUIL_TRANSACTION_INHABITUELLE_DEFAUT = 10_000_000;
 
+// Libellés alignés sur apps/frontend/src/app/institution/risques/page.tsx pour
+// que la notification pushée corresponde à ce que l'officier conformité voit
+// ensuite dans le tableau des alertes.
+const AML_ALERT_LABELS: Record<AmlAlertType, string> = {
+  TRANSACTION_INHABITUELLE: 'Transaction inhabituelle',
+  PEP_DETECTE: 'PEP détecté (screening)',
+  BENEFICIAIRE_NON_IDENTIFIE: 'Bénéficiaire tiers non identifié',
+};
+
 @Injectable()
 export class InstitutionsService {
-  constructor(private institutionsRepository: InstitutionsRepository) {}
+  constructor(
+    private institutionsRepository: InstitutionsRepository,
+    private notificationsService: NotificationsService,
+  ) {}
 
   // ── Rattachement institution (auto-provisionné au premier accès) ──────────
 
@@ -241,6 +254,17 @@ export class InstitutionsService {
         status: 'EN_ANALYSE',
         detectedAt: new Date(),
       });
+
+      const memberIds = await this.institutionsRepository.findMemberUserIds(membership.institutionId);
+      await Promise.all(
+        memberIds.map((userId) =>
+          this.notificationsService.notify(
+            userId,
+            'Alerte AML/LAB-CFT détectée',
+            `${AML_ALERT_LABELS[alertType]} — ${params.organization.legalName} (${params.amountCommitted.toLocaleString('fr-FR')} F CFA).`,
+          ),
+        ),
+      );
     }
   }
 

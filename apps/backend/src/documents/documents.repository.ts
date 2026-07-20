@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient } from '@le-financier/database';
+import { PrismaClient, Document } from '@le-financier/database';
 import { IDocumentsRepository, CreateDocumentData } from './interfaces/documents-repository.interface';
 
 @Injectable()
@@ -28,8 +28,11 @@ export class DocumentsRepository implements IDocumentsRepository {
     });
   }
 
-  async updateStatus(id: string, status: any) {
-    return this.prisma.document.update({ where: { id }, data: { status } });
+  async updateStatus(id: string, status: Document['status'], rejectionReason?: string) {
+    return this.prisma.document.update({
+      where: { id },
+      data: { status, rejectionReason: status === 'REJECTED' ? rejectionReason : null },
+    });
   }
 
   async delete(id: string) {

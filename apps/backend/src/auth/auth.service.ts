@@ -11,8 +11,10 @@ import { randomBytes } from 'crypto';
 import { UsersRepository } from '../users/users.repository';
 import { OrganizationsRepository } from '../organizations/organizations.repository';
 import { InstitutionsRepository } from '../institutions/institutions.repository';
+import { NotificationsService } from '../notifications/notifications.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Injectable()
 export class AuthService {
@@ -20,6 +22,7 @@ export class AuthService {
     private usersRepository: UsersRepository,
     private organizationsRepository: OrganizationsRepository,
     private institutionsRepository: InstitutionsRepository,
+    private notificationsService: NotificationsService,
     private jwtService: JwtService,
   ) {}
 
@@ -129,6 +132,18 @@ export class AuthService {
     return { message: 'Déconnexion réussie.' };
   }
 
+  async getMyProfile(userId: string) {
+    const user = await this.usersRepository.findByIdPublic(userId);
+    if (!user) {
+      throw new UnauthorizedException('Utilisateur introuvable.');
+    }
+    return user;
+  }
+
+  async updateMyProfile(userId: string, dto: UpdateProfileDto) {
+    return this.usersRepository.updateProfile(userId, dto);
+  }
+
   async changePassword(userId: string, currentPassword: string, newPassword: string) {
     const user = await this.usersRepository.findById(userId);
     if (!user) {
@@ -171,7 +186,17 @@ export class AuthService {
   }
 
   async updateUserKyc(id: string, status: 'VERIFIED' | 'REJECTED') {
-    return this.usersRepository.updateKycStatus(id, status);
+    const updated = await this.usersRepository.updateKycStatus(id, status);
+
+    await this.notificationsService.notify(
+      id,
+      status === 'VERIFIED' ? 'Identité vérifiée' : 'Vérification d\'identité rejetée',
+      status === 'VERIFIED'
+        ? 'Votre pièce d\'identité a été validée.'
+        : 'Votre pièce d\'identité a été rejetée. Veuillez la resoumettre.',
+    );
+
+    return updated;
   }
 
   private async buildAuthResponse(user: {

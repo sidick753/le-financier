@@ -4,6 +4,7 @@ import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
@@ -63,13 +64,23 @@ export class AuthController {
   }
 
   @ApiBearerAuth('jwt')
-  @ApiOperation({ summary: 'Profil courant', description: 'Retourne les informations du user authentifié (injectées par le JWT).' })
-  @ApiResponse({ status: 200, description: '{ id, email, firstName, lastName, role, kycStatus }' })
+  @ApiOperation({ summary: 'Profil courant', description: 'Retourne le profil complet du user authentifié : identité personnelle, commune aux 4 rôles (PME_OWNER, INVESTOR, INSTITUTION, ADMIN).' })
+  @ApiResponse({ status: 200, description: '{ id, email, firstName, lastName, phone, cniNumber, role, kycStatus, isActive, createdAt }' })
   @ApiResponse({ status: 401, description: 'Token manquant ou expiré' })
   @UseGuards(JwtAuthGuard)
   @Get('me')
   getProfile(@Request() req) {
-    return req.user;
+    return this.authService.getMyProfile(req.user.id);
+  }
+
+  @ApiBearerAuth('jwt')
+  @ApiOperation({ summary: 'Modifier mon profil', description: "Prénom, nom, téléphone, numéro CNI (rôle INVESTOR). L'email (identifiant de connexion) n'est pas modifiable ici." })
+  @ApiResponse({ status: 200, description: 'Profil mis à jour' })
+  @ApiResponse({ status: 401, description: 'Token manquant ou expiré' })
+  @UseGuards(JwtAuthGuard)
+  @Patch('me')
+  updateProfile(@Body() dto: UpdateProfileDto, @Request() req) {
+    return this.authService.updateMyProfile(req.user.id, dto);
   }
 
   @ApiBearerAuth('jwt')

@@ -104,6 +104,7 @@ interface OrganizationDetail {
     title: string | null;
     sizeBytes: number;
     status: string;
+    rejectionReason: string | null;
     createdAt: string;
   }>;
   scoringReports: Array<{
@@ -129,6 +130,8 @@ export default function AdminPmeDetailPage() {
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
   const [scoreLoading, setScoreLoading] = useState(false);
   const [snapshotReportId, setSnapshotReportId] = useState<string | null>(null);
+  const [docActionLoading, setDocActionLoading] = useState<string | null>(null);
+  const [docRejectId, setDocRejectId] = useState<string | null>(null);
 
   function load() {
     if (!token) return;
@@ -184,6 +187,28 @@ export default function AdminPmeDetailPage() {
       load();
     } finally {
       setActionLoading(false);
+    }
+  }
+
+  async function handleApproveDocument(docId: string) {
+    setDocActionLoading(docId);
+    try {
+      await api.patch(`/documents/admin/${docId}/approve`, {}, token!);
+      load();
+    } finally {
+      setDocActionLoading(null);
+    }
+  }
+
+  async function handleRejectDocument(reason: string) {
+    if (!docRejectId) return;
+    setDocActionLoading(docRejectId);
+    try {
+      await api.patch(`/documents/admin/${docRejectId}/reject`, { reason }, token!);
+      setDocRejectId(null);
+      load();
+    } finally {
+      setDocActionLoading(null);
     }
   }
 
@@ -450,24 +475,47 @@ export default function AdminPmeDetailPage() {
             {org.documents.map((doc) => {
               const docConfig = DOC_STATUS_CONFIG[doc.status] ?? DOC_STATUS_CONFIG.PENDING_REVIEW;
               return (
-                <div key={doc.id} className="flex items-center justify-between gap-3 p-4">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-gray-900">{doc.title ?? doc.fileName}</p>
-                    <p className="truncate text-xs text-gray-500">
-                      {doc.title && `${doc.fileName} · `}{doc.type} · {formatFileSize(doc.sizeBytes)}
-                    </p>
+                <div key={doc.id} className="gap-3 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-gray-900">{doc.title ?? doc.fileName}</p>
+                      <p className="truncate text-xs text-gray-500">
+                        {doc.title && `${doc.fileName} · `}{doc.type} · {formatFileSize(doc.sizeBytes)}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${docConfig.className}`}>
+                        {docConfig.label}
+                      </span>
+                      <button
+                        onClick={() => setPreviewDocId(doc.id)}
+                        className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                      >
+                        Voir
+                      </button>
+                      {doc.status === "PENDING_REVIEW" && (
+                        <>
+                          <button
+                            onClick={() => handleApproveDocument(doc.id)}
+                            disabled={docActionLoading === doc.id}
+                            className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                          >
+                            Valider
+                          </button>
+                          <button
+                            onClick={() => setDocRejectId(doc.id)}
+                            disabled={docActionLoading === doc.id}
+                            className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            Rejeter
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${docConfig.className}`}>
-                      {docConfig.label}
-                    </span>
-                    <button
-                      onClick={() => setPreviewDocId(doc.id)}
-                      className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-                    >
-                      Voir
-                    </button>
-                  </div>
+                  {doc.status === "REJECTED" && doc.rejectionReason && (
+                    <p className="mt-2 text-xs text-red-600">Motif : {doc.rejectionReason}</p>
+                  )}
                 </div>
               );
             })}
@@ -531,6 +579,15 @@ export default function AdminPmeDetailPage() {
           isSubmitting={actionLoading}
           onClose={() => setModal(null)}
           onConfirm={handleSuspend}
+        />
+      )}
+      {docRejectId && (
+        <RejectReasonModal
+          title="Rejeter ce document"
+          confirmLabel="Confirmer le rejet"
+          isSubmitting={docActionLoading === docRejectId}
+          onClose={() => setDocRejectId(null)}
+          onConfirm={handleRejectDocument}
         />
       )}
     </div>

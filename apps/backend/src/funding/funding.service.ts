@@ -231,6 +231,11 @@ export class FundingService {
       console.error(`[ScoringService] Erreur calcul scoring ${fundingRequestId}:`, err);
     });
 
+    await this.notificationsService.notifyAdmins(
+      'Nouveau dossier à examiner',
+      `"${fundingRequest.title}" a été soumis pour révision.`,
+    );
+
     return updated;
   }
 
@@ -246,7 +251,18 @@ export class FundingService {
       );
     }
 
-    return this.fundingRepository.updateStatus(fundingRequestId, 'PUBLISHED');
+    const updated = await this.fundingRepository.updateStatus(fundingRequestId, 'PUBLISHED');
+
+    const owner = await this.fundingRepository.findOrganizationOwner(fundingRequest.organizationId);
+    if (owner) {
+      await this.notificationsService.notify(
+        owner.userId,
+        'Demande publiée',
+        `Votre demande "${fundingRequest.title}" a été validée et est maintenant visible par les investisseurs.`,
+      );
+    }
+
+    return updated;
   }
 
   async reject(fundingRequestId: string, reason: string) {
@@ -261,7 +277,18 @@ export class FundingService {
       );
     }
 
-    return this.fundingRepository.updateStatus(fundingRequestId, 'REJECTED', reason);
+    const updated = await this.fundingRepository.updateStatus(fundingRequestId, 'REJECTED', reason);
+
+    const owner = await this.fundingRepository.findOrganizationOwner(fundingRequest.organizationId);
+    if (owner) {
+      await this.notificationsService.notify(
+        owner.userId,
+        'Demande rejetée',
+        `Votre demande "${fundingRequest.title}" a été rejetée : ${reason}`,
+      );
+    }
+
+    return updated;
   }
 
   async getScoringReport(fundingRequestId: string) {

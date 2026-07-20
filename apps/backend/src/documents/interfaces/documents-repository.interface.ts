@@ -18,6 +18,6 @@ export interface IDocumentsRepository {
   findById(id: string): Promise<Document | null>;
   findAllByOrganizationId(organizationId: string): Promise<Document[]>;
   findAllByFundingRequestId(fundingRequestId: string): Promise<Document[]>;
-  updateStatus(id: string, status: Document['status']): Promise<Document>;
+  updateStatus(id: string, status: Document['status'], rejectionReason?: string): Promise<Document>;
   delete(id: string): Promise<Document>;
 }

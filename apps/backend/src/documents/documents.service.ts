@@ -7,6 +7,7 @@ import { FundingRepository } from '../funding/funding.repository';
 import { OrganizationsRepository } from '../organizations/organizations.repository';
 import { EDITABLE_FUNDING_STATUSES, PUBLIC_FUNDING_STATUSES } from '../funding/funding-status.constants';
 import { INVESTOR_VISIBLE_DOCUMENT_TYPES } from './document-visibility.constants';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = [
@@ -23,6 +24,7 @@ export class DocumentsService {
     private storageService: StorageService,
     private fundingRepository: FundingRepository,
     private organizationsRepository: OrganizationsRepository,
+    private notificationsService: NotificationsService,
   ) {}
 
   async upload(file: Express.Multer.File, dto: CreateDocumentDto, uploadedById: string) {
@@ -220,6 +222,49 @@ export class DocumentsService {
     await Promise.all(
       documents.map((doc) => this.storageService.delete(doc.storageKey).catch(() => {})),
     );
+  }
+
+  // [ADMIN] Valide un document déposé : passe en APPROVED, ce qui le protège
+  // ensuite d'une suppression par un membre de l'organisation (voir remove()).
+  async approve(documentId: string) {
+    const document = await this.documentsRepository.findById(documentId);
+    if (!document) {
+      throw new NotFoundException('Document introuvable.');
+    }
+    if (document.status !== 'PENDING_REVIEW') {
+      throw new BadRequestException('Ce document a déjà été traité.');
+    }
+
+    const approved = await this.documentsRepository.updateStatus(documentId, 'APPROVED');
+
+    await this.notificationsService.notify(
+      document.uploadedById,
+      'Document validé',
+      `Votre document "${document.title ?? document.fileName}" a été validé.`,
+    );
+
+    return approved;
+  }
+
+  // [ADMIN] Rejette un document : le déposant doit en soumettre un nouveau.
+  async reject(documentId: string, reason: string) {
+    const document = await this.documentsRepository.findById(documentId);
+    if (!document) {
+      throw new NotFoundException('Document introuvable.');
+    }
+    if (document.status !== 'PENDING_REVIEW') {
+      throw new BadRequestException('Ce document a déjà été traité.');
+    }
+
+    const rejected = await this.documentsRepository.updateStatus(documentId, 'REJECTED', reason);
+
+    await this.notificationsService.notify(
+      document.uploadedById,
+      'Document rejeté',
+      `Votre document "${document.title ?? document.fileName}" a été rejeté : ${reason}`,
+    );
+
+    return rejected;
   }
 
   async getKycStatus(organizationId: string) {

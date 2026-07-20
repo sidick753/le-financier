@@ -119,11 +119,6 @@ export function useInstitutionSettings() {
     return result.apiKey;
   }
 
-  async function changePassword(currentPassword: string, newPassword: string) {
-    if (!token) return;
-    return api.patch<{ message: string }>("/auth/change-password", { currentPassword, newPassword }, token);
-  }
-
   async function inviteMember(data: { email: string; firstName: string; lastName: string; role: string; specialty?: string }) {
     if (!token) return null;
     const result = await api.post<{ message: string; temporaryPassword: string }>(
@@ -164,7 +159,6 @@ export function useInstitutionSettings() {
     updateProfile,
     updateLimits,
     regenerateApiKey,
-    changePassword,
     inviteMember,
     removeMember,
     resolveAmlAlert,
