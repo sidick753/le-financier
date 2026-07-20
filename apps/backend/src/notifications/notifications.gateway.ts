@@ -10,10 +10,11 @@ import { JwtService } from '@nestjs/jwt';
 import { Logger } from '@nestjs/common';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
+import { CORS_ORIGINS } from '../common/cors-origins';
 
 @WebSocketGateway({
   cors: {
-    origin: process.env.FRONTEND_URL ?? 'http://localhost:4200',
+    origin: CORS_ORIGINS,
     credentials: true,
   },
 })
