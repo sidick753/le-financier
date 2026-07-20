@@ -279,74 +279,76 @@ async function ensureFundingRequestsAndScoring(adminId: string) {
       });
     }
 
-    if (spec.status !== 'DRAFT' && !spec.skipScoring && !spec.forceScoringError) {
-      const organization = await prisma.organization.findUnique({ where: { id: org.organizationId } });
-      const scoringInput = await prisma.scoringInput.findUnique({ where: { fundingRequestId: fr.id } });
-
-      let result;
-      if (spec.category === 'FACTURE') {
-        result = scoreFacture({
-          debiteurType: scoringInput?.debiteurType ?? null,
-          debiteurSolvabilite: scoringInput?.debiteurSolvabilite ?? null,
-          ancienneteRelation: scoringInput?.ancienneteRelation ?? null,
-          delaiPaiementMenu: scoringInput?.delaiPaiementMenu ?? null,
-          tauxImpaye12m: num(scoringInput?.tauxImpaye12m),
-          partPlusGrosClient: num(scoringInput?.partPlusGrosClient),
-          nbClientsActifs: organization?.nbClientsActifs ?? null,
-        });
-      } else if (spec.category === 'PRET') {
-        result = scorePret({
-          cashFlowAnnuel: num(organization?.cashFlowAnnuel),
-          fluxMobileMoneyMensuel: num(organization?.fluxMobileMoneyMensuel),
-          autonomieFinanciere: num(organization?.autonomieFinanciere),
-          tauxEndettement: num(organization?.tauxEndettement),
-          ratioLiquidite: num(organization?.ratioLiquidite),
-          garantieType: scoringInput?.garantieType ?? null,
-          garantieCouverture: num(scoringInput?.garantieCouverture),
-          dirigeantExperienceAns: organization?.dirigeantExperienceAns ?? null,
-          dirigeantAntecedents: organization?.dirigeantAntecedents ?? null,
-          dirigeantIncidentsLegaux: organization?.dirigeantIncidentsLegaux ?? null,
-          secteurCode: organization?.secteurCode ?? null,
-          secteurSaisonnalite: organization?.secteurSaisonnalite ?? null,
-          secteurImportDevises: organization?.secteurImportDevises ?? null,
-          secteurSoutienPublic: organization?.secteurSoutienPublic ?? null,
-          amountRequested: spec.amountRequested,
-          durationMonths: spec.durationMonths,
-        });
-      } else {
-        result = scoreEquity({
-          tcamCa3ans: num(organization?.tcamCa3ans),
-          tailleMarche: organization?.tailleMarche ?? null,
-          scalabilite: organization?.scalabilite ?? null,
-          experienceSecteurAns: organization?.experienceSecteurAns ?? null,
-          trackRecord: organization?.trackRecord ?? null,
-          completudeEquipe: organization?.completudeEquipe ?? null,
-          moat: organization?.moat ?? null,
-          partMarcheRelative: organization?.partMarcheRelative ?? null,
-          runwayMois: organization?.runwayMois ?? null,
-          margeBrute: num(organization?.margeBrute),
-          droitsInvestisseur: organization?.droitsInvestisseur ?? null,
-          transparence: organization?.transparence ?? null,
-        });
-      }
-
-      const shouldValidate = rng() < 0.6 && spec.status !== 'REJECTED';
-      const report = await prisma.scoringReport.create({
-        data: {
-          organizationId: org.organizationId, fundingRequestId: fr.id, product: spec.category,
-          autoScore: result.autoScore, grade: result.grade, gradeCapped: result.gradeCapped,
-          coverage: result.coverage, confidence: result.confidence, advanceRate: result.advanceRate ?? undefined,
-          kpiSnapshot: result.kpiSnapshot as any,
-          status: shouldValidate ? 'VALIDATED' : 'CALCULATED',
-          validatedById: shouldValidate ? adminId : undefined,
-          validatedScore: shouldValidate ? result.autoScore : undefined,
-          validationNotes: shouldValidate ? 'Analyse conforme au barème 2026.1, aucune réserve.' : undefined,
-          validatedAt: shouldValidate ? daysAgo(Math.max(spec.createdDaysAgo - 1, 0)) : undefined,
-          createdAt,
-        },
-      });
-      if (shouldValidate) await audit(adminId, 'SCORING_REPORT_VALIDATED', 'ScoringReport', report.id, daysAgo(Math.max(spec.createdDaysAgo - 1, 0)));
-    }
+    // TEMPORAIRE : calcul de score désactivé (scoreFacture/scorePret plantent en seed sur Render).
+    // On se contente d'insérer les organisations et demandes de financement, sans ScoringReport.
+    // if (spec.status !== 'DRAFT' && !spec.skipScoring && !spec.forceScoringError) {
+    //   const organization = await prisma.organization.findUnique({ where: { id: org.organizationId } });
+    //   const scoringInput = await prisma.scoringInput.findUnique({ where: { fundingRequestId: fr.id } });
+    //
+    //   let result;
+    //   if (spec.category === 'FACTURE') {
+    //     result = scoreFacture({
+    //       debiteurType: scoringInput?.debiteurType ?? null,
+    //       debiteurSolvabilite: scoringInput?.debiteurSolvabilite ?? null,
+    //       ancienneteRelation: scoringInput?.ancienneteRelation ?? null,
+    //       delaiPaiementMenu: scoringInput?.delaiPaiementMenu ?? null,
+    //       tauxImpaye12m: num(scoringInput?.tauxImpaye12m),
+    //       partPlusGrosClient: num(scoringInput?.partPlusGrosClient),
+    //       nbClientsActifs: organization?.nbClientsActifs ?? null,
+    //     });
+    //   } else if (spec.category === 'PRET') {
+    //     result = scorePret({
+    //       cashFlowAnnuel: num(organization?.cashFlowAnnuel),
+    //       fluxMobileMoneyMensuel: num(organization?.fluxMobileMoneyMensuel),
+    //       autonomieFinanciere: num(organization?.autonomieFinanciere),
+    //       tauxEndettement: num(organization?.tauxEndettement),
+    //       ratioLiquidite: num(organization?.ratioLiquidite),
+    //       garantieType: scoringInput?.garantieType ?? null,
+    //       garantieCouverture: num(scoringInput?.garantieCouverture),
+    //       dirigeantExperienceAns: organization?.dirigeantExperienceAns ?? null,
+    //       dirigeantAntecedents: organization?.dirigeantAntecedents ?? null,
+    //       dirigeantIncidentsLegaux: organization?.dirigeantIncidentsLegaux ?? null,
+    //       secteurCode: organization?.secteurCode ?? null,
+    //       secteurSaisonnalite: organization?.secteurSaisonnalite ?? null,
+    //       secteurImportDevises: organization?.secteurImportDevises ?? null,
+    //       secteurSoutienPublic: organization?.secteurSoutienPublic ?? null,
+    //       amountRequested: spec.amountRequested,
+    //       durationMonths: spec.durationMonths,
+    //     });
+    //   } else {
+    //     result = scoreEquity({
+    //       tcamCa3ans: num(organization?.tcamCa3ans),
+    //       tailleMarche: organization?.tailleMarche ?? null,
+    //       scalabilite: organization?.scalabilite ?? null,
+    //       experienceSecteurAns: organization?.experienceSecteurAns ?? null,
+    //       trackRecord: organization?.trackRecord ?? null,
+    //       completudeEquipe: organization?.completudeEquipe ?? null,
+    //       moat: organization?.moat ?? null,
+    //       partMarcheRelative: organization?.partMarcheRelative ?? null,
+    //       runwayMois: organization?.runwayMois ?? null,
+    //       margeBrute: num(organization?.margeBrute),
+    //       droitsInvestisseur: organization?.droitsInvestisseur ?? null,
+    //       transparence: organization?.transparence ?? null,
+    //     });
+    //   }
+    //
+    //   const shouldValidate = rng() < 0.6 && spec.status !== 'REJECTED';
+    //   const report = await prisma.scoringReport.create({
+    //     data: {
+    //       organizationId: org.organizationId, fundingRequestId: fr.id, product: spec.category,
+    //       autoScore: result.autoScore, grade: result.grade, gradeCapped: result.gradeCapped,
+    //       coverage: result.coverage, confidence: result.confidence, advanceRate: result.advanceRate ?? undefined,
+    //       kpiSnapshot: result.kpiSnapshot as any,
+    //       status: shouldValidate ? 'VALIDATED' : 'CALCULATED',
+    //       validatedById: shouldValidate ? adminId : undefined,
+    //       validatedScore: shouldValidate ? result.autoScore : undefined,
+    //       validationNotes: shouldValidate ? 'Analyse conforme au barème 2026.1, aucune réserve.' : undefined,
+    //       validatedAt: shouldValidate ? daysAgo(Math.max(spec.createdDaysAgo - 1, 0)) : undefined,
+    //       createdAt,
+    //     },
+    //   });
+    //   if (shouldValidate) await audit(adminId, 'SCORING_REPORT_VALIDATED', 'ScoringReport', report.id, daysAgo(Math.max(spec.createdDaysAgo - 1, 0)));
+    // }
 
     fundingCtx.push({
       id: fr.id, registrationNumber: spec.registrationNumber, category: spec.category, status: spec.status,
