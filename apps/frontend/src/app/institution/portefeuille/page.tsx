@@ -260,7 +260,7 @@ export default function InstitutionPortefeuillePage() {
                                 {inv.fundingRequest.title}
                               </p>
                               <a
-                                href={`/investor/opportunites/${inv.fundingRequest.id}`}
+                                href={`/institution/deal-flow/${inv.fundingRequest.id}`}
                                 onClick={(e) => e.stopPropagation()}
                                 className="text-xs font-medium text-brand-700 hover:underline"
                               >

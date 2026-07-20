@@ -6,6 +6,11 @@ import { UpdateInstitutionProfileDto } from './dto/update-institution-profile.dt
 import { UpdateInstitutionLimitsDto } from './dto/update-institution-limits.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
+import { AmlAlertType } from '@le-financier/database';
+
+// Seuil par défaut de "transaction inhabituelle" quand l'institution n'a pas
+// déclaré de ticketMax — utilisé par InstitutionsService.evaluateInvestmentSettlement.
+const SEUIL_TRANSACTION_INHABITUELLE_DEFAUT = 10_000_000;
 
 @Injectable()
 export class InstitutionsService {
@@ -22,6 +27,28 @@ export class InstitutionsService {
   private toProfileDto(institution: any) {
     const { apiKeyHash, ...rest } = institution;
     return rest;
+  }
+
+  // ── Représentation institution ─────────────────────────────────────────
+  // Un membre agit toujours au nom de son institution : les investissements/
+  // négociations/remboursements appartiennent à l'institution, jamais à la
+  // personne qui a cliqué. Utilisé par InvestmentsService et RepaymentService
+  // pour raisonner par institution plutôt que par utilisateur exact.
+
+  // Investisseur indépendant (pas de membership) → juste lui-même.
+  async getFellowMemberUserIds(userId: string): Promise<string[]> {
+    const membership = await this.institutionsRepository.findMembershipByUserId(userId);
+    if (!membership) return [userId];
+    return this.institutionsRepository.findMemberUserIds(membership.institutionId);
+  }
+
+  async isSameInstitutionMember(userIdA: string, userIdB: string): Promise<boolean> {
+    if (userIdA === userIdB) return true;
+    const [a, b] = await Promise.all([
+      this.institutionsRepository.findMembershipByUserId(userIdA),
+      this.institutionsRepository.findMembershipByUserId(userIdB),
+    ]);
+    return !!a && !!b && a.institutionId === b.institutionId;
   }
 
   // ── Profil ──────────────────────────────────────────────────────────────
@@ -133,14 +160,7 @@ export class InstitutionsService {
         ? { value: Math.round(data.couvertureGaranties * 10) / 10, disponible: true }
         : { value: null, disponible: false };
 
-    return {
-      npl,
-      concentrationSectorielle,
-      couvertureGaranties,
-      lcr: { value: null, disponible: false },
-      car: { value: null, disponible: false },
-      ratioLevier: { value: null, disponible: false },
-    };
+    return { npl, concentrationSectorielle, couvertureGaranties };
   }
 
   // ── AML / LAB-CFT ──────────────────────────────────────────────────────
@@ -173,6 +193,55 @@ export class InstitutionsService {
       throw new NotFoundException('Alerte introuvable.');
     }
     return this.institutionsRepository.resolveAmlAlert(alertId);
+  }
+
+  // Moteur de détection — appelé à la validation admin d'un virement d'investissement
+  // (InvestmentsService.approveSettlement), seul point où de l'argent réel part vers
+  // une PME. Ne s'applique qu'aux investisseurs membres d'une institution : un
+  // investisseur indépendant n'a pas de tableau de bord de conformité à alimenter.
+  async evaluateInvestmentSettlement(params: {
+    investorId: string;
+    amountCommitted: number;
+    organization: {
+      id: string;
+      legalName: string;
+      bankAccountHolder: string | null;
+      bankAccountNumber: string | null;
+      dirigeantEstPep: boolean;
+    };
+  }) {
+    const membership = await this.institutionsRepository.findMembershipByUserId(params.investorId);
+    if (!membership) return;
+
+    const institution = await this.institutionsRepository.findInstitutionById(membership.institutionId);
+    const ticketMax = institution?.ticketMax ? Number(institution.ticketMax) : 0;
+    const seuil = ticketMax > 0 ? ticketMax : SEUIL_TRANSACTION_INHABITUELLE_DEFAUT;
+
+    const triggered: AmlAlertType[] = [];
+    if (params.amountCommitted > seuil) triggered.push('TRANSACTION_INHABITUELLE');
+    if (!params.organization.bankAccountHolder || !params.organization.bankAccountNumber) {
+      triggered.push('BENEFICIAIRE_NON_IDENTIFIE');
+    }
+    if (params.organization.dirigeantEstPep) triggered.push('PEP_DETECTE');
+
+    for (const alertType of triggered) {
+      const existing = await this.institutionsRepository.findActiveAmlAlert(
+        membership.institutionId,
+        params.organization.id,
+        alertType,
+      );
+      if (existing) continue;
+
+      await this.institutionsRepository.createAmlAlert({
+        institutionId: membership.institutionId,
+        organizationId: params.organization.id,
+        clientLabel: params.organization.legalName,
+        alertType,
+        amount: params.amountCommitted,
+        status: 'EN_ANALYSE',
+        detectedAt: new Date(),
+      });
+    }
   }
 
   // ── Admin (partenaires) ────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateCreditProfileDto } from './dto/update-credit-profile.dto';
 import { UpdateBankInfoDto } from './dto/update-bank-info.dto';
 import { UpdateIdentityDto } from './dto/update-identity.dto';
+import { UpdateComplianceDto } from './dto/update-compliance.dto';
 import { ScoringService } from '../scoring/scoring.service';
 
 @Injectable()
@@ -76,6 +77,14 @@ export class OrganizationsService {
       throw new NotFoundException('Organisation introuvable.');
     }
     return this.organizationsRepository.updateVerificationStatus(id, status, rejectionReason);
+  }
+
+  async updateCompliance(id: string, dto: UpdateComplianceDto) {
+    const organization = await this.organizationsRepository.findById(id);
+    if (!organization) {
+      throw new NotFoundException('Organisation introuvable.');
+    }
+    return this.organizationsRepository.updateCompliance(id, dto.dirigeantEstPep);
   }
 
   async updateCreditProfile(id: string, userId: string, dto: UpdateCreditProfileDto) {

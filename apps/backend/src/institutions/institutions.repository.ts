@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaClient, Prisma } from '@le-financier/database';
+import { PrismaClient, Prisma, AmlAlertType } from '@le-financier/database';
 import { CreateUserData } from '../users/interfaces/users-repository.interface';
 
 const ACTIVE_INVESTMENT_STATUSES = ['NEGOTIATING', 'COMMITTED', 'SETTLED_OFF_PLATFORM'] as const;
@@ -13,6 +13,14 @@ export class InstitutionsRepository {
 
   async findMembershipByUserId(userId: string) {
     return this.prisma.institutionMember.findUnique({ where: { userId } });
+  }
+
+  async findMemberUserIds(institutionId: string) {
+    const members = await this.prisma.institutionMember.findMany({
+      where: { institutionId },
+      select: { userId: true },
+    });
+    return members.map((m) => m.userId);
   }
 
   async provisionInstitution(userId: string) {
@@ -339,5 +347,17 @@ export class InstitutionsRepository {
       where: { id },
       data: { status: 'RESOLU', resolvedAt: new Date() },
     });
+  }
+
+  // Évite les doublons : pas de nouvelle alerte si une alerte du même type sur le
+  // même client, pour cette institution, est déjà ouverte (EN_ANALYSE ou BLOQUE).
+  async findActiveAmlAlert(institutionId: string, organizationId: string, alertType: AmlAlertType) {
+    return this.prisma.amlAlert.findFirst({
+      where: { institutionId, organizationId, alertType, status: { in: ['EN_ANALYSE', 'BLOQUE'] } },
+    });
+  }
+
+  async createAmlAlert(data: Prisma.AmlAlertUncheckedCreateInput) {
+    return this.prisma.amlAlert.create({ data });
   }
 }

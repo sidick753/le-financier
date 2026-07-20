@@ -32,6 +32,8 @@ export default function OffresPage() {
   const { refreshBadges } = usePmeBadges();
   const [selectedOffer, setSelectedOffer] = useState<string | null>(null);
   const [counterReturn, setCounterReturn] = useState("");
+  const [counterConditions, setCounterConditions] = useState("");
+  const [counterNote, setCounterNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -55,17 +57,42 @@ export default function OffresPage() {
     try {
       await api.patch(
         `/investments/${offerId}/counter-offer`,
-        { proposedReturn: Number(counterReturn) },
+        {
+          proposedReturn: Number(counterReturn),
+          conditions:     counterConditions.trim() || undefined,
+          note:           counterNote.trim() || undefined,
+        },
         token!,
       );
       setSuccess("Contre-proposition envoyée à l'investisseur.");
       setCounterReturn("");
+      setCounterConditions("");
+      setCounterNote("");
       setSelectedOffer(null);
       refresh();
       refreshBadges();
     } catch (err) {
       console.error("[handleCounter]", err);
       setError(err instanceof Error ? err.message : "Échec de la contre-proposition.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleReject(offerId: string) {
+    if (!window.confirm("Mettre fin à cette négociation ? Cette action est définitive.")) return;
+    setError(null);
+    setSuccess(null);
+    setIsSubmitting(true);
+    try {
+      await api.patch(`/investments/${offerId}/reject-offer`, {}, token!);
+      setSuccess("Négociation close.");
+      setSelectedOffer(null);
+      refresh();
+      refreshBadges();
+    } catch (err) {
+      console.error("[handleReject]", err);
+      setError(err instanceof Error ? err.message : "Échec.");
     } finally {
       setIsSubmitting(false);
     }
@@ -162,11 +189,11 @@ export default function OffresPage() {
 
                   {isExpanded && (
                     <div className="border-t border-gray-100 p-5">
-                      {/* Conditions posées par l'investisseur à la création de l'offre */}
+                      {/* Conditions actuelles — suivent le dernier tour de négociation */}
                       {offer.conditions && (
                         <div className="mb-4 rounded-md bg-gray-50 p-3">
                           <p className="mb-1 text-xs font-medium text-gray-700">
-                            Conditions de l&apos;investisseur
+                            Conditions actuelles
                           </p>
                           <p className="text-xs text-gray-600">{offer.conditions}</p>
                         </div>
@@ -180,34 +207,44 @@ export default function OffresPage() {
                         {offer.negotiationOffers.map((neg) => (
                           <div
                             key={neg.id}
-                            className={`flex items-center justify-between rounded-md p-2 text-xs ${
+                            className={`rounded-md p-2 text-xs ${
                               neg.status === "PENDING"
                                 ? "bg-yellow-50 font-semibold"
                                 : "bg-gray-50 text-gray-400"
                             }`}
                           >
-                            <span>
-                              {neg.proposedBy === "INVESTOR"
-                                ? `${offer.investor.firstName} (Investisseur)`
-                                : "Vous (PME)"}
-                            </span>
-                            <span className="font-medium">{Number(neg.proposedReturn)}%</span>
-                            <span className="text-gray-400">{formatDate(neg.createdAt)}</span>
-                            <span
-                              className={
-                                neg.status === "PENDING"
-                                  ? "text-yellow-600"
+                            <div className="flex items-center justify-between">
+                              <span>
+                                {neg.proposedBy === "INVESTOR"
+                                  ? `${offer.investor.firstName} (Investisseur)`
+                                  : "Vous (PME)"}
+                              </span>
+                              <span className="font-medium">{Number(neg.proposedReturn)}%</span>
+                              <span className="text-gray-400">{formatDate(neg.createdAt)}</span>
+                              <span
+                                className={
+                                  neg.status === "PENDING"
+                                    ? "text-yellow-600"
+                                    : neg.status === "ACCEPTED"
+                                      ? "text-green-600"
+                                      : "text-gray-400"
+                                }
+                              >
+                                {neg.status === "PENDING"
+                                  ? "En attente"
                                   : neg.status === "ACCEPTED"
-                                    ? "text-green-600"
-                                    : "text-gray-400"
-                              }
-                            >
-                              {neg.status === "PENDING"
-                                ? "En attente"
-                                : neg.status === "ACCEPTED"
-                                  ? "Accepté"
-                                  : "Contré"}
-                            </span>
+                                    ? "Accepté"
+                                    : "Contré"}
+                              </span>
+                            </div>
+                            {neg.conditions && (
+                              <p className="mt-1 font-normal text-gray-500">
+                                <span className="font-medium">Conditions : </span>{neg.conditions}
+                              </p>
+                            )}
+                            {neg.note && (
+                              <p className="mt-1 font-normal italic text-gray-500">« {neg.note} »</p>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -243,13 +280,45 @@ export default function OffresPage() {
                               Contre-proposer
                             </button>
                           </div>
+                          <textarea
+                            rows={2}
+                            maxLength={1000}
+                            placeholder={`Conditions (optionnel — vide = inchangées : ${offer.conditions || "aucune"})`}
+                            value={counterConditions}
+                            onChange={(e) => setCounterConditions(e.target.value)}
+                            className="w-full resize-none rounded-md border border-gray-200 px-3 py-2 text-xs focus:border-brand-700 focus:outline-none"
+                          />
+                          <textarea
+                            rows={2}
+                            maxLength={1000}
+                            placeholder="Message accompagnant votre contre-proposition (optionnel)"
+                            value={counterNote}
+                            onChange={(e) => setCounterNote(e.target.value)}
+                            className="w-full resize-none rounded-md border border-gray-200 px-3 py-2 text-xs focus:border-brand-700 focus:outline-none"
+                          />
+                          <button
+                            onClick={() => handleReject(offer.id)}
+                            disabled={isSubmitting}
+                            className="w-full text-xs font-medium text-red-600 hover:underline disabled:opacity-50"
+                          >
+                            Refuser et clore la négociation
+                          </button>
                         </div>
                       )}
 
                       {ballIsInInvestorCourt && (
-                        <p className="text-center text-xs text-gray-400">
-                          En attente de la réponse de l'investisseur…
-                        </p>
+                        <div className="space-y-2">
+                          <p className="text-center text-xs text-gray-400">
+                            En attente de la réponse de l'investisseur…
+                          </p>
+                          <button
+                            onClick={() => handleReject(offer.id)}
+                            disabled={isSubmitting}
+                            className="w-full rounded-md border border-red-200 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            Annuler ma négociation
+                          </button>
+                        </div>
                       )}
                     </div>
                   )}

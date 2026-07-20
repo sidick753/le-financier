@@ -3,6 +3,7 @@ import { RepaymentRepository } from './repayment.repository';
 import { FundingRepository } from '../funding/funding.repository';
 import { OrganizationsRepository } from '../organizations/organizations.repository';
 import { NotificationsService } from '../notifications/notifications.service';
+import { InstitutionsService } from '../institutions/institutions.service';
 import { ConfirmPaymentDto } from './dto/confirm-payment.dto';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class RepaymentService {
     private fundingRepository: FundingRepository,
     private organizationsRepository: OrganizationsRepository,
     private notificationsService: NotificationsService,
+    private institutionsService: InstitutionsService,
   ) {}
 
   async generateSchedule(params: {
@@ -26,7 +28,8 @@ export class RepaymentService {
   }
 
   async getMySchedule(investorId: string) {
-    return this.repaymentRepository.findUpcomingByInvestorId(investorId);
+    const investorIds = await this.institutionsService.getFellowMemberUserIds(investorId);
+    return this.repaymentRepository.findUpcomingByInvestorIds(investorIds);
   }
 
   async getScheduleForFundingRequest(fundingRequestId: string) {
@@ -40,14 +43,19 @@ export class RepaymentService {
     if (!owner) {
       throw new NotFoundException('Investissement introuvable.');
     }
-    if (owner.investorId !== investorId) {
+    const authorized = await this.institutionsService.isSameInstitutionMember(
+      owner.investorId,
+      investorId,
+    );
+    if (!authorized) {
       throw new ForbiddenException("Vous n'avez pas accès à cet investissement.");
     }
     return this.repaymentRepository.findScheduleByInvestmentId(investmentId);
   }
 
   async getMyPayments(investorId: string) {
-    return this.repaymentRepository.findPaymentsByInvestorId(investorId);
+    const investorIds = await this.institutionsService.getFellowMemberUserIds(investorId);
+    return this.repaymentRepository.findPaymentsByInvestorIds(investorIds);
   }
 
   // Soumission par la PME : preuve du virement fait vers le compte plateforme,
@@ -140,7 +148,8 @@ export class RepaymentService {
     if (!owner) {
       throw new NotFoundException('Échéance introuvable.');
     }
-    if (owner.investorId !== investorId) {
+    const authorized = await this.institutionsService.isSameInstitutionMember(owner.investorId, investorId);
+    if (!authorized) {
       throw new ForbiddenException("Vous n'avez pas accès à cette échéance.");
     }
     return this.repaymentRepository.getClaimableAmountForSchedule(scheduleId);
@@ -151,16 +160,25 @@ export class RepaymentService {
     if (!owner) {
       throw new NotFoundException('Échéance introuvable.');
     }
-    if (owner.investorId !== investorId) {
+    const authorized = await this.institutionsService.isSameInstitutionMember(owner.investorId, investorId);
+    if (!authorized) {
       throw new ForbiddenException("Vous n'avez pas accès à cette échéance.");
     }
     return this.repaymentRepository.findClaimsForSchedule(scheduleId);
   }
 
   // Investisseur : réclame tout ou partie des remboursements déjà validés sur une
-  // échéance, avant même qu'elle soit intégralement soldée.
-  async requestClaim(scheduleId: string, investorId: string, amount?: number) {
-    const claim = await this.repaymentRepository.requestRepaymentClaim(scheduleId, investorId, amount);
+  // échéance, avant même qu'elle soit intégralement soldée. requestedById = la personne
+  // qui clique (traçabilité) ; l'autorisation porte sur toute l'institution (voir
+  // RepaymentRepository.requestRepaymentClaim).
+  async requestClaim(scheduleId: string, requestedById: string, amount?: number) {
+    const investorIds = await this.institutionsService.getFellowMemberUserIds(requestedById);
+    const claim = await this.repaymentRepository.requestRepaymentClaim(
+      scheduleId,
+      requestedById,
+      investorIds,
+      amount,
+    );
 
     await this.notificationsService.notifyAdmins(
       'Réclamation de remboursement à valider',

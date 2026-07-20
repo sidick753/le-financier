@@ -37,7 +37,7 @@ export class InvestmentsController {
   @ApiResponse({ status: 409, description: 'Pas en négociation ou contre-proposition consécutive interdite' })
   @Patch(':id/counter-offer')
   counterOffer(@Param('id') id: string, @Body() dto: CounterOfferDto, @Request() req) {
-    return this.investmentsService.counterOffer(id, dto.proposedReturn, req.user.id, req.user.role);
+    return this.investmentsService.counterOffer(id, dto.proposedReturn, req.user.id, req.user.role, dto.conditions, dto.note);
   }
 
   @ApiOperation({ summary: 'Accepter la dernière offre', description: 'Accepte la proposition en attente. Interdit d\'accepter sa propre proposition.' })
@@ -47,6 +47,18 @@ export class InvestmentsController {
   @Patch(':id/accept-offer')
   acceptOffer(@Param('id') id: string, @Request() req) {
     return this.investmentsService.acceptOffer(id, req.user.id, req.user.role);
+  }
+
+  @ApiOperation({
+    summary: 'Refuser / abandonner la négociation',
+    description: 'Met fin à la négociation en cours, quelle que soit la partie qui a la balle (pas de contrainte de tour, contrairement à accept/counter). L\'engagement passe en REJECTED et libère le montant restant sur la demande.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID de l\'engagement' })
+  @ApiResponse({ status: 200, description: 'Négociation close — statut REJECTED' })
+  @ApiResponse({ status: 409, description: 'Cet engagement n\'est pas en négociation' })
+  @Patch(':id/reject-offer')
+  rejectOffer(@Param('id') id: string, @Request() req) {
+    return this.investmentsService.rejectOffer(id, req.user.id, req.user.role);
   }
 
   @ApiOperation({ summary: 'Mon engagement sur une demande', description: 'Retourne l\'engagement de l\'investisseur courant sur une demande donnée, avec l\'historique des offres de négociation.' })

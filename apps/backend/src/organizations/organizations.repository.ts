@@ -183,4 +183,11 @@ export class OrganizationsRepository implements IOrganizationsRepository {
       data,
     });
   }
+
+  async updateCompliance(id: string, dirigeantEstPep: boolean) {
+    return this.prisma.organization.update({
+      where: { id },
+      data: { dirigeantEstPep },
+    });
+  }
 }

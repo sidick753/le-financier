@@ -54,6 +54,7 @@ interface OrganizationDetail {
   bankAccountHolder: string | null;
   bankAccountNumber: string | null;
   bankSwiftCode: string | null;
+  dirigeantEstPep: boolean;
 
   // ── Profil de crédit — saisi par la PME dans Paramètres > Profil entreprise ──
   secteurCode: string | null;
@@ -171,6 +172,16 @@ export default function AdminPmeDetailPage() {
       setModal(null);
       load();
       refreshBadges();
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleTogglePep(value: boolean) {
+    setActionLoading(true);
+    try {
+      await api.patch(`/organizations/admin/${id}/compliance`, { dirigeantEstPep: value }, token!);
+      load();
     } finally {
       setActionLoading(false);
     }
@@ -372,6 +383,22 @@ export default function AdminPmeDetailPage() {
           <Field label="Expérience sectorielle" value={org.experienceSecteurAns != null ? `${org.experienceSecteurAns} ans` : "—"} />
           <Field label="Track record du dirigeant" value={labelFor(TRACK_RECORD, org.trackRecord)} />
           <Field label="Antécédents du dirigeant" value={org.dirigeantAntecedents || "—"} span2 />
+          <div>
+            <p className="text-xs text-gray-500">Personne politiquement exposée (PEP)</p>
+            <label className="mt-1 flex items-center gap-2 text-sm font-medium text-gray-900">
+              <input
+                type="checkbox"
+                checked={org.dirigeantEstPep}
+                disabled={actionLoading}
+                onChange={(e) => handleTogglePep(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-brand-700 focus:ring-brand-700"
+              />
+              {org.dirigeantEstPep ? "Oui" : "Non"}
+            </label>
+            {org.dirigeantEstPep && (
+              <p className="mt-1 text-[11px] text-amber-600">Déclenche une alerte AML à chaque virement validé.</p>
+            )}
+          </div>
         </CreditSection>
 
         <CreditSection title="Équipe, gouvernance & marché">

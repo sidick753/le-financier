@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 import { useInstitutionData, gradeToRisk, isRecentlyCreated, GRADE_CLASSNAMES, RISK_CLASSNAMES } from "@/lib/use-institution-data";
-import { useAuth } from "@/lib/auth-context";
-import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { NotifBell } from "@/components/ui/notif-bell";
 
@@ -26,14 +24,11 @@ function formatAmount(v: number) {
 }
 
 export default function DealFlowPage() {
-  const { opportunities, investments, isLoading, refresh } = useInstitutionData();
-  const { token } = useAuth();
+  const { opportunities, investments, isLoading } = useInstitutionData();
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("Tous");
   const [riskFilter, setRiskFilter] = useState("Tous");
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<{ id: string; message: string } | null>(null);
 
   const engagedFundingRequestIds = new Set(investments.map((inv) => inv.fundingRequest.id));
 
@@ -48,27 +43,6 @@ export default function DealFlowPage() {
     return matchSearch && matchCategory && matchRisk;
   });
 
-  async function handleEngage(opportunityId: string, amount: number, proposedReturn: number) {
-    if (!token) return;
-    setActionLoading(opportunityId);
-    setActionError(null);
-    try {
-      await api.post("/investments", {
-        fundingRequestId: opportunityId,
-        amountCommitted: amount,
-        proposedReturn,
-      }, token);
-      refresh();
-    } catch (err) {
-      setActionError({
-        id: opportunityId,
-        message: err instanceof Error ? err.message : "Échec de la soumission.",
-      });
-    } finally {
-      setActionLoading(null);
-    }
-  }
-
   return (
     <>
       <header className="sticky top-0 z-10 flex h-15 items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
@@ -82,23 +56,7 @@ export default function DealFlowPage() {
       </header>
 
       <div className="p-8 pb-16">
-        {/* Bannière Premium */}
-      <div className="mb-6 flex items-center justify-between rounded-xl bg-brand-700 px-5 py-3">
-        <div className="flex items-center gap-3">
-          <span className="text-yellow-400">⭐</span>
-          <div>
-            <p className="text-sm font-semibold text-white">Accès Institutionnel Premium</p>
-            <p className="text-xs text-brand-100">
-              Vous avez accès en avant-première aux opportunités supérieures à 100M FCFA et aux dossiers marqués Premium.
-            </p>
-          </div>
-        </div>
-        <span className="rounded-full bg-yellow-400 px-3 py-1 text-xs font-bold text-yellow-900">
-          PREMIUM
-        </span>
-      </div>
-
-      {/* Filtres */}
+        {/* Filtres */}
       <div className="mb-6 flex items-center gap-3">
         <input
           type="text"
@@ -107,31 +65,37 @@ export default function DealFlowPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="flex-1 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
         />
-        <div className="flex gap-1">
-          {["Tous", "FACTURE", "PRET", "EQUITY"].map((c) => (
-            <button
-              key={c}
-              onClick={() => setCategoryFilter(c)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                categoryFilter === c ? "bg-brand-700 text-white" : "bg-gray-100 text-gray-600"
-              }`}
-            >
-              {c === "Tous" ? "Tous" : CATEGORY_LABELS[c]}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-brand-700">Catégorie :</span>
+          <div className="flex gap-1">
+            {["Tous", "FACTURE", "PRET", "EQUITY"].map((c) => (
+              <button
+                key={c}
+                onClick={() => setCategoryFilter(c)}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                  categoryFilter === c ? "bg-brand-700 text-white" : "bg-gray-100 text-gray-600"
+                }`}
+              >
+                {c === "Tous" ? "Tous" : CATEGORY_LABELS[c]}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="flex gap-1">
-          {["Tous", "Faible", "Modéré", "Élevé"].map((r) => (
-            <button
-              key={r}
-              onClick={() => setRiskFilter(r)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                riskFilter === r ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600"
-              }`}
-            >
-              {r}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-gray-800">Risque :</span>
+          <div className="flex gap-1">
+            {["Tous", "Faible", "Modéré", "Élevé"].map((r) => (
+              <button
+                key={r}
+                onClick={() => setRiskFilter(r)}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                  riskFilter === r ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600"
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -144,13 +108,11 @@ export default function DealFlowPage() {
         {filtered.map((opp) => {
           const requested = Number(opp.amountRequested);
           const raised = Number(opp.amountRaised);
-          const remaining = requested - raised;
           const progress = requested > 0 ? Math.min(100, (raised / requested) * 100) : 0;
           const isLarge = requested >= 100_000_000;
           const report = opp.scoringReports[0];
           const risk = gradeToRisk(report?.grade ?? null);
           const isSingleInvestor = opp.investorMode === "SINGLE_INVESTOR";
-          const ticketAmount = isSingleInvestor ? remaining : Math.min(requested * 0.3, remaining);
 
           const isEngaged = engagedFundingRequestIds.has(opp.id);
           // hasActiveInvestor compte aussi notre propre engagement (NEGOTIATING/COMMITTED) —
@@ -243,30 +205,12 @@ export default function DealFlowPage() {
                 </div>
               </div>
 
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleEngage(opp.id, ticketAmount, Number(opp.expectedReturn ?? 8))}
-                  disabled={actionLoading === opp.id || isEngaged || isTakenByOther || ticketAmount <= 0}
-                  className="flex-1 rounded-md bg-brand-700 py-2 text-xs font-medium text-white hover:bg-brand-800 disabled:opacity-50"
-                >
-                  {actionLoading === opp.id
-                    ? "Envoi..."
-                    : isTakenByOther
-                      ? "Déjà pris par un autre investisseur"
-                      : isSingleInvestor
-                        ? "Financer 100% (comité)"
-                        : "Soumettre au comité (30%)"}
-                </button>
-                <button
-                  onClick={() => router.push(`/investor/opportunites/${opp.id}`)}
-                  className="rounded-md border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Analyser
-                </button>
-              </div>
-              {actionError?.id === opp.id && (
-                <p className="mt-2 text-xs text-red-600">{actionError.message}</p>
-              )}
+              <button
+                onClick={() => router.push(`/institution/deal-flow/${opp.id}`)}
+                className="w-full rounded-md border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Analyser
+              </button>
             </div>
           );
         })}

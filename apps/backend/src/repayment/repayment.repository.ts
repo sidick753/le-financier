@@ -60,10 +60,10 @@ export class RepaymentRepository implements IRepaymentRepository {
     });
   }
 
-  async findUpcomingByInvestorId(investorId: string, limit = 5) {
+  async findUpcomingByInvestorIds(investorIds: string[], limit = 5) {
     return this.prisma.repaymentSchedule.findMany({
       where: {
-        investment: { investorId },
+        investment: { investorId: { in: investorIds } },
         status: { in: ['PENDING', 'PARTIALLY_PAID'] },
         dueDate: { gte: new Date() },
       },
@@ -261,7 +261,15 @@ export class RepaymentRepository implements IRepaymentRepository {
 
   // Investisseur : réclame tout ou partie du montant déjà validé par un admin sur cette
   // échéance, avant même qu'elle soit intégralement soldée (PARTIALLY_PAID accepté).
-  async requestRepaymentClaim(scheduleId: string, investorId: string, amount?: number) {
+  // requestedById = la personne qui clique (traçabilité) ; authorizedInvestorIds = tous
+  // les membres de son institution (voir InstitutionsService.getFellowMemberUserIds) —
+  // l'échéance appartient à l'institution, pas à la personne qui a créé l'investissement.
+  async requestRepaymentClaim(
+    scheduleId: string,
+    requestedById: string,
+    authorizedInvestorIds: string[],
+    amount?: number,
+  ) {
     return this.prisma.$transaction(async (tx) => {
       // Verrou de ligne : empêche deux réclamations concurrentes de lire le même
       // disponible avant que l'une des deux n'ait inséré la sienne.
@@ -272,7 +280,7 @@ export class RepaymentRepository implements IRepaymentRepository {
         include: { investment: { select: { investorId: true } } },
       });
       if (!schedule) throw new ConflictException('Échéance introuvable.');
-      if (schedule.investment.investorId !== investorId) {
+      if (!authorizedInvestorIds.includes(schedule.investment.investorId)) {
         throw new ConflictException("Cette échéance n'appartient pas à cet investisseur.");
       }
 
@@ -289,7 +297,7 @@ export class RepaymentRepository implements IRepaymentRepository {
         { repaymentScheduleId: scheduleId },
         available,
         amount,
-        investorId,
+        requestedById,
       );
     });
   }
@@ -380,9 +388,9 @@ export class RepaymentRepository implements IRepaymentRepository {
     });
   }
 
-  async findPaymentsByInvestorId(investorId: string) {
+  async findPaymentsByInvestorIds(investorIds: string[]) {
     return this.prisma.repaymentPayment.findMany({
-      where: { repaymentSchedule: { investment: { investorId } } },
+      where: { repaymentSchedule: { investment: { investorId: { in: investorIds } } } },
       include: {
         repaymentSchedule: {
           include: {

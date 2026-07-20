@@ -9,6 +9,8 @@ interface NegotiationOffer {
   id: string;
   proposedBy: "INVESTOR" | "PME";
   proposedReturn: string;
+  conditions: string | null;
+  note: string | null;
   status: string;
   createdAt: string;
 }

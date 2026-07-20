@@ -6,9 +6,10 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { FundingModule } from '../funding/funding.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { RepaymentModule } from '../repayment/repayment.module';
+import { InstitutionsModule } from '../institutions/institutions.module';
 
 @Module({
-  imports: [NotificationsModule, FundingModule, OrganizationsModule, RepaymentModule],
+  imports: [NotificationsModule, FundingModule, OrganizationsModule, RepaymentModule, InstitutionsModule],
   controllers: [InvestmentsController],
   providers: [InvestmentsService, InvestmentsRepository],
 })

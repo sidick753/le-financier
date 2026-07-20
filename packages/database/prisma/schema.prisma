@@ -131,6 +131,10 @@ model Organization {
   experienceSecteurAns     Int?
   trackRecord              String?
 
+  // Conformité LAB-CFT — coché manuellement par un admin à la revue KYC ; alimente
+  // le moteur d'alertes AML (voir InstitutionsService.evaluateInvestmentSettlement).
+  dirigeantEstPep Boolean @default(false)
+
   // Équipe, gouvernance & marché (EQUITY)
   completudeEquipe   String?
   droitsInvestisseur String?
@@ -382,9 +386,10 @@ model Investment {
   lockedReturn    Decimal?          @db.Decimal(5, 2)
   status          InvestmentStatus  @default(INTERESTED)
 
-  // Conditions particulières fixées par l'investisseur à la création de l'offre
-  // (garanties demandées, clauses, calendrier...) — non renégociables via les
-  // NegotiationOffer, qui ne portent que sur le taux.
+  // Conditions actuelles (garanties demandées, clauses, calendrier...) — reflète
+  // la dernière NegotiationOffer acceptée/en cours, mise à jour à chaque tour et
+  // figée à l'acceptation. Chaque NegotiationOffer garde aussi sa propre valeur
+  // pour l'historique.
   conditions String? @db.Text
 
   settlementProofId String?   @unique
@@ -415,6 +420,11 @@ model NegotiationOffer {
 
   proposedBy     NegotiationOfferAuthor
   proposedReturn Decimal                @db.Decimal(5, 2)
+  // Conditions proposées à ce tour précis (garanties, calendrier...) — optionnel,
+  // laissé vide si ce tour ne change que le taux.
+  conditions     String?                @db.Text
+  // Message libre accompagnant la proposition (justification, contexte...).
+  note           String?                @db.Text
   status         NegotiationOfferStatus @default(PENDING)
 
   createdAt DateTime @default(now())

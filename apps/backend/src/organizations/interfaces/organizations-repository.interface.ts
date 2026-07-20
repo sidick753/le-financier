@@ -88,4 +88,5 @@ export interface IOrganizationsRepository {
   updateCreditProfile(id: string, data: CreditProfileData): Promise<Organization>;
   updateBankInfo(id: string, data: BankInfoData): Promise<Organization>;
   updateIdentity(id: string, data: IdentityData): Promise<Organization>;
+  updateCompliance(id: string, dirigeantEstPep: boolean): Promise<Organization>;
 }

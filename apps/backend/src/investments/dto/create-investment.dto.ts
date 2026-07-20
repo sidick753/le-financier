@@ -20,10 +20,20 @@ export class CreateInvestmentDto {
   @ApiPropertyOptional({
     example: 'Garantie hypothécaire souhaitée sur l\'actif financé.',
     maxLength: 1000,
-    description: 'Conditions particulières fixées par l\'investisseur à la création de l\'offre (non renégociables via les contre-propositions, qui ne portent que sur le taux).',
+    description: 'Conditions particulières proposées à la création de l\'offre — modifiables lors des contre-propositions suivantes.',
   })
   @IsOptional()
   @IsString()
   @MaxLength(1000)
   conditions?: string;
+
+  @ApiPropertyOptional({
+    example: 'Premier contact avec cette PME, taux aligné sur le secteur.',
+    maxLength: 1000,
+    description: 'Message libre accompagnant la proposition initiale.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  note?: string;
 }

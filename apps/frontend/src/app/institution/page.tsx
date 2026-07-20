@@ -81,6 +81,11 @@ export default function InstitutionOverviewPage() {
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   }).length;
 
+  const pendingNegotiations = investments.filter((inv) => {
+    const last = inv.negotiationOffers[0];
+    return last?.proposedBy === "PME" && last?.status === "PENDING";
+  });
+
   const alerts: DashboardAlert[] = [];
   if (amlStats.alertesActives > 0) {
     const n = amlStats.alertesActives;
@@ -94,7 +99,7 @@ export default function InstitutionOverviewPage() {
         </>
       ),
       actionLabel: "Voir",
-      onAction: () => router.push("/institution/risques"),
+      onAction: () => router.push("/institution/risques?tab=aml"),
     });
   }
   if (garantiesStatus === "violation" || garantiesStatus === "attention") {
@@ -121,7 +126,10 @@ export default function InstitutionOverviewPage() {
         </>
       ),
       actionLabel: "Répondre",
-      onAction: () => router.push("/institution/portefeuille"),
+      onAction: () =>
+        pendingNegotiations.length === 1
+          ? router.push(`/institution/deal-flow/${pendingNegotiations[0].fundingRequest.id}`)
+          : router.push("/institution/portefeuille"),
     });
   }
   if (newOpportunities.length > 0) {
@@ -164,12 +172,6 @@ export default function InstitutionOverviewPage() {
           <p className="text-xs text-slate-500">Tableau de bord institutionnel</p>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => router.push("/institution/deal-flow")}
-            className="rounded-[10px] bg-brand-700 px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-brand-800"
-          >
-            + Nouveau dossier
-          </button>
           <NotifBell href="/institution/notifications" />
         </div>
       </header>

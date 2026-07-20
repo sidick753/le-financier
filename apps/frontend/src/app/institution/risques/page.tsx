@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   useInstitutionSettings,
   type RiskIndicators,
@@ -81,42 +82,21 @@ const INDICATOR_DEFS: IndicatorDef[] = [
     plusBas: false,
     key: "couvertureGaranties",
   },
-  {
-    code: "LCR",
-    label: "Ratio de liquidité (LCR)",
-    description: "Couverture des sorties nettes de trésorerie sur 30 jours",
-    unit: "%",
-    seuil: 100,
-    seuilLabel: "Seuil BCEAO : 100%",
-    plusBas: false,
-    key: "lcr",
-  },
-  {
-    code: "CAR",
-    label: "Ratio de solvabilité (CAR)",
-    description: "Fonds propres pondérés sur les risques (Bâle III)",
-    unit: "%",
-    seuil: 11.5,
-    seuilLabel: "Seuil BCEAO : 11.5%",
-    plusBas: false,
-    key: "car",
-  },
-  {
-    code: "LEV",
-    label: "Ratio de levier",
-    description: "Rapport fonds propres / total actif (plafond BCEAO)",
-    unit: "x",
-    seuil: 8,
-    seuilLabel: "Seuil BCEAO : 8x",
-    plusBas: true,
-    key: "ratioLevier",
-  },
 ];
 
 export default function RisquesPage() {
+  return (
+    <Suspense fallback={null}>
+      <RisquesPageContent />
+    </Suspense>
+  );
+}
+
+function RisquesPageContent() {
+  const searchParams = useSearchParams();
   const { riskIndicators, amlAlerts, amlStats, isLoading, refresh, resolveAmlAlert } = useInstitutionSettings();
   const { refreshBadges } = useInstitutionBadges();
-  const [tab, setTab] = useState<RisqueTab>("prudentiels");
+  const [tab, setTab] = useState<RisqueTab>(searchParams.get("tab") === "aml" ? "aml" : "prudentiels");
 
   const indicateurs = INDICATOR_DEFS.map((def) => {
     const data = riskIndicators?.[def.key];

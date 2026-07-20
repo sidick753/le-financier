@@ -75,7 +75,7 @@ export class InstitutionsController {
 
   @ApiOperation({
     summary: 'Indicateurs de risque et de conformité',
-    description: 'Calculés à partir des données réelles de la plateforme. Les ratios bancaires (LCR, CAR, levier) ne sont pas disponibles (données de bilan hors plateforme).',
+    description: 'Calculés à partir des données réelles de la plateforme (NPL, concentration sectorielle, couverture des garanties). Les ratios bancaires (LCR, CAR, levier) ne sont pas exposés — ils nécessiteraient des données de bilan de l\'institution hors plateforme.',
   })
   @Get('mine/risk-indicators')
   getRiskIndicators(@Request() req) {

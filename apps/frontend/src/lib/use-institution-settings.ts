@@ -43,9 +43,6 @@ export interface RiskIndicators {
   npl: RiskIndicator;
   concentrationSectorielle: RiskIndicator;
   couvertureGaranties: RiskIndicator;
-  lcr: RiskIndicator;
-  car: RiskIndicator;
-  ratioLevier: RiskIndicator;
 }
 
 export type AmlAlertType = "TRANSACTION_INHABITUELLE" | "PEP_DETECTE" | "BENEFICIAIRE_NON_IDENTIFIE";

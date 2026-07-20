@@ -17,9 +17,12 @@ export class InvestmentsRepository implements IInvestmentsRepository {
     });
   }
 
-  async findAllByInvestorId(investorId: string) {
+  // Un investissement/négociation appartient à l'institution du membre qui l'a
+  // engagé, pas au membre lui-même — investorIds regroupe donc tous les
+  // membres de l'institution (voir InstitutionsService.getFellowMemberUserIds).
+  async findAllByInvestorIds(investorIds: string[]) {
     return this.prisma.investment.findMany({
-      where: { investorId },
+      where: { investorId: { in: investorIds } },
       include: {
         fundingRequest: {
           include: {
@@ -50,6 +53,7 @@ export class InvestmentsRepository implements IInvestmentsRepository {
     amountCommitted: number,
     proposedReturn: number,
     conditions?: string,
+    note?: string,
   ) {
     return this.prisma.$transaction(async (tx) => {
       const fundingRequest = await tx.fundingRequest.findUnique({
@@ -98,7 +102,7 @@ export class InvestmentsRepository implements IInvestmentsRepository {
       });
 
       await tx.negotiationOffer.create({
-        data: { investmentId: investment.id, proposedBy: 'INVESTOR', proposedReturn, status: 'PENDING' },
+        data: { investmentId: investment.id, proposedBy: 'INVESTOR', proposedReturn, conditions, note, status: 'PENDING' },
       });
 
       return investment;
@@ -109,6 +113,8 @@ export class InvestmentsRepository implements IInvestmentsRepository {
     investmentId: string,
     proposedBy: 'INVESTOR' | 'PME',
     proposedReturn: number,
+    conditions?: string,
+    note?: string,
   ) {
     return this.prisma.$transaction(async (tx) => {
       const investment = await tx.investment.findUnique({
@@ -145,11 +151,14 @@ export class InvestmentsRepository implements IInvestmentsRepository {
       }
 
       await tx.negotiationOffer.create({
-        data: { investmentId, proposedBy, proposedReturn, status: 'PENDING' },
+        data: { investmentId, proposedBy, proposedReturn, conditions, note, status: 'PENDING' },
       });
 
-      return tx.investment.findUnique({
+      return tx.investment.update({
         where: { id: investmentId },
+        // Les conditions "actuelles" de l'engagement suivent le dernier tour —
+        // seulement si ce tour en précise de nouvelles, sinon elles restent celles d'avant.
+        data: conditions !== undefined ? { conditions } : {},
         include: {
           fundingRequest: {
             include: {
@@ -219,13 +228,72 @@ export class InvestmentsRepository implements IInvestmentsRepository {
     });
   }
 
-  async findByFundingRequestAndInvestor(fundingRequestId: string, investorId: string) {
-    return this.prisma.investment.findFirst({
-      where: { fundingRequestId, investorId },
+  // Abandon unilatéral : contrairement à accept/counter, pas de contrainte de tour —
+  // n'importe quelle partie peut mettre fin à une négociation bloquée à tout moment.
+  async rejectOffer(investmentId: string, rejectedBy: 'INVESTOR' | 'PME') {
+    return this.prisma.$transaction(async (tx) => {
+      const investment = await tx.investment.findUnique({
+        where: { id: investmentId },
+        include: {
+          negotiationOffers: { orderBy: { createdAt: 'desc' }, take: 1 },
+          fundingRequest: {
+            include: {
+              organization: {
+                include: { members: { where: { role: 'OWNER' }, take: 1 } },
+              },
+            },
+          },
+          investor: { select: { id: true, firstName: true, lastName: true } },
+        },
+      });
+
+      if (!investment || investment.status !== 'NEGOTIATING') {
+        throw new ConflictException("Cet engagement n'est pas en négociation.");
+      }
+
+      const lastOffer = investment.negotiationOffers[0];
+      if (lastOffer && lastOffer.status === 'PENDING') {
+        await tx.negotiationOffer.update({
+          where: { id: lastOffer.id },
+          data: { status: 'REJECTED' },
+        });
+      }
+
+      return tx.investment.update({
+        where: { id: investmentId },
+        data: { status: 'REJECTED' },
+        include: {
+          fundingRequest: {
+            include: {
+              organization: {
+                include: { members: { where: { role: 'OWNER' }, take: 1 } },
+              },
+            },
+          },
+          investor: { select: { id: true, firstName: true, lastName: true } },
+        },
+      });
+    });
+  }
+
+  // Une institution peut avoir plusieurs négociations distinctes en parallèle sur le
+  // même dossier (une par collègue qui a engagé — pas de déduplication à la création,
+  // cf. règle métier). On priorise donc l'engagement propre de l'appelant (ownInvestorId) ;
+  // à défaut, celui d'un collègue (investorIds) toujours actif, pour que la page de détail
+  // retrouve au moins la négociation en cours même si c'est un collègue qui l'a initiée ;
+  // sinon le plus récent (ex. après un REJECTED), pour garder du contexte.
+  async findByFundingRequestAndInvestors(fundingRequestId: string, ownInvestorId: string, investorIds: string[]) {
+    const investments = await this.prisma.investment.findMany({
+      where: { fundingRequestId, investorId: { in: investorIds } },
       include: {
         negotiationOffers: { orderBy: { createdAt: 'desc' } },
       },
+      orderBy: { createdAt: 'desc' },
     });
+    if (investments.length === 0) return null;
+    const mine = investments.find((inv) => inv.investorId === ownInvestorId);
+    if (mine) return mine;
+    return investments.find((inv) => !['REJECTED', 'CANCELLED'].includes(inv.status)) ?? investments[0];
   }
 
   async findAllForOrganization(organizationId: string) {

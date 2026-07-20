@@ -5,6 +5,7 @@ import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateCreditProfileDto } from './dto/update-credit-profile.dto';
 import { UpdateBankInfoDto } from './dto/update-bank-info.dto';
 import { UpdateIdentityDto } from './dto/update-identity.dto';
+import { UpdateComplianceDto } from './dto/update-compliance.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -168,5 +169,19 @@ export class OrganizationsController {
   @Patch('admin/:id/suspend')
   suspendOrganization(@Param('id') id: string, @Body() dto: RejectionReasonDto) {
     return this.organizationsService.updateVerificationStatus(id, 'REJECTED', dto.reason);
+  }
+
+  @ApiOperation({
+    summary: '[Admin] Statut de conformité LAB-CFT',
+    description: 'Marque le dirigeant comme personne politiquement exposée (PEP), saisi manuellement à la revue KYC. Alimente le moteur d\'alertes AML de l\'institution investisseuse.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID de l\'organisation' })
+  @ApiResponse({ status: 200, description: 'Statut de conformité mis à jour' })
+  @ApiResponse({ status: 404, description: 'Organisation introuvable' })
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Patch('admin/:id/compliance')
+  updateCompliance(@Param('id') id: string, @Body() dto: UpdateComplianceDto) {
+    return this.organizationsService.updateCompliance(id, dto);
   }
 }
