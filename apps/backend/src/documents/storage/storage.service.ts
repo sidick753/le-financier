@@ -14,16 +14,15 @@ export class StorageService {
   private bucket: string;
 
   constructor() {
-    this.bucket = process.env.MINIO_BUCKET ?? 'le-financier-documents';
-    const useSSL = process.env.MINIO_USE_SSL === 'true';
+    this.bucket = process.env.STORAGE_BUCKET ?? 'le-financier-documents';
     this.client = new S3Client({
-      endpoint: `${useSSL ? 'https' : 'http'}://${process.env.MINIO_ENDPOINT ?? 'localhost'}:${process.env.MINIO_PORT ?? 4300}`,
-      region: 'us-east-1',
+      endpoint: process.env.STORAGE_ENDPOINT ?? 'http://localhost:4300',
+      region: process.env.STORAGE_REGION ?? 'us-east-1',
       credentials: {
-        accessKeyId: process.env.MINIO_ROOT_USER ?? '',
-        secretAccessKey: process.env.MINIO_ROOT_PASSWORD ?? '',
+        accessKeyId: process.env.STORAGE_ACCESS_KEY_ID ?? '',
+        secretAccessKey: process.env.STORAGE_SECRET_ACCESS_KEY ?? '',
       },
-      forcePathStyle: true,
+      forcePathStyle: process.env.STORAGE_FORCE_PATH_STYLE !== 'false',
     });
   }
 
