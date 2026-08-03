@@ -10,6 +10,8 @@ interface OrganizationProfile {
   cashFlowAnnuel: string | null;
   fluxMobileMoneyMensuel: string | null;
   dirigeantExperienceAns: number | null;
+  bankAccountHolder: string | null;
+  bankAccountNumber: string | null;
 }
 
 // Le profil de crédit (onglet "Profil entreprise" des Paramètres) compte une
@@ -36,6 +38,39 @@ export function useOrganizationProfileStatus() {
       .then((p) => {
         const hasFinancials = p.cashFlowAnnuel != null || p.fluxMobileMoneyMensuel != null;
         setIsComplete(!!p.secteurCode && hasFinancials && p.dirigeantExperienceAns != null);
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
+  }, [token, organization]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return { isComplete, isLoading, refresh };
+}
+
+// Informations bancaires (onglet "Informations bancaires" des Paramètres) —
+// nécessaires à la PME pour recevoir les décaissements de la plateforme. Le
+// critère de complétude reprend celui du moteur AML (InstitutionsService.
+// evaluateInvestmentSettlement, alerte BENEFICIAIRE_NON_IDENTIFIE) : titulaire
+// + numéro de compte renseignés.
+export function useBankInfoStatus() {
+  const { token } = useAuth();
+  const { organization } = usePmeData();
+  const [isComplete, setIsComplete] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const refresh = useCallback(() => {
+    if (!token || !organization) {
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    api
+      .get<OrganizationProfile>(`/organizations/${organization.id}`, token)
+      .then((p) => {
+        setIsComplete(!!p.bankAccountHolder && !!p.bankAccountNumber);
       })
       .catch(() => {})
       .finally(() => setIsLoading(false));
