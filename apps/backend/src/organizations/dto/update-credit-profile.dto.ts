@@ -1,5 +1,10 @@
-import { IsString, IsNumber, IsOptional, IsBoolean, Min } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsBoolean, Min, Max } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+
+// Bornes des colonnes @db.Decimal(5, 4) en base (autonomieFinanciere, tauxEndettement,
+// ratioLiquidite, tcamCa3ans, margeBrute) : la partie entière ne tient que sur 1 chiffre,
+// donc |valeur| doit rester < 10 sous peine d'un "numeric field overflow" Postgres.
+const DECIMAL_5_4_MAX = 9.9999;
 
 // Profil de crédit de la PME — attributs de l'entité (secteur, santé financière,
 // dirigeant, équipe/gouvernance/marché), partagés par toutes ses demandes de
@@ -40,26 +45,36 @@ export class UpdateCreditProfileDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
+  @Min(0)
+  @Max(DECIMAL_5_4_MAX)
   autonomieFinanciere?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
+  @Min(0)
+  @Max(DECIMAL_5_4_MAX)
   tauxEndettement?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
+  @Min(0)
+  @Max(DECIMAL_5_4_MAX)
   ratioLiquidite?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
+  @Min(-DECIMAL_5_4_MAX)
+  @Max(DECIMAL_5_4_MAX)
   tcamCa3ans?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsNumber()
+  @Min(-DECIMAL_5_4_MAX)
+  @Max(DECIMAL_5_4_MAX)
   margeBrute?: number;
 
   @ApiPropertyOptional()
