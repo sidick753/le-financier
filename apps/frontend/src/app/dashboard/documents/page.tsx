@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useKycStatus } from "@/lib/use-kyc-status";
 import { usePmeData } from "@/lib/use-pme-data";
@@ -8,7 +8,7 @@ import { api } from "@/lib/api";
 import { UploadZone } from "@/components/upload-zone";
 import { NotifBell } from "@/components/ui/notif-bell";
 import { DocumentPreviewModal } from "@/components/document-preview-modal";
-import { DOCUMENT_TYPE_LABELS, DOCUMENT_STATUS_CONFIG, formatFileSize, type FundingDocument } from "@/lib/document-labels";
+import { DOCUMENT_STATUS_CONFIG, formatFileSize, getDocumentLabel, type FundingDocument } from "@/lib/document-labels";
 
 const STATUS_STYLES: Record<string, { icon: React.ReactNode; label: string; badgeClass: string }> = {
   VALIDATED: {
@@ -68,6 +68,11 @@ export default function DocumentsPage() {
 
   const validated = items.filter((i) => i.status === "VALIDATED").length;
   const total = items.length;
+
+  const kycLabelsByKey = useMemo(
+    () => Object.fromEntries(items.map((i) => [i.key, i.label])),
+    [items],
+  );
 
   return (
     <>
@@ -159,7 +164,7 @@ export default function DocumentsPage() {
                   <div className="min-w-0">
                     <p className="truncate text-[13px] font-medium text-slate-900">{doc.title ?? doc.fileName}</p>
                     <p className="mt-0.5 truncate text-[11px] text-slate-400">
-                      {DOCUMENT_TYPE_LABELS[doc.type] ?? doc.type} · {formatFileSize(doc.sizeBytes)}
+                      {getDocumentLabel(doc, kycLabelsByKey)} · {formatFileSize(doc.sizeBytes)}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">

@@ -1,6 +1,7 @@
 export interface FundingDocument {
   id: string;
   type: string;
+  kycRequirementKey?: string | null;
   fileName: string;
   title?: string | null;
   sizeBytes: number;
@@ -24,6 +25,19 @@ export const DOCUMENT_STATUS_CONFIG: Record<string, { label: string; badgeClass:
   APPROVED:       { label: "Validé",   badgeClass: "bg-green-50 text-green-600" },
   REJECTED:       { label: "Rejeté",   badgeClass: "bg-red-50 text-red-600" },
 };
+
+// Plusieurs exigences KYC (ex: Bilan 2024, Bilan 2025, Attestation fiscale, Plan de
+// trésorerie) partagent le même DocumentType FINANCIAL_STATEMENT — kycRequirementKey
+// (via kycLabelsByKey, ex: { BILAN_2024: "Bilan 2024" }) permet de les distinguer à l'affichage.
+export function getDocumentLabel(
+  doc: Pick<FundingDocument, "type" | "kycRequirementKey">,
+  kycLabelsByKey: Record<string, string>,
+) {
+  if (doc.kycRequirementKey && kycLabelsByKey[doc.kycRequirementKey]) {
+    return kycLabelsByKey[doc.kycRequirementKey];
+  }
+  return DOCUMENT_TYPE_LABELS[doc.type] ?? doc.type;
+}
 
 export function formatFileSize(bytes: number) {
   if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} Mo`;
