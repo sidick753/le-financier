@@ -38,7 +38,12 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       .then(setNotifications)
       .catch(() => {});
 
-    const socket: Socket = io(SOCKET_URL, { auth: { token } });
+    // auth en callback (pas un objet figé) : relu à chaque tentative de reconnexion
+    // automatique de socket.io-client (ex: après un redémarrage du backend), pour éviter
+    // de retenter indéfiniment avec un access token expiré.
+    const socket: Socket = io(SOCKET_URL, {
+      auth: (cb) => cb({ token: sessionStorage.getItem("accessToken") ?? token }),
+    });
 
     socket.on("notification", (notification: Notification) => {
       setNotifications((prev) => [notification, ...prev]);
