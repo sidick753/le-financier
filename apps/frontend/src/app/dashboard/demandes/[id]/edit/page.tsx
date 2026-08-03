@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { UploadZone } from "@/components/upload-zone";
 import { FundingDocument, DOCUMENT_TYPE_LABELS, DOCUMENT_STATUS_CONFIG, formatFileSize } from "@/lib/document-labels";
 import { EDITABLE_STATUSES } from "@/lib/funding-status";
+import { alertError, confirmDialog } from "@/lib/alert";
 
 const CATEGORY_OPTIONS: { value: "FACTURE" | "PRET" | "EQUITY"; label: string }[] = [
   { value: "FACTURE", label: "Financement de facture" },
@@ -48,7 +49,6 @@ export default function EditDemandePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notEditable, setNotEditable] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const [category, setCategory] = useState<"FACTURE" | "PRET" | "EQUITY">("FACTURE");
   const [title, setTitle] = useState("");
@@ -96,13 +96,13 @@ export default function EditDemandePage() {
 
   async function handleDeleteDocument(docId: string) {
     if (!token) return;
-    if (!window.confirm("Supprimer ce document ?")) return;
+    if (!(await confirmDialog("Supprimer ce document ?", { confirmText: "Supprimer" }))) return;
     setDeletingDocId(docId);
     try {
       await api.delete(`/documents/${docId}`, token);
       setDocuments((docs) => docs.filter((d) => d.id !== docId));
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Erreur lors de la suppression.");
+      alertError(err instanceof Error ? err.message : "Erreur lors de la suppression.");
     } finally {
       setDeletingDocId(null);
     }
@@ -111,15 +111,14 @@ export default function EditDemandePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!token || !id) return;
-    setError(null);
 
     const amountRaw = parseInt(amount.replace(/\D/g, ""), 10);
     if (isNaN(amountRaw) || amountRaw < 1) {
-      setError("Montant invalide.");
+      alertError("Montant invalide.");
       return;
     }
     if (!title.trim() || !description.trim()) {
-      setError("Le titre et la description sont obligatoires.");
+      alertError("Le titre et la description sont obligatoires.");
       return;
     }
 
@@ -143,7 +142,7 @@ export default function EditDemandePage() {
       );
       router.push(`/dashboard/demandes/${id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur lors de la mise à jour.");
+      alertError(err instanceof Error ? err.message : "Erreur lors de la mise à jour.");
       setSubmitting(false);
     }
   }
@@ -194,10 +193,6 @@ export default function EditDemandePage() {
 
         {!isLoading && !loadError && !notEditable && (
           <form onSubmit={handleSubmit} className="rounded-[18px] border border-slate-200 bg-white p-7">
-            {error && (
-              <div className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</div>
-            )}
-
             <label className="mb-1.5 block text-[13px] font-semibold text-slate-900">Type de financement</label>
             <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
               {CATEGORY_OPTIONS.map((opt) => (

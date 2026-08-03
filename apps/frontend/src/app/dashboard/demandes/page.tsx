@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { NotifBell } from "@/components/ui/notif-bell";
 import { EDITABLE_STATUSES } from "@/lib/funding-status";
+import { alertError, confirmDialog } from "@/lib/alert";
 
 // ── status config ─────────────────────────────────────────────────────────────
 
@@ -53,13 +54,13 @@ function DemandeCard({ request: r, onDeleted }: { request: FundingRequest; onDel
 
   async function handleDelete() {
     if (!token) return;
-    if (!window.confirm("Supprimer définitivement cette demande ?")) return;
+    if (!(await confirmDialog("Supprimer définitivement cette demande ?", { confirmText: "Supprimer" }))) return;
     setDeleting(true);
     try {
       await api.delete(`/funding-requests/${r.id}`, token);
       onDeleted(r.id);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Erreur lors de la suppression.");
+      alertError(err instanceof Error ? err.message : "Erreur lors de la suppression.");
       setDeleting(false);
     }
   }

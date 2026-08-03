@@ -19,6 +19,7 @@ import {
   TRANSPARENCE,
   labelFor,
 } from "@/lib/credit-profile-options";
+import { alertError, alertSuccess, confirmDialog } from "@/lib/alert";
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
@@ -476,8 +477,6 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
   const [counterConditions, setCounterConditions] = useState("");
   const [counterNote, setCounterNote]       = useState("");
   const [isSubmitting, setIsSubmitting]     = useState(false);
-  const [submitError, setSubmitError]       = useState<string | null>(null);
-  const [submitSuccess, setSubmitSuccess]   = useState<string | null>(null);
 
   const [isFavorited, setIsFavorited]       = useState(false);
   const [favLoading, setFavLoading]         = useState(false);
@@ -539,10 +538,8 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
   }, [id, token]);
 
   async function handleEngage() {
-    setSubmitError(null);
-    setSubmitSuccess(null);
     if (!investAmount || !proposedReturn) {
-      setSubmitError("Veuillez saisir un montant et un taux.");
+      alertError("Veuillez saisir un montant et un taux.");
       return;
     }
     setIsSubmitting(true);
@@ -554,18 +551,16 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
         conditions:       conditions.trim() || undefined,
         note:             note.trim() || undefined,
       }, token!);
-      setSubmitSuccess("Votre proposition a été envoyée à la PME.");
+      alertSuccess("Votre proposition a été envoyée à la PME.");
       await refreshEngagement();
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Échec de l'envoi.");
+      alertError(err instanceof Error ? err.message : "Échec de l'envoi.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
   async function handleCounter() {
-    setSubmitError(null);
-    setSubmitSuccess(null);
     if (!engagement || !counterReturn) return;
     setIsSubmitting(true);
     try {
@@ -574,13 +569,13 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
         conditions:     counterConditions.trim() || undefined,
         note:           counterNote.trim() || undefined,
       }, token!);
-      setSubmitSuccess("Contre-proposition envoyée.");
+      alertSuccess("Contre-proposition envoyée.");
       setCounterReturn("");
       setCounterConditions("");
       setCounterNote("");
       await refreshEngagement();
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Échec.");
+      alertError(err instanceof Error ? err.message : "Échec.");
     } finally {
       setIsSubmitting(false);
     }
@@ -588,15 +583,14 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
 
   async function handleReject() {
     if (!engagement) return;
-    if (!window.confirm("Mettre fin à cette négociation ? Cette action est définitive.")) return;
-    setSubmitError(null);
+    if (!(await confirmDialog("Mettre fin à cette négociation ? Cette action est définitive.", { confirmText: "Mettre fin" }))) return;
     setIsSubmitting(true);
     try {
       await api.patch(`/investments/${engagement.id}/reject-offer`, {}, token!);
-      setSubmitSuccess("Négociation close.");
+      alertSuccess("Négociation close.");
       await refreshEngagement();
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Échec.");
+      alertError(err instanceof Error ? err.message : "Échec.");
     } finally {
       setIsSubmitting(false);
     }
@@ -619,15 +613,14 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
   }
 
   async function handleAccept() {
-    setSubmitError(null);
     if (!engagement) return;
     setIsSubmitting(true);
     try {
       await api.patch(`/investments/${engagement.id}/accept-offer`, {}, token!);
-      setSubmitSuccess("Offre acceptée ! Votre engagement est confirmé.");
+      alertSuccess("Offre acceptée ! Votre engagement est confirmé.");
       await refreshEngagement();
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Échec.");
+      alertError(err instanceof Error ? err.message : "Échec.");
     } finally {
       setIsSubmitting(false);
     }
@@ -826,13 +819,6 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
               <p className="mb-4 text-[11px] text-slate-500">
                 Proposez un montant et un taux pour cette opportunité
               </p>
-
-              {submitError && (
-                <div className="mb-3 rounded-[8px] bg-red-50 px-3 py-2 text-[12px] text-red-700">{submitError}</div>
-              )}
-              {submitSuccess && (
-                <div className="mb-3 rounded-[8px] bg-green-50 px-3 py-2 text-[12px] text-green-700">{submitSuccess}</div>
-              )}
 
               {/* COMMITTED */}
               {isCommitted && (

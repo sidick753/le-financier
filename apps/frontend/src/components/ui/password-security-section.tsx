@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAccountProfile } from "@/lib/use-account-profile";
 import { EyeIcon } from "./eye-icon";
 import { INPUT_GRAY } from "./form-styles";
+import { alertError, alertSuccess } from "@/lib/alert";
 
 // Bloc "Changement de mot de passe" — identique pour les 4 rôles (PME_OWNER,
 // INVESTOR, INSTITUTION, ADMIN), tous authentifiés via /auth/change-password.
@@ -15,14 +16,10 @@ export function PasswordSecuritySection() {
   const [confirmerMotDePasse, setConfirmerMotDePasse] = useState("");
   const [showMotDePasseActuel, setShowMotDePasseActuel] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [passwordSuccess, setPasswordSuccess] = useState(false);
 
   async function handleChangePassword() {
-    setPasswordError(null);
-    setPasswordSuccess(false);
     if (nouveauMotDePasse !== confirmerMotDePasse) {
-      setPasswordError("Les deux mots de passe ne correspondent pas.");
+      alertError("Les deux mots de passe ne correspondent pas.");
       return;
     }
     setIsChangingPassword(true);
@@ -31,9 +28,9 @@ export function PasswordSecuritySection() {
       setMotDePasseActuel("");
       setNouveauMotDePasse("");
       setConfirmerMotDePasse("");
-      setPasswordSuccess(true);
+      alertSuccess("Mot de passe mis à jour.");
     } catch (err) {
-      setPasswordError(err instanceof Error ? err.message : "Erreur lors du changement de mot de passe.");
+      alertError(err instanceof Error ? err.message : "Erreur lors du changement de mot de passe.");
     } finally {
       setIsChangingPassword(false);
     }
@@ -79,8 +76,6 @@ export function PasswordSecuritySection() {
             className={INPUT_GRAY}
           />
         </div>
-        {passwordError && <p className="text-xs text-red-600">{passwordError}</p>}
-        {passwordSuccess && <p className="text-xs text-green-600">✓ Mot de passe mis à jour.</p>}
         <button
           onClick={handleChangePassword}
           disabled={isChangingPassword}

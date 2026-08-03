@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { useAdminBadges } from "@/lib/admin-badges-context";
 import { USER_ROLE_CONFIG, KYC_STATUS_CONFIG, formatAdminDate, formatCompactAmount } from "@/lib/admin-ui";
+import { alertError, alertSuccess } from "@/lib/alert";
 
 const INVESTMENT_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   INTERESTED: { label: "Intéressé", className: "bg-gray-100 text-gray-600" },
@@ -72,6 +73,9 @@ export default function AdminInvestisseurDetailPage() {
       await api.patch(`/auth/admin/users/${id}/${action}`, {}, token!);
       load();
       refreshBadges();
+      alertSuccess(action === "verify-kyc" ? "KYC validé." : "KYC rejeté.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec de l'action.");
     } finally {
       setActionLoading(false);
     }

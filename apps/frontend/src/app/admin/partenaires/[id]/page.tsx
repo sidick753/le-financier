@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { useAdminBadges } from "@/lib/admin-badges-context";
 import { KYC_STATUS_CONFIG, formatAdminDate, formatFullAmount } from "@/lib/admin-ui";
+import { alertError, alertSuccess } from "@/lib/alert";
 
 const MEMBER_ROLE_LABELS: Record<string, string> = {
   OWNER: "Propriétaire",
@@ -76,6 +77,9 @@ export default function AdminPartenaireDetailPage() {
       await api.patch(`/auth/admin/users/${userId}/${action}`, {}, token!);
       load();
       refreshBadges();
+      alertSuccess(action === "verify-kyc" ? "KYC validé." : "KYC rejeté.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec de l'action.");
     } finally {
       setActionLoading(false);
     }

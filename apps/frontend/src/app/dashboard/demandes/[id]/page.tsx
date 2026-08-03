@@ -10,6 +10,7 @@ import { DocumentPreviewModal } from "@/components/document-preview-modal";
 import { FundingDocument, DOCUMENT_TYPE_LABELS, DOCUMENT_STATUS_CONFIG, formatFileSize } from "@/lib/document-labels";
 import { EDITABLE_STATUSES } from "@/lib/funding-status";
 import { CLAIM_STATUS_CONFIG } from "@/lib/admin-ui";
+import { alertError, alertSuccess, confirmDialog } from "@/lib/alert";
 
 // ── config ────────────────────────────────────────────────────────────────────
 
@@ -97,7 +98,6 @@ export default function DemandeDetailPage() {
   const [claims, setClaims] = useState<PayoutClaimRow[]>([]);
   const [claimAmount, setClaimAmount] = useState("");
   const [claimSubmitting, setClaimSubmitting] = useState(false);
-  const [claimError, setClaimError] = useState<string | null>(null);
 
   function loadClaims() {
     if (!token || !id) return;
@@ -121,15 +121,15 @@ export default function DemandeDetailPage() {
 
   async function handleRequestClaim() {
     if (!token || !id) return;
-    setClaimError(null);
     setClaimSubmitting(true);
     try {
       const amount = claimAmount.trim() ? Number(claimAmount) : undefined;
       await api.post(`/funding-requests/${id}/claims`, { amount }, token);
       setClaimAmount("");
       loadClaims();
+      alertSuccess("Réclamation envoyée, elle est en attente de validation par un admin.");
     } catch (err) {
-      setClaimError(err instanceof Error ? err.message : "Erreur lors de la réclamation.");
+      alertError(err instanceof Error ? err.message : "Erreur lors de la réclamation.");
     } finally {
       setClaimSubmitting(false);
     }
@@ -137,13 +137,13 @@ export default function DemandeDetailPage() {
 
   async function handleDelete() {
     if (!token || !id) return;
-    if (!window.confirm("Supprimer définitivement cette demande ?")) return;
+    if (!(await confirmDialog("Supprimer définitivement cette demande ?", { confirmText: "Supprimer" }))) return;
     setDeleting(true);
     try {
       await api.delete(`/funding-requests/${id}`, token);
       router.push("/dashboard/demandes");
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Erreur lors de la suppression.");
+      alertError(err instanceof Error ? err.message : "Erreur lors de la suppression.");
       setDeleting(false);
     }
   }
@@ -321,7 +321,6 @@ export default function DemandeDetailPage() {
                     </button>
                   </div>
                 )}
-                {claimError && <p className="mb-3 text-[12px] text-red-600">{claimError}</p>}
 
                 {claims.length > 0 && (
                   <div className="-mx-6 divide-y divide-slate-100 border-t border-slate-100">

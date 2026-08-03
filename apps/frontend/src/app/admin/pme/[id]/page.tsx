@@ -10,6 +10,7 @@ import { DocumentPreviewModal } from "@/components/document-preview-modal";
 import { ScoringSnapshotModal } from "@/components/scoring-snapshot-modal";
 import { ORG_STATUS_CONFIG, formatAdminDate, formatCompactAmount, formatFullAmount, formatFileSize } from "@/lib/admin-ui";
 import { useAdminBadges } from "@/lib/admin-badges-context";
+import { alertError, alertSuccess } from "@/lib/alert";
 import {
   SECTEURS,
   TAILLE_MARCHE,
@@ -151,6 +152,9 @@ export default function AdminPmeDetailPage() {
       await api.patch(`/organizations/admin/${id}/verify`, {}, token!);
       load();
       refreshBadges();
+      alertSuccess("PME validée.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec de la validation.");
     } finally {
       setActionLoading(false);
     }
@@ -163,6 +167,9 @@ export default function AdminPmeDetailPage() {
       setModal(null);
       load();
       refreshBadges();
+      alertSuccess("PME rejetée.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec du rejet.");
     } finally {
       setActionLoading(false);
     }
@@ -175,6 +182,9 @@ export default function AdminPmeDetailPage() {
       setModal(null);
       load();
       refreshBadges();
+      alertSuccess("PME suspendue.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec de la suspension.");
     } finally {
       setActionLoading(false);
     }
@@ -185,6 +195,8 @@ export default function AdminPmeDetailPage() {
     try {
       await api.patch(`/organizations/admin/${id}/compliance`, { dirigeantEstPep: value }, token!);
       load();
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec de la mise à jour.");
     } finally {
       setActionLoading(false);
     }
@@ -195,6 +207,9 @@ export default function AdminPmeDetailPage() {
     try {
       await api.patch(`/documents/admin/${docId}/approve`, {}, token!);
       load();
+      alertSuccess("Document validé.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec de la validation.");
     } finally {
       setDocActionLoading(null);
     }
@@ -207,6 +222,9 @@ export default function AdminPmeDetailPage() {
       await api.patch(`/documents/admin/${docRejectId}/reject`, { reason }, token!);
       setDocRejectId(null);
       load();
+      alertSuccess("Document rejeté.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec du rejet.");
     } finally {
       setDocActionLoading(null);
     }
@@ -217,6 +235,9 @@ export default function AdminPmeDetailPage() {
     try {
       await api.post(`/scoring/compute-organisation/${id}`, {}, token!);
       load();
+      alertSuccess("Score recalculé.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec du recalcul.");
     } finally {
       setScoreLoading(false);
     }

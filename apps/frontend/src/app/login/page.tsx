@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { getPostAuthRedirectPath } from "@/lib/role-redirect";
 import { Logo } from "@/components/logo";
+import { alertError } from "@/lib/alert";
 
 const TEST_ACCOUNTS = [
   { role: "PME",          email: "test@lefinancier.ci",          password: "motdepasse123" },
@@ -22,7 +23,6 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   function fillTestAccount(e: string, p: string) {
@@ -32,13 +32,12 @@ export default function LoginPage() {
 
   async function handleSubmit(ev: FormEvent) {
     ev.preventDefault();
-    setError(null);
     setIsSubmitting(true);
     try {
       const response = await login(email, password);
       router.push(getPostAuthRedirectPath(response.user.role));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Connexion impossible.");
+      alertError(err instanceof Error ? err.message : "Connexion impossible.");
     } finally {
       setIsSubmitting(false);
     }
@@ -67,12 +66,6 @@ export default function LoginPage() {
           <p className="mt-1 mb-7 text-center text-sm text-slate-500">
             Accédez à votre espace LeFinancier
           </p>
-
-          {error && (
-            <div className="mb-5 rounded-[10px] bg-red-50 px-3.5 py-2.5 text-[13px] font-semibold text-red-700">
-              {error}
-            </div>
-          )}
 
           <form onSubmit={handleSubmit} className="space-y-3.5">
             <div>

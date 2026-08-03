@@ -8,6 +8,7 @@ import { useAdminBadges } from "@/lib/admin-badges-context";
 import { RejectReasonModal } from "@/components/reject-reason-modal";
 import { DocumentPreviewModal } from "@/components/document-preview-modal";
 import { formatAdminDate, formatFullAmount } from "@/lib/admin-ui";
+import { alertError, alertSuccess } from "@/lib/alert";
 
 interface PendingPayment {
   id: string;
@@ -70,6 +71,9 @@ export default function AdminRemboursementsPage() {
       await api.patch(`/repayments/payment/${paymentId}/approve`, {}, token!);
       load();
       refreshBadges();
+      alertSuccess("Remboursement validé.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec de la validation.");
     } finally {
       setActionId(null);
     }
@@ -83,6 +87,9 @@ export default function AdminRemboursementsPage() {
       setRejectFor(null);
       load();
       refreshBadges();
+      alertSuccess("Remboursement rejeté.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec du rejet.");
     } finally {
       setActionId(null);
     }
@@ -94,6 +101,9 @@ export default function AdminRemboursementsPage() {
       await api.patch(`/repayments/claims/${claimId}/approve`, {}, token!);
       load();
       refreshBadges();
+      alertSuccess("Réclamation validée.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec de la validation.");
     } finally {
       setClaimActionId(null);
     }
@@ -107,6 +117,9 @@ export default function AdminRemboursementsPage() {
       setRejectClaimFor(null);
       load();
       refreshBadges();
+      alertSuccess("Réclamation rejetée.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec du rejet.");
     } finally {
       setClaimActionId(null);
     }

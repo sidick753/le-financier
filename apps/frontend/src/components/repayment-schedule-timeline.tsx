@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { useRepaymentSchedule } from "@/lib/use-repayment-schedule";
 import { CLAIM_STATUS_CONFIG } from "@/lib/admin-ui";
+import { alertError, alertSuccess } from "@/lib/alert";
 
 // Échéancier de remboursement d'un investissement (dates, statuts, réclamation des
 // fonds déjà validés) — partagé entre le portefeuille investisseur individuel et le
@@ -99,7 +100,6 @@ function ClaimAction({ scheduleId }: { scheduleId: string }) {
   const [claims, setClaims] = useState<RepaymentClaimRow[]>([]);
   const [amount, setAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   function load() {
     if (!token) return;
@@ -114,15 +114,15 @@ function ClaimAction({ scheduleId }: { scheduleId: string }) {
 
   async function submit() {
     if (!token) return;
-    setError(null);
     setSubmitting(true);
     try {
       const value = amount.trim() ? Number(amount) : undefined;
       await api.post(`/repayments/schedule/${scheduleId}/claims`, { amount: value }, token);
       setAmount("");
       load();
+      alertSuccess("Réclamation envoyée, elle est en attente de validation par un admin.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur lors de la réclamation.");
+      alertError(err instanceof Error ? err.message : "Erreur lors de la réclamation.");
     } finally {
       setSubmitting(false);
     }
@@ -167,7 +167,6 @@ function ClaimAction({ scheduleId }: { scheduleId: string }) {
               </button>
             </div>
           )}
-          {error && <p className="mt-1.5 text-[11px] text-red-600">{error}</p>}
 
           {claims.length > 0 && (
             <div className="mt-2 space-y-1.5 border-t border-slate-200 pt-2">

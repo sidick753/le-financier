@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { usePmeData } from "@/lib/use-pme-data";
 import { api } from "@/lib/api";
 import { UploadZone as RealUploadZone } from "@/components/upload-zone";
+import { alertError } from "@/lib/alert";
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
@@ -524,7 +525,6 @@ export default function NewDemandePage() {
   const [data, setData] = useState<FormData>(INITIAL);
   const [submitting, setSubmitting] = useState(false);
   const [creatingDraft, setCreatingDraft] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [docs, setDocs] = useState<Record<string, boolean>>({});
 
@@ -534,21 +534,20 @@ export default function NewDemandePage() {
 
   function validate(): boolean {
     if (step === 1 && !data.amount.trim()) {
-      setError("Veuillez entrer le montant souhaité.");
+      alertError("Veuillez entrer le montant souhaité.");
       return false;
     }
     if (step === 2 && !data.description.trim()) {
-      setError("Veuillez rédiger une description détaillée.");
+      alertError("Veuillez rédiger une description détaillée.");
       return false;
     }
     if (step === 3) {
       const missing = DOC_SLOTS_BY_TYPE[data.type].filter((slot) => slot.required && !docs[slot.key]);
       if (missing.length > 0) {
-        setError(`Document(s) obligatoire(s) manquant(s) : ${missing.map((s) => s.label).join(", ")}.`);
+        alertError(`Document(s) obligatoire(s) manquant(s) : ${missing.map((s) => s.label).join(", ")}.`);
         return false;
       }
     }
-    setError(null);
     return true;
   }
 
@@ -590,12 +589,12 @@ export default function NewDemandePage() {
     // à une demande existante.
     if (step === 2 && !createdId) {
       if (!token || !organization) {
-        setError("Organisation introuvable.");
+        alertError("Organisation introuvable.");
         return;
       }
       const { amountRaw, body } = buildPayload();
       if (isNaN(amountRaw) || amountRaw < 1) {
-        setError("Montant invalide.");
+        alertError("Montant invalide.");
         return;
       }
       setCreatingDraft(true);
@@ -607,7 +606,7 @@ export default function NewDemandePage() {
         );
         setCreatedId(created.id);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Une erreur est survenue.");
+        alertError(err instanceof Error ? err.message : "Une erreur est survenue.");
         setCreatingDraft(false);
         return;
       }
@@ -619,7 +618,6 @@ export default function NewDemandePage() {
   }
 
   function prev() {
-    setError(null);
     setStep((s) => Math.max(s - 1, 1));
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -627,11 +625,10 @@ export default function NewDemandePage() {
   async function submit() {
     if (!token || !organization) return;
     setSubmitting(true);
-    setError(null);
     try {
       const { amountRaw, body } = buildPayload();
       if (isNaN(amountRaw) || amountRaw < 1) {
-        setError("Montant invalide.");
+        alertError("Montant invalide.");
         return;
       }
 
@@ -653,7 +650,7 @@ export default function NewDemandePage() {
 
       router.push("/dashboard/demandes");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Une erreur est survenue.");
+      alertError(err instanceof Error ? err.message : "Une erreur est survenue.");
     } finally {
       setSubmitting(false);
     }
@@ -711,11 +708,6 @@ export default function NewDemandePage() {
               );
             })}
           </div>
-
-          {/* Error */}
-          {error && (
-            <div className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-700">{error}</div>
-          )}
 
           {/* Step content */}
           {step === 1 && <Step1 data={data} onChange={onChange} />}

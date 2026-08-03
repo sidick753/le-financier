@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { usePmeData } from "@/lib/use-pme-data";
 import { api } from "@/lib/api";
@@ -19,6 +20,7 @@ import {
   DROITS_INVESTISSEUR,
   TRANSPARENCE,
 } from "@/lib/credit-profile-options";
+import { alertError, alertSuccess } from "@/lib/alert";
 
 type Tab = "profil" | "entreprise" | "bancaire" | "securite";
 
@@ -81,14 +83,24 @@ function fromPercentInput(v: string): number | undefined {
 }
 
 export default function ParametresPage() {
+  return (
+    <Suspense fallback={null}>
+      <ParametresPageContent />
+    </Suspense>
+  );
+}
+
+function ParametresPageContent() {
   const { token } = useAuth();
   const { organization, isLoading: orgLoading } = usePmeData();
+  const searchParams = useSearchParams();
 
-  const [tab, setTab] = useState<Tab>("profil");
+  const [tab, setTab] = useState<Tab>(
+    TABS.some((t) => t.id === searchParams.get("tab")) ? (searchParams.get("tab") as Tab) : "profil",
+  );
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [sector, setSector] = useState("");
@@ -97,8 +109,6 @@ export default function ParametresPage() {
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [isSavingIdentity, setIsSavingIdentity] = useState(false);
-  const [savedIdentity, setSavedIdentity] = useState(false);
-  const [identityError, setIdentityError] = useState<string | null>(null);
 
   const [secteurCode, setSecteurCode] = useState("");
   const [secteurSaisonnalite, setSecteurSaisonnalite] = useState(false);
@@ -134,8 +144,6 @@ export default function ParametresPage() {
   const [bankAccountNumber, setBankAccountNumber] = useState("");
   const [bankSwiftCode, setBankSwiftCode] = useState("");
   const [isSavingBankInfo, setIsSavingBankInfo] = useState(false);
-  const [savedBankInfo, setSavedBankInfo] = useState(false);
-  const [bankInfoError, setBankInfoError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token || !organization) return;
@@ -185,8 +193,6 @@ export default function ParametresPage() {
   async function handleSaveIdentity() {
     if (!token || !organization) return;
     setIsSavingIdentity(true);
-    setSavedIdentity(false);
-    setIdentityError(null);
     try {
       await api.patch(
         `/organizations/${organization.id}/identity`,
@@ -199,10 +205,9 @@ export default function ParametresPage() {
         },
         token,
       );
-      setSavedIdentity(true);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      alertSuccess("Identité enregistrée.");
     } catch (err) {
-      setIdentityError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement.");
+      alertError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement.");
     } finally {
       setIsSavingIdentity(false);
     }
@@ -211,8 +216,6 @@ export default function ParametresPage() {
   async function handleSave() {
     if (!token || !organization) return;
     setIsSaving(true);
-    setSaved(false);
-    setError(null);
     try {
       await api.patch(
         `/organizations/${organization.id}/credit-profile`,
@@ -245,10 +248,9 @@ export default function ParametresPage() {
         },
         token,
       );
-      setSaved(true);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      alertSuccess("Profil enregistré.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement.");
+      alertError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement.");
     } finally {
       setIsSaving(false);
     }
@@ -257,8 +259,6 @@ export default function ParametresPage() {
   async function handleSaveBankInfo() {
     if (!token || !organization) return;
     setIsSavingBankInfo(true);
-    setSavedBankInfo(false);
-    setBankInfoError(null);
     try {
       await api.patch(
         `/organizations/${organization.id}/bank-info`,
@@ -270,10 +270,9 @@ export default function ParametresPage() {
         },
         token,
       );
-      setSavedBankInfo(true);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      alertSuccess("Informations bancaires enregistrées.");
     } catch (err) {
-      setBankInfoError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement.");
+      alertError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement.");
     } finally {
       setIsSavingBankInfo(false);
     }
@@ -328,11 +327,6 @@ export default function ParametresPage() {
             {error && (
               <div className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
             )}
-            {saved && (
-              <div className="mb-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-700">
-                Profil enregistré.
-              </div>
-            )}
 
             <div className="space-y-6">
               {/* Identité de l'entreprise — jamais demandée à l'inscription, complétée ici.
@@ -343,15 +337,6 @@ export default function ParametresPage() {
                 <p className="mb-4 text-xs text-gray-500">
                   Visible par notre équipe lors de la vérification KYC et sur votre profil auprès des investisseurs.
                 </p>
-
-                {identityError && (
-                  <div className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{identityError}</div>
-                )}
-                {savedIdentity && (
-                  <div className="mb-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-700">
-                    Identité enregistrée.
-                  </div>
-                )}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -654,15 +639,6 @@ export default function ParametresPage() {
               Ces coordonnées sont utilisées pour vous verser les fonds levés (prêts et equity), une
               fois la commission de la plateforme déduite.
             </p>
-
-            {bankInfoError && (
-              <div className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{bankInfoError}</div>
-            )}
-            {savedBankInfo && (
-              <div className="mb-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-700">
-                Informations bancaires enregistrées.
-              </div>
-            )}
 
             <section className="rounded-xl border border-gray-200 bg-white p-6">
               <h2 className="mb-4 text-sm font-semibold text-gray-900">Coordonnées bancaires</h2>

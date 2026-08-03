@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { useNegotiationSocket } from "@/lib/use-negotiation-socket";
 import { usePmeBadges } from "@/lib/pme-badges-context";
+import { alertError, alertSuccess, confirmDialog } from "@/lib/alert";
 
 const STATUS_LABELS: Record<string, { label: string; className: string }> = {
   INTERESTED: { label: "Intéressé", className: "bg-gray-100 text-gray-600" },
@@ -35,8 +36,6 @@ export default function OffresPage() {
   const [counterConditions, setCounterConditions] = useState("");
   const [counterNote, setCounterNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   useNegotiationSocket(() => {
     refresh();
@@ -47,10 +46,8 @@ export default function OffresPage() {
   const otherOffers = offers.filter((o) => o.status !== "NEGOTIATING");
 
   async function handleCounter(offerId: string) {
-    setError(null);
-    setSuccess(null);
     if (!counterReturn) {
-      setError("Saisissez un taux de contre-proposition.");
+      alertError("Saisissez un taux de contre-proposition.");
       return;
     }
     setIsSubmitting(true);
@@ -64,7 +61,7 @@ export default function OffresPage() {
         },
         token!,
       );
-      setSuccess("Contre-proposition envoyée à l'investisseur.");
+      alertSuccess("Contre-proposition envoyée à l'investisseur.");
       setCounterReturn("");
       setCounterConditions("");
       setCounterNote("");
@@ -73,44 +70,40 @@ export default function OffresPage() {
       refreshBadges();
     } catch (err) {
       console.error("[handleCounter]", err);
-      setError(err instanceof Error ? err.message : "Échec de la contre-proposition.");
+      alertError(err instanceof Error ? err.message : "Échec de la contre-proposition.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
   async function handleReject(offerId: string) {
-    if (!window.confirm("Mettre fin à cette négociation ? Cette action est définitive.")) return;
-    setError(null);
-    setSuccess(null);
+    if (!(await confirmDialog("Mettre fin à cette négociation ? Cette action est définitive.", { confirmText: "Mettre fin" }))) return;
     setIsSubmitting(true);
     try {
       await api.patch(`/investments/${offerId}/reject-offer`, {}, token!);
-      setSuccess("Négociation close.");
+      alertSuccess("Négociation close.");
       setSelectedOffer(null);
       refresh();
       refreshBadges();
     } catch (err) {
       console.error("[handleReject]", err);
-      setError(err instanceof Error ? err.message : "Échec.");
+      alertError(err instanceof Error ? err.message : "Échec.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
   async function handleAccept(offerId: string) {
-    setError(null);
-    setSuccess(null);
     setIsSubmitting(true);
     try {
       await api.patch(`/investments/${offerId}/accept-offer`, {}, token!);
-      setSuccess("Offre acceptée — l'engagement est maintenant confirmé.");
+      alertSuccess("Offre acceptée — l'engagement est maintenant confirmé.");
       setSelectedOffer(null);
       refresh();
       refreshBadges();
     } catch (err) {
       console.error("[handleAccept]", err);
-      setError(err instanceof Error ? err.message : "Échec de l'acceptation.");
+      alertError(err instanceof Error ? err.message : "Échec de l'acceptation.");
     } finally {
       setIsSubmitting(false);
     }
@@ -129,15 +122,6 @@ export default function OffresPage() {
           )}
         </p>
       </div>
-
-      {error && (
-        <div className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-      )}
-      {success && (
-        <div className="mb-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-700">
-          {success}
-        </div>
-      )}
 
       {/* Offres en négociation — action requise */}
       {negotiatingOffers.length > 0 && (

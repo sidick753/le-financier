@@ -3,6 +3,7 @@
 import { useGainsData } from "@/lib/use-gains-data";
 import { useSortableRows } from "@/lib/use-sortable-rows";
 import { SortableTh } from "@/components/ui/sortable-th";
+import { alertInfo } from "@/lib/alert";
 
 const NATURE_LABELS: Record<string, string> = {
   INTEREST: "Intérêts",
@@ -238,7 +239,7 @@ export default function GainsPage() {
           Les revenus de crowdlending sont soumis à l&apos;IRPP. Consultez votre conseiller fiscal.
         </p>
         <button
-          onClick={() => alert("Génération du relevé fiscal à venir.")}
+          onClick={() => alertInfo("Génération du relevé fiscal à venir.")}
           className="mt-4 flex items-center gap-2 rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
         >
           ⬇ Télécharger relevé fiscal

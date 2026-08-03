@@ -2,6 +2,7 @@
 
 import { useState, useRef, DragEvent, ChangeEvent } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { alertError } from "@/lib/alert";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4201";
 const MAX_SIZE_MB = 50;
@@ -29,25 +30,22 @@ export function UploadZone({
   const { token } = useAuth();
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const titleMissing = requireTitle && !title.trim();
 
   async function uploadFile(file: File) {
-    setError(null);
-
     if (titleMissing) {
-      setError("Veuillez indiquer un titre pour ce document.");
+      alertError("Veuillez indiquer un titre pour ce document.");
       return;
     }
     if (file.size > MAX_SIZE_MB * 1024 * 1024) {
-      setError(`Le fichier dépasse ${MAX_SIZE_MB} Mo.`);
+      alertError(`Le fichier dépasse ${MAX_SIZE_MB} Mo.`);
       return;
     }
     if (!ALLOWED_TYPES.includes(file.type)) {
-      setError("Format non autorisé. Utilisez PDF, JPG, PNG ou WEBP.");
+      alertError("Format non autorisé. Utilisez PDF, JPG, PNG ou WEBP.");
       return;
     }
 
@@ -79,7 +77,7 @@ export function UploadZone({
       onUploaded();
       setTitle("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Échec de l'upload.");
+      alertError(err instanceof Error ? err.message : "Échec de l'upload.");
     } finally {
       setIsUploading(false);
     }
@@ -89,7 +87,7 @@ export function UploadZone({
     e.preventDefault();
     setIsDragging(false);
     if (titleMissing) {
-      setError("Veuillez indiquer un titre avant d'ajouter un fichier.");
+      alertError("Veuillez indiquer un titre avant d'ajouter un fichier.");
       return;
     }
     const file = e.dataTransfer.files?.[0];
@@ -118,7 +116,6 @@ export function UploadZone({
           {isUploading ? "Envoi..." : "Uploader"}
         </button>
         <input ref={inputRef} type="file" className="hidden" onChange={handleFileChange} />
-        {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
       </div>
     );
   }
@@ -133,7 +130,7 @@ export function UploadZone({
           <input
             type="text"
             value={title}
-            onChange={(e) => { setTitle(e.target.value); setError(null); }}
+            onChange={(e) => setTitle(e.target.value)}
             placeholder="Ex. Bilan comptable 2025"
             className="h-[42px] w-full rounded-[10px] border border-slate-200 px-3.5 text-[13px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
           />
@@ -167,7 +164,6 @@ export function UploadZone({
         </button>
         <input ref={inputRef} type="file" className="hidden" onChange={handleFileChange} />
       </div>
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
     </div>
   );
 }

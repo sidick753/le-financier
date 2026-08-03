@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { getPostAuthRedirectPath } from "@/lib/role-redirect";
 import { Logo } from "@/components/logo";
+import { alertError } from "@/lib/alert";
 
 type Role = "pme" | "investisseur" | "banque";
 
@@ -87,7 +88,6 @@ export default function RegisterPage() {
   const [pwdMatch, setPwdMatch]           = useState<boolean | null>(null);
   const [errors, setErrors]               = useState<Record<string, boolean>>({});
 
-  const [submitError, setSubmitError]     = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting]   = useState(false);
 
   const emailTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -169,7 +169,6 @@ export default function RegisterPage() {
     setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) return;
 
-    setSubmitError(null);
     setIsSubmitting(true);
     try {
       const phoneValue = phone.trim() || undefined;
@@ -195,7 +194,7 @@ export default function RegisterPage() {
       }
       router.push(getPostAuthRedirectPath(response.user.role));
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Inscription impossible.");
+      alertError(err instanceof Error ? err.message : "Inscription impossible.");
     } finally {
       setIsSubmitting(false);
     }
@@ -226,12 +225,6 @@ export default function RegisterPage() {
           <p className="mt-1 mb-5 text-center text-[13px] text-slate-500">
             Choisissez votre type de compte pour commencer
           </p>
-
-          {submitError && (
-            <div className="mb-4 rounded-[10px] bg-red-50 px-3.5 py-2.5 text-[13px] font-semibold text-red-700">
-              {submitError}
-            </div>
-          )}
 
           {/* Onglets primaires */}
           <div className="mb-4 grid grid-cols-2 gap-1 rounded-[10px] bg-slate-100 p-1">

@@ -9,6 +9,7 @@ import { useAdminBadges } from "@/lib/admin-badges-context";
 import { RejectReasonModal } from "@/components/reject-reason-modal";
 import { DocumentPreviewModal } from "@/components/document-preview-modal";
 import { FUNDING_STATUS_CONFIG, CLAIM_STATUS_CONFIG, formatAdminDate, formatFullAmount, formatFileSize } from "@/lib/admin-ui";
+import { alertError, alertSuccess } from "@/lib/alert";
 
 const CATEGORY_LABELS: Record<string, string> = {
   FACTURE: "Affacturage",
@@ -125,6 +126,9 @@ export default function AdminOpportuniteDetailPage() {
       await api.patch(`/funding-requests/${id}/approve`, {}, token!);
       load();
       refreshBadges();
+      alertSuccess("Opportunité approuvée.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec de l'approbation.");
     } finally {
       setActionLoading(false);
     }
@@ -137,6 +141,9 @@ export default function AdminOpportuniteDetailPage() {
       setShowRejectModal(false);
       load();
       refreshBadges();
+      alertSuccess("Opportunité rejetée.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec du rejet.");
     } finally {
       setActionLoading(false);
     }
@@ -148,6 +155,9 @@ export default function AdminOpportuniteDetailPage() {
       await api.patch(`/funding-requests/${id}/cancel`, {}, token!);
       load();
       refreshBadges();
+      alertSuccess("Opportunité suspendue.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec de la suspension.");
     } finally {
       setActionLoading(false);
     }
@@ -159,6 +169,9 @@ export default function AdminOpportuniteDetailPage() {
       await api.patch(`/funding-requests/${id}/reactivate`, {}, token!);
       load();
       refreshBadges();
+      alertSuccess("Opportunité réactivée.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec de la réactivation.");
     } finally {
       setActionLoading(false);
     }
@@ -170,6 +183,9 @@ export default function AdminOpportuniteDetailPage() {
       await api.patch(`/funding-requests/claims/${claimId}/approve`, {}, token!);
       load();
       refreshBadges();
+      alertSuccess("Réclamation validée.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec de la validation.");
     } finally {
       setClaimActionId(null);
     }
@@ -183,6 +199,9 @@ export default function AdminOpportuniteDetailPage() {
       setRejectClaimFor(null);
       load();
       refreshBadges();
+      alertSuccess("Réclamation rejetée.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec du rejet.");
     } finally {
       setClaimActionId(null);
     }
@@ -193,6 +212,9 @@ export default function AdminOpportuniteDetailPage() {
     try {
       await api.patch(`/investments/${investmentId}/settlement/approve`, {}, token!);
       load();
+      alertSuccess("Preuve de virement validée.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec de la validation.");
     } finally {
       setSettlementActionId(null);
     }
@@ -205,6 +227,9 @@ export default function AdminOpportuniteDetailPage() {
       await api.patch(`/investments/${rejectSettlementFor}/settlement/reject`, { reason }, token!);
       setRejectSettlementFor(null);
       load();
+      alertSuccess("Preuve de virement rejetée.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec du rejet.");
     } finally {
       setSettlementActionId(null);
     }
