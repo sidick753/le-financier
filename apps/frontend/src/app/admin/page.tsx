@@ -250,7 +250,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Reporting BCEAO */}
-      <div className="mt-4 rounded-xl border border-gray-200 bg-white p-5">
+      {/* <div className="mt-4 rounded-xl border border-gray-200 bg-white p-5">
         <div className="mb-4 flex items-center justify-between">
           <p className="text-sm font-semibold text-gray-900">
             Reporting Réglementaire BCEAO
@@ -319,7 +319,7 @@ export default function AdminDashboardPage() {
           Le suivi automatique des obligations réglementaires BCEAO sera
           disponible dans une prochaine version.
         </p>
-      </div>
+      </div> */}
     </div>
   );
 }
