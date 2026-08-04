@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { useInvestorData } from "@/lib/use-investor-data";
 import { NotifBell } from "@/components/ui/notif-bell";
+import { formatCompactAmount } from "@/lib/admin-ui";
 
 // ── constants ────────────────────────────────────────────────────────────────
 
@@ -26,13 +27,6 @@ const DONUT_CONFIG: Record<string, { label: string; hex: string; dotClass: strin
 };
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-
-function fmtCompact(v: string | number) {
-  const n = Number(v);
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(0)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
-  return n.toLocaleString("fr-FR");
-}
 
 function fmtFull(v: string | number) {
   return `${Number(v).toLocaleString("fr-FR")} F CFA`;
@@ -192,7 +186,7 @@ export default function InvestorDashboardPage() {
               </svg>
             </div>
             <p className="text-[28px] font-extrabold leading-none tracking-tight text-slate-900">
-              {isLoading ? "…" : fmtCompact(totalCommitted)}
+              {isLoading ? "…" : formatCompactAmount(totalCommitted)}
             </p>
             <p className="mt-1.5 text-[11px] text-slate-400">{fmtFull(totalCommitted)}</p>
           </div>
@@ -337,7 +331,7 @@ export default function InvestorDashboardPage() {
                   <div className="mb-3 grid grid-cols-3 gap-3">
                     <div>
                       <p className="text-[10px] font-medium text-slate-400">Montant</p>
-                      <p className="text-[13px] font-bold text-slate-900">{fmtCompact(opp.amountRequested)}</p>
+                      <p className="text-[13px] font-bold text-slate-900">{formatCompactAmount(Number(opp.amountRequested))}</p>
                     </div>
                     <div>
                       <p className="text-[10px] font-medium text-slate-400">Rendement</p>

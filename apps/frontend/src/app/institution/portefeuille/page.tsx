@@ -6,18 +6,13 @@ import { NotifBell } from "@/components/ui/notif-bell";
 import { useSortableRows } from "@/lib/use-sortable-rows";
 import { SortableTh } from "@/components/ui/sortable-th";
 import { ScheduleTimeline } from "@/components/repayment-schedule-timeline";
+import { formatCompactAmount } from "@/lib/admin-ui";
 
 const CATEGORY_LABELS: Record<string, string> = {
   FACTURE: "Affacturage",
   PRET: "Prêt MLT",
   EQUITY: "Equity",
 };
-
-function formatAmount(v: number) {
-  if (v >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(1)} Md`;
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(0)} M`;
-  return `${(v / 1_000).toFixed(0)} K`;
-}
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
@@ -124,8 +119,8 @@ export default function InstitutionPortefeuillePage() {
         {/* 4 KPI */}
       <div className="mb-6 grid grid-cols-4 gap-4">
         {[
-          { label: "Capital investi", value: `${formatAmount(totalDeployed)} FCFA`, hint: `${totalDeployed.toLocaleString("fr-FR")} F CFA`, icon: "🏛️" },
-          { label: "Valeur actuelle", value: `${formatAmount(estimatedValue)} FCFA`, hint: `+${formatAmount(estimatedValue - totalDeployed)} FCFA`, green: true, icon: "📈" },
+          { label: "Capital investi", value: `${formatCompactAmount(totalDeployed)} FCFA`, hint: `${totalDeployed.toLocaleString("fr-FR")} F CFA`, icon: "🏛️" },
+          { label: "Valeur actuelle", value: `${formatCompactAmount(estimatedValue)} FCFA`, hint: `+${formatCompactAmount(estimatedValue - totalDeployed)} FCFA`, green: true, icon: "📈" },
           { label: "Rendement moyen", value: `${avgReturn.toFixed(1)}%`, hint: "", icon: "📊" },
           { label: "Positions actives", value: String(activeInvestments.length), hint: "+1 ce mois", icon: "✓" },
         ].map((kpi) => (
@@ -146,7 +141,7 @@ export default function InstitutionPortefeuillePage() {
 
       {/* Graphique évolution */}
       <div className="mb-4 rounded-xl border border-gray-200 bg-white p-5">
-        <p className="mb-4 text-sm font-semibold text-gray-900">
+        <p className="mb-4 text-base font-semibold text-gray-900">
           Évolution des encours (M FCFA)
         </p>
         <BarChart data={monthlyData} />
@@ -155,7 +150,7 @@ export default function InstitutionPortefeuillePage() {
       {/* Tableau positions */}
       <div className="rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-sm font-semibold text-gray-900">Positions en portefeuille</p>
+          <p className="text-base font-semibold text-gray-900">Positions en portefeuille</p>
           <p className="text-xs text-gray-400">Cliquez sur une ligne pour le détail</p>
         </div>
         {isLoading && <p className="p-5 text-sm text-gray-400">Chargement...</p>}
@@ -213,12 +208,12 @@ export default function InstitutionPortefeuillePage() {
                           {CATEGORY_LABELS[inv.fundingRequest.category] ?? inv.fundingRequest.category}
                         </td>
                         <td className="px-5 py-3 text-right text-xs font-medium text-gray-900">
-                          {formatAmount(capital)} FCFA
+                          {formatCompactAmount(capital)} FCFA
                         </td>
                         <td className="px-5 py-3 text-right text-xs">
-                          <p className="font-medium text-gray-900">{formatAmount(estimatedVal)} FCFA</p>
+                          <p className="font-medium text-gray-900">{formatCompactAmount(estimatedVal)} FCFA</p>
                           {gain > 0 && (
-                            <p className="text-green-600">+{formatAmount(gain)} M</p>
+                            <p className="text-green-600">+{formatCompactAmount(gain)} FCFA</p>
                           )}
                         </td>
                         <td className="px-5 py-3 text-center text-xs font-bold text-green-600">

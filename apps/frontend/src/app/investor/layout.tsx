@@ -26,7 +26,7 @@ export default function InvestorLayout({ children }: { children: React.ReactNode
 
   return (
     <NotificationsProvider>
-      <div className="flex min-h-screen bg-slate-50">
+      <div className="flex h-screen bg-slate-50">
         <InvestorSidebar />
         <main className="ml-64 flex-1 overflow-y-auto">{children}</main>
       </div>

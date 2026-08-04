@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { NotifBell } from "@/components/ui/notif-bell";
 import { useSortableRows } from "@/lib/use-sortable-rows";
 import { SortableTh } from "@/components/ui/sortable-th";
+import { formatCompactAmount } from "@/lib/admin-ui";
 
 const CATEGORY_LABELS: Record<string, string> = {
   FACTURE: "Affacturage",
@@ -41,12 +42,6 @@ const ALERT_TONE_CLASSNAMES: Record<AlertTone, { box: string; text: string; acti
   yellow: { box: "border-yellow-200 bg-yellow-50", text: "text-yellow-800", action: "text-yellow-700" },
   blue: { box: "border-blue-200 bg-blue-50", text: "text-blue-800", action: "text-blue-700" },
 };
-
-function formatAmount(v: number) {
-  if (v >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(1)} Md`;
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(0)} M`;
-  return `${(v / 1_000).toFixed(0)} K`;
-}
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
@@ -201,7 +196,7 @@ export default function InstitutionOverviewPage() {
       <div className="mb-6 grid grid-cols-4 gap-4">
         <KpiCard
           label="Encours déployés"
-          value={isLoading ? "…" : `${formatAmount(totalDeployed)} FCFA`}
+          value={isLoading ? "…" : `${formatCompactAmount(totalDeployed)} FCFA`}
           hint={`${totalDeployed.toLocaleString("fr-FR")} F CFA`}
           icon="🏛️"
         />
@@ -241,7 +236,7 @@ export default function InstitutionOverviewPage() {
         {/* Pipeline récent */}
         <div className="col-span-2 rounded-xl border border-gray-200 bg-white">
           <div className="flex items-center justify-between border-b border-gray-100 p-5">
-            <p className="text-sm font-semibold text-gray-900">Pipeline récent</p>
+            <p className="text-base font-semibold text-gray-900">Pipeline récent</p>
             <button
               onClick={() => router.push("/institution/deal-flow")}
               className="text-xs text-brand-700 hover:underline"
@@ -293,7 +288,7 @@ export default function InstitutionOverviewPage() {
                           {CATEGORY_LABELS[inv.fundingRequest.category] ?? inv.fundingRequest.category}
                         </td>
                         <td className="px-5 py-3 text-right text-xs font-medium text-gray-900">
-                          {formatAmount(Number(inv.amountCommitted))} FCFA
+                          {formatCompactAmount(Number(inv.amountCommitted))} FCFA
                         </td>
                         <td className="px-5 py-3 text-center">
                           {report?.grade ? (
@@ -325,7 +320,7 @@ export default function InstitutionOverviewPage() {
         <div className="space-y-4">
           {/* Répartition encours */}
           <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <p className="mb-4 text-sm font-semibold text-gray-900">Répartition encours</p>
+            <p className="mb-4 text-base font-semibold text-gray-900">Répartition encours</p>
             {Object.keys(byCategory).length === 0 ? (
               <p className="text-xs text-gray-400">Aucun encours actif.</p>
             ) : (
@@ -360,7 +355,7 @@ export default function InstitutionOverviewPage() {
 
           {/* Accès rapide */}
           <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <p className="mb-3 text-sm font-semibold text-gray-900">Accès rapide</p>
+            <p className="mb-3 text-base font-semibold text-gray-900">Accès rapide</p>
             <div className="space-y-2">
               {[
                 {
@@ -405,7 +400,7 @@ export default function InstitutionOverviewPage() {
 
       {/* Activité récente */}
       <div className="mt-4 rounded-xl border border-gray-200 bg-white p-5">
-        <p className="mb-4 text-sm font-semibold text-gray-900">Activité récente</p>
+        <p className="mb-4 text-base font-semibold text-gray-900">Activité récente</p>
         {investments.length === 0 ? (
           <p className="text-sm text-gray-400">Aucune activité récente.</p>
         ) : (
@@ -418,7 +413,7 @@ export default function InstitutionOverviewPage() {
                 <div>
                   <p className="text-xs font-medium text-gray-900">
                     Engagement sur {inv.fundingRequest.organization.legalName} —{" "}
-                    {CATEGORY_LABELS[inv.fundingRequest.category]} {formatAmount(Number(inv.amountCommitted))} FCFA
+                    {CATEGORY_LABELS[inv.fundingRequest.category]} {formatCompactAmount(Number(inv.amountCommitted))} FCFA
                   </p>
                   <p className="text-xs text-gray-400">{formatDate(inv.createdAt)}</p>
                 </div>

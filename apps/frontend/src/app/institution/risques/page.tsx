@@ -295,7 +295,7 @@ function RisquesPageContent() {
 
           <div className="rounded-xl border border-gray-200 bg-white">
             <div className="border-b border-gray-100 p-5">
-              <p className="text-sm font-semibold text-gray-900">Alertes AML / LAB-CFT</p>
+              <p className="text-base font-semibold text-gray-900">Alertes AML / LAB-CFT</p>
             </div>
             {isLoading && <p className="p-5 text-sm text-gray-400">Chargement...</p>}
             {!isLoading && amlAlerts.length === 0 && (

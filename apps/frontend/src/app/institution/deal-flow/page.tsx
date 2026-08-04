@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useInstitutionData, gradeToRisk, isRecentlyCreated, GRADE_CLASSNAMES, RISK_CLASSNAMES } from "@/lib/use-institution-data";
 import { useRouter } from "next/navigation";
 import { NotifBell } from "@/components/ui/notif-bell";
+import { formatCompactAmount } from "@/lib/admin-ui";
 
 const CATEGORY_LABELS: Record<string, string> = {
   FACTURE: "Affacturage",
@@ -16,12 +17,6 @@ const STATUS_DEAL_FLOW: Record<string, { label: string; className: string }> = {
   new: { label: "Nouveau", className: "bg-green-100 text-green-700" },
   available: { label: "Disponible", className: "bg-blue-100 text-blue-700" },
 };
-
-function formatAmount(v: number) {
-  if (v >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(1)} Md`;
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(0)}M`;
-  return `${(v / 1_000).toFixed(0)}K`;
-}
 
 export default function DealFlowPage() {
   const { opportunities, investments, isLoading } = useInstitutionData();
@@ -162,7 +157,7 @@ export default function DealFlowPage() {
               <div className="mb-4 grid grid-cols-3 gap-2 text-center">
                 <div>
                   <p className="text-xs text-gray-400">Montant</p>
-                  <p className="text-sm font-bold text-gray-900">{formatAmount(requested)}M</p>
+                  <p className="text-sm font-bold text-gray-900">{formatCompactAmount(requested)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-400">Rendement</p>

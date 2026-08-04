@@ -9,6 +9,7 @@ import { NotifBell } from "@/components/ui/notif-bell";
 import { KycAlertBanner } from "@/components/kyc-alert-banner";
 import { CompanyProfileAlertBanner } from "@/components/company-profile-alert-banner";
 import { BankInfoAlertBanner } from "@/components/bank-info-alert-banner";
+import { formatCompactAmount } from "@/lib/admin-ui";
 
 const OFFER_STATUS: Record<string, { label: string; cls: string }> = {
   INTERESTED:            { label: "Intéressé",       cls: "bg-slate-100 text-slate-600" },
@@ -20,13 +21,6 @@ const OFFER_STATUS: Record<string, { label: string; cls: string }> = {
 };
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-
-function fmtAmount(value: string | number) {
-  const n = Number(value);
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
-  return n.toString();
-}
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -273,7 +267,7 @@ export default function DashboardPage() {
           />
           <KpiCard
             label="Montant total"
-            value={isLoading ? "…" : fmtAmount(totalAmount)}
+            value={isLoading ? "…" : formatCompactAmount(totalAmount)}
             sub={totalAmount > 0 ? `${totalAmount.toLocaleString("fr-FR")} F CFA` : "Aucune demande"}
             iconBg="#f0fdf4"
             iconColor="#16a34a"

@@ -4,6 +4,7 @@ import { useGainsData } from "@/lib/use-gains-data";
 import { useSortableRows } from "@/lib/use-sortable-rows";
 import { SortableTh } from "@/components/ui/sortable-th";
 import { alertInfo } from "@/lib/alert";
+import { formatCompactAmount } from "@/lib/admin-ui";
 
 const NATURE_LABELS: Record<string, string> = {
   INTEREST: "Intérêts",
@@ -16,12 +17,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   PRET: "Prêt",
   EQUITY: "Equity",
 };
-
-function formatAmount(value: number) {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace(".0", "")}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(0)}K`;
-  return value.toLocaleString("fr-FR");
-}
 
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleDateString("fr-FR", {
@@ -72,24 +67,27 @@ export default function GainsPage() {
   });
 
   return (
-    <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Gains & Revenus</h1>
-        <p className="text-sm text-gray-500">
-          Historique de vos revenus et prochaines échéances
-        </p>
-      </div>
+    <>
+      <header className="sticky top-0 z-10 flex h-[60px] items-center border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
+        <div>
+          <p className="text-[15px] font-black tracking-tight text-gray-900">Gains & Revenus</p>
+          <p className="text-xs text-gray-500">
+            Historique de vos revenus et prochaines échéances
+          </p>
+        </div>
+      </header>
 
+      <div className="p-8">
       {/* 6 stats */}
       <div className="mb-6 grid grid-cols-6 gap-3">
         <StatCard
           label="Revenus totaux"
-          value={isLoading ? "…" : `${formatAmount(totalRevenues)} FCFA`}
+          value={isLoading ? "…" : `${formatCompactAmount(totalRevenues)} FCFA`}
           icon="💼"
         />
         <StatCard
           label="Revenus ce mois"
-          value={isLoading ? "…" : `${formatAmount(revenuesThisMonth)} FCFA`}
+          value={isLoading ? "…" : `${formatCompactAmount(revenuesThisMonth)} FCFA`}
           icon="📈"
           green={revenuesThisMonth > 0}
         />
@@ -99,7 +97,7 @@ export default function GainsPage() {
             isLoading
               ? "…"
               : nextDue
-                ? `${formatAmount(Number(nextDue.amountDue))} FCFA`
+                ? `${formatCompactAmount(Number(nextDue.amountDue))} FCFA`
                 : "—"
           }
           hint={nextDue ? formatDate(nextDue.dueDate) : "Aucune à venir"}
@@ -120,7 +118,7 @@ export default function GainsPage() {
         />
         <StatCard
           label={`Gains cumulés ${currentYear}`}
-          value={isLoading ? "…" : `${formatAmount(totalInterests)} FCFA`}
+          value={isLoading ? "…" : `${formatCompactAmount(totalInterests)} FCFA`}
           icon="✅"
           green={totalInterests > 0}
         />
@@ -129,7 +127,7 @@ export default function GainsPage() {
       <div className="grid grid-cols-3 gap-4">
         {/* Graphique revenus mensuels */}
         <div className="col-span-2 rounded-xl border border-gray-200 bg-white p-5">
-          <p className="mb-4 text-sm font-semibold text-gray-900">
+          <p className="mb-4 text-base font-semibold text-gray-900">
             Revenus mensuels {currentYear}
           </p>
           {isLoading ? (
@@ -141,7 +139,7 @@ export default function GainsPage() {
 
         {/* Prochaines échéances */}
         <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <p className="mb-4 text-sm font-semibold text-gray-900">Prochaines échéances</p>
+          <p className="mb-4 text-base font-semibold text-gray-900">Prochaines échéances</p>
           {isLoading && <p className="text-xs text-gray-400">Chargement...</p>}
           {!isLoading && upcoming.length === 0 && (
             <p className="text-xs text-gray-400">Aucune échéance à venir.</p>
@@ -170,7 +168,7 @@ export default function GainsPage() {
       {/* Historique des paiements */}
       <div className="mt-4 rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-sm font-semibold text-gray-900">Historique des paiements</p>
+          <p className="text-base font-semibold text-gray-900">Historique des paiements</p>
         </div>
 
         {!isLoading && payments.length === 0 && (
@@ -228,7 +226,7 @@ export default function GainsPage() {
 
       {/* Résumé fiscal */}
       <div className="mt-4 rounded-xl border border-gray-200 bg-white p-5">
-        <p className="mb-1 text-sm font-semibold text-gray-900">Résumé fiscal {currentYear}</p>
+        <p className="mb-1 text-base font-semibold text-gray-900">Résumé fiscal {currentYear}</p>
         <p className="mb-3 text-xs text-gray-500">
           Revenus imposables {currentYear} (à ce jour)
         </p>
@@ -245,7 +243,8 @@ export default function GainsPage() {
           ⬇ Télécharger relevé fiscal
         </button>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 
