@@ -10,6 +10,7 @@ import { UsersModule } from '../users/users.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { InstitutionsModule } from '../institutions/institutions.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     OrganizationsModule,
     InstitutionsModule,
     NotificationsModule,
+    MailModule,
     PassportModule,
     JwtModule.registerAsync({
       useFactory: (config: ConfigService) => ({

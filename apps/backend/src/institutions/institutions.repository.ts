@@ -23,6 +23,24 @@ export class InstitutionsRepository {
     return members.map((m) => m.userId);
   }
 
+  // KYC qui fait foi pour un membre agissant dans une négociation : celui du OWNER
+  // si membre d'une institution — l'institution agit comme une seule entité (cf.
+  // project_institution_representation_fix), donc c'est son identité à elle qui doit
+  // être vérifiée, pas celle de l'analyste qui a cliqué. Sinon (investisseur
+  // indépendant), le sien propre.
+  async findRepresentativeKycStatus(userId: string) {
+    const membership = await this.prisma.institutionMember.findUnique({ where: { userId } });
+    if (!membership) {
+      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { kycStatus: true } });
+      return user?.kycStatus ?? null;
+    }
+    const owner = await this.prisma.institutionMember.findFirst({
+      where: { institutionId: membership.institutionId, role: 'OWNER' },
+      include: { user: { select: { kycStatus: true } } },
+    });
+    return owner?.user.kycStatus ?? null;
+  }
+
   async provisionInstitution(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     const name = user ? `${user.firstName} ${user.lastName}` : 'Mon institution';

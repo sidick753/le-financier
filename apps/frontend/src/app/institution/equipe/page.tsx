@@ -101,7 +101,7 @@ export default function EquipePage() {
         {temporaryPassword && (
         <div className="mb-6 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3">
           <p className="text-xs text-orange-800">
-            ⚠ Membre invité. Mot de passe temporaire (communiquez-le hors-ligne, il ne sera plus affiché) :{" "}
+            ⚠ Membre invité — ce mot de passe temporaire lui a aussi été envoyé par email. Il ne sera plus affiché ici ensuite :{" "}
             <span className="font-mono font-semibold">{temporaryPassword}</span>
           </p>
         </div>

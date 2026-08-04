@@ -38,6 +38,15 @@ const STATUS_STYLES: Record<string, { icon: React.ReactNode; label: string; badg
     label: "Manquant",
     badgeClass: "bg-red-50 text-red-600",
   },
+  REJECTED: {
+    icon: (
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+      </svg>
+    ),
+    label: "Rejeté",
+    badgeClass: "bg-red-50 text-red-600",
+  },
 };
 
 export default function DocumentsPage() {
@@ -68,6 +77,10 @@ export default function DocumentsPage() {
 
   const validated = items.filter((i) => i.status === "VALIDATED").length;
   const total = items.length;
+
+  // Les documents en revue/rejetés restent gérés dans la checklist KYC ci-dessus
+  // (avec motif + reupload) — cette liste n'est qu'une archive des documents validés.
+  const visibleDocuments = documents.filter((doc) => doc.status === "APPROVED");
 
   const kycLabelsByKey = useMemo(
     () => Object.fromEntries(items.map((i) => [i.key, i.label])),
@@ -119,13 +132,18 @@ export default function DocumentsPage() {
                     <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${style.badgeClass}`}>
                       {style.icon}
                     </div>
-                    <p className="text-[13px] font-medium text-slate-800">{item.label}</p>
+                    <div>
+                      <p className="text-[13px] font-medium text-slate-800">{item.label}</p>
+                      {item.status === "REJECTED" && item.rejectionReason && (
+                        <p className="mt-0.5 text-[11px] text-red-600">Motif : {item.rejectionReason}</p>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${style.badgeClass}`}>
                       {style.label}
                     </span>
-                    {item.status === "MISSING" && organization && (
+                    {(item.status === "MISSING" || item.status === "REJECTED") && organization && (
                       <UploadZone
                         organizationId={organization.id}
                         documentType={item.documentType}
@@ -141,23 +159,27 @@ export default function DocumentsPage() {
           </div>
         </div>
 
-        {/* Bloc tous les documents — visibles quel que soit leur statut */}
+        {/* Bloc tous les documents — visibles quel que soit leur statut. Les preuves de
+            virement (SETTLEMENT_PROOF) ne sont jamais déposées par la PME mais par
+            l'investisseur : on ne les affiche ici qu'une fois validées, pour ne pas
+            laisser croire à la PME qu'un de ses propres documents a été rejeté. */}
         <div className="mb-5 overflow-hidden rounded-[18px] border border-slate-200 bg-white">
           <div className="border-b border-slate-100 px-5 py-4">
             <p className="text-[13px] font-bold text-slate-900">Mes documents</p>
             <p className="mt-0.5 text-[11px] text-slate-500">
-              Tous les documents déposés pour votre entreprise, quel que soit leur statut de vérification.
+              Documents validés pour votre entreprise. Les documents en revue ou rejetés apparaissent
+              ci-dessus, dans la checklist KYC.
             </p>
           </div>
 
           {isLoadingDocuments && <p className="p-5 text-[13px] text-slate-400">Chargement...</p>}
 
-          {!isLoadingDocuments && documents.length === 0 && (
+          {!isLoadingDocuments && visibleDocuments.length === 0 && (
             <p className="p-5 text-[13px] text-slate-400">Aucun document déposé pour le moment.</p>
           )}
 
           <div className="divide-y divide-slate-100">
-            {documents.map((doc) => {
+            {visibleDocuments.map((doc) => {
               const dcfg = DOCUMENT_STATUS_CONFIG[doc.status] ?? DOCUMENT_STATUS_CONFIG.PENDING_REVIEW;
               return (
                 <div key={doc.id} className="flex items-center justify-between gap-3 px-5 py-3.5">

@@ -8,6 +8,8 @@ import { UpdateComplianceDto } from './dto/update-compliance.dto';
 import { ScoringService } from '../scoring/scoring.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
+const FRONTEND_URL = process.env.FRONTEND_URL ?? '';
+
 @Injectable()
 export class OrganizationsService {
   constructor(
@@ -88,6 +90,8 @@ export class OrganizationsService {
         status === 'VERIFIED'
           ? `${organization.legalName} a été vérifiée avec succès.`
           : `La vérification de ${organization.legalName} a été rejetée : ${rejectionReason ?? 'raison non précisée'}`,
+        `${FRONTEND_URL}/dashboard/parametres`,
+        { email: true, ctaLabel: 'Voir mon organisation' },
       );
     }
 
@@ -138,7 +142,20 @@ export class OrganizationsService {
       throw new ForbiddenException("Vous n'avez pas accès à cette organisation.");
     }
 
-    return this.organizationsRepository.updateBankInfo(id, dto);
+    const updated = await this.organizationsRepository.updateBankInfo(id, dto);
+
+    // Coordonnées bancaires = la destination du décaissement final vers la PME —
+    // exactement la donnée surveillée par le moteur AML (bénéficiaire non identifié).
+    // Un changement non tracé est un vecteur de fraude classique (détournement du
+    // virement) : l'admin doit pouvoir le rapprocher d'une demande légitime.
+    await this.notificationsService.notifyAdmins(
+      'Coordonnées bancaires modifiées',
+      `${organization.legalName} a modifié ses coordonnées bancaires de réception des fonds.`,
+      `${FRONTEND_URL}/admin/pme/${id}`,
+      { email: true, ctaLabel: "Vérifier l'organisation" },
+    );
+
+    return updated;
   }
 
   async updateIdentity(id: string, userId: string, dto: UpdateIdentityDto) {

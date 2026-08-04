@@ -12,9 +12,12 @@ import { UsersRepository } from '../users/users.repository';
 import { OrganizationsRepository } from '../organizations/organizations.repository';
 import { InstitutionsRepository } from '../institutions/institutions.repository';
 import { NotificationsService } from '../notifications/notifications.service';
+import { MailService, renderEmail } from '../mail/mail.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+
+const FRONTEND_URL = process.env.FRONTEND_URL ?? '';
 
 @Injectable()
 export class AuthService {
@@ -23,8 +26,25 @@ export class AuthService {
     private organizationsRepository: OrganizationsRepository,
     private institutionsRepository: InstitutionsRepository,
     private notificationsService: NotificationsService,
+    private mailService: MailService,
     private jwtService: JwtService,
   ) {}
+
+  // Email de bienvenue — pas d'in-app ici : l'utilisateur vient de recevoir ses
+  // tokens et n'a encore jamais vu la cloche de notifications, l'email est le
+  // seul canal qui a du sens à cet instant précis.
+  private async sendWelcomeEmail(email: string, firstName: string) {
+    const title = 'Bienvenue sur LeFinancier';
+    await this.mailService.send(
+      email,
+      title,
+      renderEmail(
+        title,
+        `Bonjour ${firstName}, votre compte a bien été créé. Vous pouvez dès maintenant vous connecter et compléter votre dossier.`,
+        { label: 'Se connecter', url: `${FRONTEND_URL}/login` },
+      ),
+    );
+  }
 
   async registerPmeOwner(dto: RegisterDto) {
     await this.assertEmailAvailable(dto.email);
@@ -46,6 +66,7 @@ export class AuthService {
       { legalName: companyName, registrationNumber, sector: 'Secteur non renseigné', country: 'CI' },
     );
 
+    await this.sendWelcomeEmail(user.email, user.firstName);
     return this.buildAuthResponse(user);
   }
 
@@ -63,6 +84,7 @@ export class AuthService {
       cniNumber: dto.cniNumber,
     });
 
+    await this.sendWelcomeEmail(user.email, user.firstName);
     return this.buildAuthResponse(user);
   }
 
@@ -81,6 +103,7 @@ export class AuthService {
       { name: institutionName, bceaoApprovalNumber: bceaoNumber, country: 'CI' },
     );
 
+    await this.sendWelcomeEmail(user.email, user.firstName);
     return this.buildAuthResponse(user);
   }
 
@@ -161,6 +184,20 @@ export class AuthService {
     // Un changement de mot de passe invalide toutes les sessions existantes.
     await this.usersRepository.revokeAllUserRefreshTokens(userId);
 
+    // Alerte de sécurité — email seul (pas d'in-app : si le mot de passe a été
+    // changé par un tiers malveillant, la victime doit être prévenue même sans
+    // se reconnecter). Pas de lien : évite qu'un email de sécurité ressemble à
+    // une tentative de phishing.
+    const title = 'Mot de passe modifié';
+    await this.mailService.send(
+      user.email,
+      title,
+      renderEmail(
+        title,
+        "Le mot de passe de votre compte LeFinancier vient d'être modifié. Si vous n'êtes pas à l'origine de ce changement, contactez immédiatement le support.",
+      ),
+    );
+
     return { message: 'Mot de passe mis à jour.' };
   }
 
@@ -194,6 +231,8 @@ export class AuthService {
       status === 'VERIFIED'
         ? 'Votre pièce d\'identité a été validée.'
         : `Votre pièce d'identité a été rejetée. Motif : ${reason}. Veuillez la resoumettre.`,
+      undefined,
+      { email: true },
     );
 
     return updated;

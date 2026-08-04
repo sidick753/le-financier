@@ -17,6 +17,23 @@ const ALLOWED_MIME_TYPES = [
   'image/webp',
 ];
 
+const FRONTEND_URL = process.env.FRONTEND_URL ?? '';
+
+// Types de document soumis à une revue KYC admin — les autres (preuve de virement,
+// pièce de litige, pièce jointe libre...) ont leur propre flux de notification
+// dédié ailleurs (ex. InvestmentsService.settle) ou ne sont pas bloquants.
+const KYC_REVIEW_DOCUMENT_TYPES = ['KYC_ID', 'KYC_PROOF_OF_ADDRESS', 'ORGANIZATION_LEGAL', 'FINANCIAL_STATEMENT'];
+
+// Un investisseur ne doit jamais voir un document soumis à revue KYC (RCCM, bilan...)
+// tant qu'un admin ne l'a pas validé — encore moins un document déjà rejeté (potentiellement
+// frauduleux). Les types hors revue KYC (pièce jointe libre, "autre") restent visibles dès
+// le dépôt : personne ne les fait jamais passer par /documents/admin/:id/approve.
+function isInvestorVisibleDocument(doc: { type: string; status: string }): boolean {
+  if (!INVESTOR_VISIBLE_DOCUMENT_TYPES.includes(doc.type)) return false;
+  if (KYC_REVIEW_DOCUMENT_TYPES.includes(doc.type)) return doc.status === 'APPROVED';
+  return true;
+}
+
 @Injectable()
 export class DocumentsService {
   constructor(
@@ -51,8 +68,9 @@ export class DocumentsService {
 
     await this.storageService.upload(storageKey, file.buffer, file.mimetype);
 
+    let document;
     try {
-      return await this.documentsRepository.create({
+      document = await this.documentsRepository.create({
         type: dto.type as any,
         storageKey,
         fileName: file.originalname,
@@ -69,6 +87,23 @@ export class DocumentsService {
       await this.storageService.delete(storageKey).catch(() => {});
       throw err;
     }
+
+    // Un document KYC déposé (ou redéposé après rejet) attend une revue admin —
+    // jusqu'ici l'admin ne le découvrait qu'en allant vérifier manuellement la
+    // checklist d'une PME/d'un investisseur au hasard.
+    if (KYC_REVIEW_DOCUMENT_TYPES.includes(dto.type)) {
+      const link = dto.organizationId
+        ? `${FRONTEND_URL}/admin/pme/${dto.organizationId}`
+        : `${FRONTEND_URL}/admin/investisseurs/${uploadedById}`;
+      await this.notificationsService.notifyAdmins(
+        'Document à valider',
+        `Un document "${document.title ?? document.fileName}" a été déposé et attend une revue KYC.`,
+        link,
+        { email: true, ctaLabel: 'Examiner le document' },
+      );
+    }
+
+    return document;
   }
 
   async getDownloadUrl(documentId: string, requesterId: string, requesterRole?: string) {
@@ -92,7 +127,7 @@ export class DocumentsService {
         // qu'un investisseur ne puisse pas contourner le filtre de liste en
         // devinant l'id d'un document KYC.
         const isInvestorVisible =
-          INVESTOR_VISIBLE_DOCUMENT_TYPES.includes(document.type) &&
+          isInvestorVisibleDocument(document) &&
           (document.fundingRequestId
             ? await this.isFundingRequestPublic(document.fundingRequestId)
             : document.organizationId
@@ -137,7 +172,11 @@ export class DocumentsService {
     );
     const documents = await this.documentsRepository.findAllByFundingRequestId(fundingRequestId);
     if (isMember) {
-      return documents;
+      // Sens inverse : la preuve de virement d'un investisseur (SETTLEMENT_PROOF) ne
+      // concerne jamais la PME — seul un admin la vérifie (voir InvestmentsService.
+      // settle/approveSettlement). La lui montrer exposerait en plus les coordonnées
+      // bancaires de l'investisseur sans raison, validée ou non.
+      return documents.filter((doc) => doc.type !== 'SETTLEMENT_PROOF');
     }
     // Non-membre (investisseur, institution...) : accès en lecture seule aux
     // documents "métier" (pas KYC) une fois la demande rendue publique — pour
@@ -146,7 +185,7 @@ export class DocumentsService {
     if (!PUBLIC_FUNDING_STATUSES.includes(fundingRequest.status)) {
       throw new ForbiddenException("Vous n'avez pas accès à cette demande.");
     }
-    return documents.filter((doc) => INVESTOR_VISIBLE_DOCUMENT_TYPES.includes(doc.type));
+    return documents.filter(isInvestorVisibleDocument);
   }
 
   // Le RCCM, les bilans, etc. sont versés une fois au niveau de l'organisation
@@ -162,7 +201,7 @@ export class DocumentsService {
     if (!(await this.hasPublicFundingRequest(organizationId))) {
       throw new ForbiddenException("Vous n'avez pas accès à cette organisation.");
     }
-    return documents.filter((doc) => INVESTOR_VISIBLE_DOCUMENT_TYPES.includes(doc.type));
+    return documents.filter(isInvestorVisibleDocument);
   }
 
   private async isFundingRequestPublic(fundingRequestId: string): Promise<boolean> {
@@ -248,10 +287,16 @@ export class DocumentsService {
 
     const approved = await this.documentsRepository.updateStatus(documentId, 'APPROVED');
 
+    // Lien valable seulement côté PME (page /dashboard/documents scoped organisation) —
+    // un document personnel (KYC investisseur/institution sans organizationId) n'a pas
+    // encore d'équivalent frontend, on omet alors le lien plutôt que d'en deviner un faux.
+    const link = document.organizationId ? `${FRONTEND_URL}/dashboard/documents` : undefined;
     await this.notificationsService.notify(
       document.uploadedById,
       'Document validé',
       `Votre document "${document.title ?? document.fileName}" a été validé.`,
+      link,
+      { email: true, ctaLabel: 'Voir mes documents' },
     );
 
     return approved;
@@ -269,10 +314,13 @@ export class DocumentsService {
 
     const rejected = await this.documentsRepository.updateStatus(documentId, 'REJECTED', reason);
 
+    const link = document.organizationId ? `${FRONTEND_URL}/dashboard/documents` : undefined;
     await this.notificationsService.notify(
       document.uploadedById,
       'Document rejeté',
-      `Votre document "${document.title ?? document.fileName}" a été rejeté : ${reason}`,
+      `Votre document "${document.title ?? document.fileName}" a été rejeté : ${reason}. Merci de le resoumettre.`,
+      link,
+      { email: true, ctaLabel: 'Resoumettre mon document' },
     );
 
     return rejected;
@@ -284,16 +332,20 @@ export class DocumentsService {
 
     return requirements.map((req) => {
       const matchingDoc = documents.find((d) => d.kycRequirementKey === req.key);
+      const status = !matchingDoc
+        ? 'MISSING'
+        : matchingDoc.status === 'APPROVED'
+          ? 'VALIDATED'
+          : matchingDoc.status === 'REJECTED'
+            ? 'REJECTED'
+            : 'PENDING_REVIEW';
       return {
         key: req.key,
         label: req.label,
         documentType: req.documentType,
-        status: matchingDoc
-          ? matchingDoc.status === 'APPROVED'
-            ? 'VALIDATED'
-            : 'PENDING_REVIEW'
-          : 'MISSING',
+        status,
         documentId: matchingDoc?.id ?? null,
+        rejectionReason: status === 'REJECTED' ? matchingDoc!.rejectionReason : null,
       };
     });
   }

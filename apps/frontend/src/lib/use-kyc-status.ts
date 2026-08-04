@@ -9,8 +9,9 @@ export interface KycItem {
   key: string;
   label: string;
   documentType: string;
-  status: "VALIDATED" | "PENDING_REVIEW" | "MISSING";
+  status: "VALIDATED" | "PENDING_REVIEW" | "REJECTED" | "MISSING";
   documentId: string | null;
+  rejectionReason: string | null;
 }
 
 export function useKycStatus() {

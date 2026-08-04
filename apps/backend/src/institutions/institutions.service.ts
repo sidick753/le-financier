@@ -7,7 +7,10 @@ import { UpdateInstitutionLimitsDto } from './dto/update-institution-limits.dto'
 import { InviteMemberDto } from './dto/invite-member.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { MailService, renderEmail } from '../mail/mail.service';
 import { AmlAlertType } from '@le-financier/database';
+
+const FRONTEND_URL = process.env.FRONTEND_URL ?? '';
 
 // Seuil par défaut de "transaction inhabituelle" quand l'institution n'a pas
 // déclaré de ticketMax — utilisé par InstitutionsService.evaluateInvestmentSettlement.
@@ -27,6 +30,7 @@ export class InstitutionsService {
   constructor(
     private institutionsRepository: InstitutionsRepository,
     private notificationsService: NotificationsService,
+    private mailService: MailService,
   ) {}
 
   // ── Rattachement institution (auto-provisionné au premier accès) ──────────
@@ -62,6 +66,12 @@ export class InstitutionsService {
       this.institutionsRepository.findMembershipByUserId(userIdB),
     ]);
     return !!a && !!b && a.institutionId === b.institutionId;
+  }
+
+  // Utilisé par InvestmentsService avant qu'une négociation ne soit créée : la PME
+  // ne doit jamais voir une offre venant d'une identité pas encore vérifiée par un admin.
+  async getRepresentativeKycStatus(userId: string) {
+    return this.institutionsRepository.findRepresentativeKycStatus(userId);
   }
 
   // ── Profil ──────────────────────────────────────────────────────────────
@@ -116,7 +126,7 @@ export class InstitutionsService {
     const temporaryPassword = crypto.randomBytes(6).toString('base64url');
     const passwordHash = await bcrypt.hash(temporaryPassword, 12);
 
-    await this.institutionsRepository.createMember(membership.institutionId, {
+    const member = await this.institutionsRepository.createMember(membership.institutionId, {
       email: dto.email,
       firstName: dto.firstName,
       lastName: dto.lastName,
@@ -125,8 +135,28 @@ export class InstitutionsService {
       specialty: dto.specialty,
     });
 
+    // Jusqu'ici le mot de passe temporaire n'existait que dans la réponse HTTP —
+    // le membre invité ne recevait strictement rien. L'email est le seul canal
+    // possible à cet instant : il n'a encore aucune session pour voir une notif
+    // in-app (mais on lui en laisse une, prête à son premier login).
+    const title = 'Invitation à rejoindre votre institution sur LeFinancier';
+    await this.mailService.send(
+      dto.email,
+      title,
+      renderEmail(
+        title,
+        `Bonjour ${dto.firstName}, vous avez été invité(e) à rejoindre votre institution sur LeFinancier. Votre mot de passe temporaire : <strong>${temporaryPassword}</strong>. Connectez-vous puis changez-le dès que possible.`,
+        { label: 'Se connecter', url: `${FRONTEND_URL}/login` },
+      ),
+    );
+    await this.notificationsService.notify(
+      member.userId,
+      'Bienvenue dans votre institution',
+      'Vous avez été ajouté(e) comme membre. Pensez à changer votre mot de passe temporaire.',
+    );
+
     return {
-      message: "Membre invité — communiquez-lui ce mot de passe temporaire (aucun email n'est envoyé automatiquement).",
+      message: 'Membre invité — ses identifiants (mot de passe temporaire) lui ont été envoyés par email.',
       temporaryPassword,
     };
   }
@@ -144,8 +174,23 @@ export class InstitutionsService {
   }
 
   async updateMember(userId: string, memberId: string, dto: UpdateMemberDto) {
-    await this.assertOwnerAndGetMember(userId, memberId);
-    return this.institutionsRepository.updateMember(memberId, dto);
+    const { member } = await this.assertOwnerAndGetMember(userId, memberId);
+    const updated = await this.institutionsRepository.updateMember(memberId, dto);
+
+    // Le membre visé n'apprenait jusqu'ici jamais qu'on venait de changer son rôle
+    // (ex. rétrogradé d'OWNER, ou passé COMPLIANCE) — pertinent surtout parce que
+    // ça change ce qu'il peut faire sur la plateforme dès sa prochaine action.
+    if (dto.role && dto.role !== member.role) {
+      await this.notificationsService.notify(
+        member.userId,
+        'Votre rôle a changé',
+        `Votre rôle au sein de votre institution est désormais : ${dto.role}.`,
+        undefined,
+        { email: true },
+      );
+    }
+
+    return updated;
   }
 
   async removeMember(userId: string, memberId: string) {
@@ -154,6 +199,17 @@ export class InstitutionsService {
       throw new ForbiddenException('Vous ne pouvez pas vous retirer vous-même.');
     }
     await this.institutionsRepository.removeMember(memberId);
+
+    // Le compte utilisateur n'est pas supprimé (seul le rattachement à
+    // l'institution l'est) — encore joignable, donc encore informable.
+    await this.notificationsService.notify(
+      member.userId,
+      'Retrait de votre institution',
+      "Vous avez été retiré(e) de votre institution sur LeFinancier. Contactez son propriétaire pour plus de détails.",
+      undefined,
+      { email: true },
+    );
+
     return { message: 'Membre retiré.' };
   }
 
@@ -255,6 +311,8 @@ export class InstitutionsService {
         detectedAt: new Date(),
       });
 
+      // Email en plus de l'in-app : événement de conformité réglementaire — ne doit
+      // pas dépendre du fait que l'officier conformité soit connecté au dashboard.
       const memberIds = await this.institutionsRepository.findMemberUserIds(membership.institutionId);
       await Promise.all(
         memberIds.map((userId) =>
@@ -262,6 +320,8 @@ export class InstitutionsService {
             userId,
             'Alerte AML/LAB-CFT détectée',
             `${AML_ALERT_LABELS[alertType]} — ${params.organization.legalName} (${params.amountCommitted.toLocaleString('fr-FR')} F CFA).`,
+            `${FRONTEND_URL}/institution/risques`,
+            { email: true, ctaLabel: "Voir l'alerte" },
           ),
         ),
       );
