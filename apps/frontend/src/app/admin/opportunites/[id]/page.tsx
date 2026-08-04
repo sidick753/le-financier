@@ -12,7 +12,7 @@ import { DocumentPreviewModal } from "@/components/document-preview-modal";
 import { ScoringSnapshotModal } from "@/components/scoring-snapshot-modal";
 import { FUNDING_STATUS_CONFIG, CLAIM_STATUS_CONFIG, ORG_STATUS_CONFIG, formatAdminDate, formatFullAmount, formatFileSize } from "@/lib/admin-ui";
 import { DOCUMENT_TYPE_LABELS, DOCUMENT_STATUS_CONFIG } from "@/lib/document-labels";
-import { alertError, alertSuccess } from "@/lib/alert";
+import { alertError, alertSuccess, confirmDialog } from "@/lib/alert";
 import { OrganizationProfileSummary, type OrganizationProfileSummaryData } from "@/components/organization-profile-summary";
 import { NotifBell } from "@/components/ui/notif-bell";
 
@@ -132,6 +132,7 @@ export default function AdminOpportuniteDetailPage() {
   useEffect(load, [id, token]);
 
   async function handleApprove() {
+    if (!(await confirmDialog("Approuver cette opportunité ? Elle deviendra visible par les investisseurs.", { confirmText: "Approuver", danger: false }))) return;
     setActionLoading(true);
     try {
       await api.patch(`/funding-requests/${id}/approve`, {}, token!);
@@ -161,6 +162,7 @@ export default function AdminOpportuniteDetailPage() {
   }
 
   async function handleCancel() {
+    if (!(await confirmDialog("Suspendre cette opportunité ? Elle ne sera plus visible par les investisseurs.", { confirmText: "Suspendre" }))) return;
     setActionLoading(true);
     try {
       await api.patch(`/funding-requests/${id}/cancel`, {}, token!);
@@ -175,6 +177,7 @@ export default function AdminOpportuniteDetailPage() {
   }
 
   async function handleReactivate() {
+    if (!(await confirmDialog("Réactiver cette opportunité ? Elle redeviendra visible par les investisseurs.", { confirmText: "Réactiver", danger: false }))) return;
     setActionLoading(true);
     try {
       await api.patch(`/funding-requests/${id}/reactivate`, {}, token!);
@@ -221,6 +224,7 @@ export default function AdminOpportuniteDetailPage() {
   }
 
   async function handleApproveDoc(docId: string) {
+    if (!(await confirmDialog("Valider ce document ?", { confirmText: "Valider", danger: false }))) return;
     setDocActionId(docId);
     try {
       await api.patch(`/documents/admin/${docId}/approve`, {}, token!);
@@ -249,6 +253,7 @@ export default function AdminOpportuniteDetailPage() {
   }
 
   async function handleApproveSettlement(investmentId: string) {
+    if (!(await confirmDialog("Valider ce virement ? L'engagement sera confirmé et l'échéancier généré.", { confirmText: "Valider", danger: false }))) return;
     setSettlementActionId(investmentId);
     try {
       await api.patch(`/investments/${investmentId}/settlement/approve`, {}, token!);

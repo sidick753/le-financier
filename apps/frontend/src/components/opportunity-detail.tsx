@@ -681,6 +681,7 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
 
   async function handleAccept() {
     if (!engagement) return;
+    if (!(await confirmDialog("Accepter cette offre ? Votre engagement sera définitivement confirmé.", { confirmText: "Accepter", danger: false }))) return;
     setIsSubmitting(true);
     try {
       await api.patch(`/investments/${engagement.id}/accept-offer`, {}, token!);

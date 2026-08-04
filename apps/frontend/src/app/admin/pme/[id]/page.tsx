@@ -12,7 +12,7 @@ import { ORG_STATUS_CONFIG, formatAdminDate, formatCompactAmount, formatFullAmou
 import { getDocumentLabel } from "@/lib/document-labels";
 import type { KycItem } from "@/lib/use-kyc-status";
 import { useAdminBadges } from "@/lib/admin-badges-context";
-import { alertError, alertSuccess } from "@/lib/alert";
+import { alertError, alertSuccess, confirmDialog } from "@/lib/alert";
 import { NotifBell } from "@/components/ui/notif-bell";
 import {
   SECTEURS,
@@ -168,6 +168,7 @@ export default function AdminPmeDetailPage() {
   );
 
   async function handleVerify() {
+    if (!(await confirmDialog("Valider cette PME ?", { confirmText: "Valider", danger: false }))) return;
     setActionLoading(true);
     try {
       await api.patch(`/organizations/admin/${id}/verify`, {}, token!);
@@ -212,6 +213,7 @@ export default function AdminPmeDetailPage() {
   }
 
   async function handleTogglePep(value: boolean) {
+    if (!(await confirmDialog(value ? "Marquer le dirigeant comme PEP ?" : "Retirer le statut PEP du dirigeant ?", { confirmText: "Confirmer" }))) return;
     setActionLoading(true);
     try {
       await api.patch(`/organizations/admin/${id}/compliance`, { dirigeantEstPep: value }, token!);
@@ -224,6 +226,7 @@ export default function AdminPmeDetailPage() {
   }
 
   async function handleApproveDocument(docId: string) {
+    if (!(await confirmDialog("Valider ce document ?", { confirmText: "Valider", danger: false }))) return;
     setDocActionLoading(docId);
     try {
       await api.patch(`/documents/admin/${docId}/approve`, {}, token!);
@@ -252,6 +255,7 @@ export default function AdminPmeDetailPage() {
   }
 
   async function handleRecomputeScore() {
+    if (!(await confirmDialog("Recalculer le score de cette PME ?", { confirmText: "Recalculer", danger: false }))) return;
     setScoreLoading(true);
     try {
       await api.post(`/scoring/compute-organisation/${id}`, {}, token!);

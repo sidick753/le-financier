@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { useAdminBadges } from "@/lib/admin-badges-context";
+import { confirmDialog } from "@/lib/alert";
 import { FUNDING_STATUS_CONFIG, formatAdminDate, formatCompactAmount } from "@/lib/admin-ui";
 import { useSortableRows } from "@/lib/use-sortable-rows";
 import { SortableTh } from "@/components/ui/sortable-th";
@@ -140,6 +141,7 @@ function AdminOpportunitesPageContent() {
   }, [fetchStats]);
 
   async function handleCancel(id: string) {
+    if (!(await confirmDialog("Suspendre cette opportunité ?", { confirmText: "Suspendre" }))) return;
     setActionLoading(id);
     try {
       await api.patch(`/funding-requests/${id}/cancel`, {}, token!);
@@ -152,6 +154,7 @@ function AdminOpportunitesPageContent() {
   }
 
   async function handleReactivate(id: string) {
+    if (!(await confirmDialog("Réactiver cette opportunité ?", { confirmText: "Réactiver", danger: false }))) return;
     setActionLoading(id);
     try {
       await api.patch(`/funding-requests/${id}/reactivate`, {}, token!);

@@ -9,6 +9,7 @@ import { PushNotificationsSection } from "@/components/ui/push-notifications-sec
 import { EyeIcon } from "@/components/ui/eye-icon";
 import { INPUT_GRAY as INPUT } from "@/components/ui/form-styles";
 import { formatAmountInput, parseAmountInput } from "@/lib/admin-ui";
+import { confirmDialog } from "@/lib/alert";
 
 type Tab = "profil" | "institution" | "limites" | "securite";
 
@@ -89,6 +90,7 @@ export default function InstitutionParametresPage() {
   }
 
   async function handleRegenerateKey() {
+    if (!(await confirmDialog("Régénérer la clé API ? L'ancienne clé cessera immédiatement de fonctionner.", { confirmText: "Régénérer" }))) return;
     const plainKey = await regenerateApiKey();
     if (plainKey) {
       setRevealedApiKey(plainKey);

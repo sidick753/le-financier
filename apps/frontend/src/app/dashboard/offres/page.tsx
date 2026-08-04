@@ -125,6 +125,7 @@ function OffresPageContent() {
   }
 
   async function handleAccept(offerId: string) {
+    if (!(await confirmDialog("Accepter cette offre ? L'engagement sera définitivement confirmé.", { confirmText: "Accepter", danger: false }))) return;
     setIsSubmitting(true);
     try {
       await api.patch(`/investments/${offerId}/accept-offer`, {}, token!);
