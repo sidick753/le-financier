@@ -28,6 +28,16 @@ export class DocumentsRepository implements IDocumentsRepository {
     });
   }
 
+  // Autorise l'upload d'une preuve de virement (SETTLEMENT_PROOF) : l'investisseur
+  // n'est jamais membre de l'organisation PME propriétaire de la demande, donc le
+  // contrôle d'accès habituel (isMember) ne peut pas s'appliquer à ce type de document.
+  async hasInvestmentEngagement(fundingRequestId: string, investorIds: string[]) {
+    const count = await this.prisma.investment.count({
+      where: { fundingRequestId, investorId: { in: investorIds } },
+    });
+    return count > 0;
+  }
+
   // Documents rattachés directement à un utilisateur (ex. pièce d'identité
   // d'un investisseur particulier), sans organisation ni demande de financement.
   async findPersonalDocuments(userId: string) {

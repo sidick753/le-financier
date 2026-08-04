@@ -6,7 +6,11 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { useNegotiationSocket } from "@/lib/use-negotiation-socket";
 import { DocumentPreviewModal } from "@/components/document-preview-modal";
+import { UploadZone } from "@/components/upload-zone";
 import { FundingDocument, DOCUMENT_TYPE_LABELS, DOCUMENT_STATUS_CONFIG, formatFileSize } from "@/lib/document-labels";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
+import { glossaryText } from "@/lib/financial-glossary";
+import { formatAmountInput, parseAmountInput } from "@/lib/admin-ui";
 import {
   SECTEURS,
   TAILLE_MARCHE,
@@ -75,9 +79,10 @@ const GARANTIE_TYPE_LABELS: Record<string, string> = {
   aucune:                "Aucune garantie",
 };
 
-// Profil de crédit + identité de l'entreprise — jamais les champs bancaires
-// (bankName/bankAccountHolder/bankAccountNumber/bankSwiftCode), que le backend
-// exclut désormais de cette réponse publique (cf. funding.service.ts).
+// Profil de crédit + identité de l'entreprise — jamais les coordonnées
+// bancaires de la PME, qui restent réservées à l'admin (décaissement/réclamation).
+// Le virement de l'investisseur se fait vers un compte LeFinancier, voir
+// Opportunity.platformBankAccounts ci-dessous.
 interface OpportunityOrganization {
   id: string;
   legalName: string;
@@ -152,6 +157,16 @@ interface OpportunityScoringInput {
   garantieCouverture: string | null;
 }
 
+// Compte LeFinancier vers lequel virer les fonds — jamais un compte PME.
+// Révélé par le backend uniquement une fois l'engagement confirmé.
+interface PlatformBankAccount {
+  id: string;
+  bankName: string;
+  accountHolder: string;
+  accountNumber: string;
+  swiftCode: string | null;
+}
+
 interface Opportunity {
   id: string;
   title: string;
@@ -164,6 +179,7 @@ interface Opportunity {
   currency: string;
   investorMode: "SINGLE_INVESTOR" | "MULTIPLE_INVESTORS";
   hasActiveInvestor: boolean;
+  platformBankAccounts: PlatformBankAccount[];
   publishedAt: string | null;
   closesAt: string | null;
   organization: OpportunityOrganization;
@@ -187,6 +203,8 @@ interface MyEngagement {
   status: string;
   lockedReturn: string | null;
   conditions: string | null;
+  settlementProofId: string | null;
+  settlementRejectionReason: string | null;
   negotiationOffers: NegotiationOffer[];
 }
 
@@ -223,15 +241,16 @@ function labelFromMap(map: Record<string, string>, value: string | null) {
 // ── sub-components ────────────────────────────────────────────────────────────
 
 function StatCard({
-  label, value, icon, valueClass = "text-slate-900",
+  label, value, icon, valueClass = "text-slate-900", hint,
 }: {
-  label: string; value: string; icon: React.ReactNode; valueClass?: string;
+  label: string; value: string; icon: React.ReactNode; valueClass?: string; hint?: string;
 }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3.5">
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mb-2 flex items-center gap-1.5">
         <span className="text-slate-400">{icon}</span>
         <p className="text-[11px] font-medium text-slate-500">{label}</p>
+        {hint && <InfoTooltip text={hint} />}
       </div>
       <p className={`text-[15px] font-bold ${valueClass}`}>{value}</p>
     </div>
@@ -274,10 +293,13 @@ function TabBar({
   );
 }
 
-function Field({ label, value, span2 }: { label: string; value: string; span2?: boolean }) {
+function Field({ label, value, span2, hint }: { label: string; value: string; span2?: boolean; hint?: string }) {
   return (
     <div className={span2 ? "col-span-2" : undefined}>
-      <p className="text-[11px] text-slate-400">{label}</p>
+      <p className="flex items-center gap-1 text-[11px] text-slate-400">
+        {label}
+        {hint && <InfoTooltip text={hint} />}
+      </p>
       <p className="mt-0.5 break-words text-[13px] font-semibold text-slate-900">{value}</p>
     </div>
   );
@@ -345,31 +367,31 @@ function FinanceTab({
         <FieldSection title="Débiteur de la facture">
           <Field label="Nom du débiteur" value={scoringInput.debiteurNom || "—"} />
           <Field label="Type de débiteur" value={labelFromMap(DEBITEUR_TYPE_LABELS, scoringInput.debiteurType)} />
-          <Field label="Solvabilité" value={labelFromMap(DEBITEUR_SOLVABILITE_LABELS, scoringInput.debiteurSolvabilite)} />
+          <Field label="Solvabilité" value={labelFromMap(DEBITEUR_SOLVABILITE_LABELS, scoringInput.debiteurSolvabilite)} hint={glossaryText("solvabilite-debiteur")} />
           <Field label="Échéance de la facture" value={fmtDate(scoringInput.echeanceFactureDate)} />
-          <Field label="Ancienneté de la relation" value={labelFromMap(ANCIENNETE_RELATION_LABELS, scoringInput.ancienneteRelation)} />
+          <Field label="Ancienneté de la relation" value={labelFromMap(ANCIENNETE_RELATION_LABELS, scoringInput.ancienneteRelation)} hint={glossaryText("anciennete-relation")} />
           <Field label="Délai de paiement habituel" value={labelFromMap(DELAI_PAIEMENT_LABELS, scoringInput.delaiPaiementMenu)} />
-          <Field label="Part du plus gros client" value={fmtPercent(scoringInput.partPlusGrosClient)} />
-          <Field label="Taux d'impayés (12 mois)" value={fmtPercent(scoringInput.tauxImpaye12m)} />
+          <Field label="Part du plus gros client" value={fmtPercent(scoringInput.partPlusGrosClient)} hint={glossaryText("part-plus-gros-client")} />
+          <Field label="Taux d'impayés (12 mois)" value={fmtPercent(scoringInput.tauxImpaye12m)} hint={glossaryText("taux-impayes")} />
         </FieldSection>
       )}
 
       {scoringInput && category === "PRET" && (scoringInput.garantieType || scoringInput.garantieCouverture) && (
         <FieldSection title="Garantie">
           <Field label="Type de garantie" value={labelFromMap(GARANTIE_TYPE_LABELS, scoringInput.garantieType)} />
-          <Field label="Taux de couverture" value={fmtPercent(scoringInput.garantieCouverture)} />
+          <Field label="Taux de couverture" value={fmtPercent(scoringInput.garantieCouverture)} hint={glossaryText("couverture-garantie")} />
         </FieldSection>
       )}
 
       <FieldSection title="Santé financière">
-        <Field label="Cash-flow annuel" value={organization.cashFlowAnnuel ? fmtAmount(organization.cashFlowAnnuel) : "—"} />
+        <Field label="Cash-flow annuel" value={organization.cashFlowAnnuel ? fmtAmount(organization.cashFlowAnnuel) : "—"} hint={glossaryText("cash-flow")} />
         <Field label="Flux Mobile Money mensuel" value={organization.fluxMobileMoneyMensuel ? fmtAmount(organization.fluxMobileMoneyMensuel) : "—"} />
-        <Field label="Autonomie financière" value={fmtPercent(organization.autonomieFinanciere)} />
-        <Field label="Taux d'endettement" value={fmtPercent(organization.tauxEndettement)} />
-        <Field label="Ratio de liquidité" value={fmtPercent(organization.ratioLiquidite)} />
-        <Field label="Marge brute" value={fmtPercent(organization.margeBrute)} />
-        <Field label="TCAM CA sur 3 ans" value={fmtPercent(organization.tcamCa3ans)} />
-        <Field label="Runway" value={organization.runwayMois != null ? `${organization.runwayMois} mois` : "—"} />
+        <Field label="Autonomie financière" value={fmtPercent(organization.autonomieFinanciere)} hint={glossaryText("autonomie-financiere")} />
+        <Field label="Taux d'endettement" value={fmtPercent(organization.tauxEndettement)} hint={glossaryText("taux-endettement")} />
+        <Field label="Ratio de liquidité" value={fmtPercent(organization.ratioLiquidite)} hint={glossaryText("ratio-liquidite")} />
+        <Field label="Marge brute" value={fmtPercent(organization.margeBrute)} hint={glossaryText("marge-brute")} />
+        <Field label="TCAM CA sur 3 ans" value={fmtPercent(organization.tcamCa3ans)} hint={glossaryText("tcam")} />
+        <Field label="Runway" value={organization.runwayMois != null ? `${organization.runwayMois} mois` : "—"} hint={glossaryText("runway")} />
         <Field label="Clients actifs" value={organization.nbClientsActifs?.toString() ?? "—"} />
       </FieldSection>
 
@@ -406,19 +428,22 @@ function EntrepriseTab({ organization }: { organization: OpportunityOrganization
 
       <FieldSection title="Équipe, gouvernance & marché">
         <Field label="Taille du marché" value={labelFor(TAILLE_MARCHE, organization.tailleMarche)} />
-        <Field label="Scalabilité" value={labelFor(SCALABILITE, organization.scalabilite)} />
-        <Field label="Avantage concurrentiel (moat)" value={labelFor(MOAT, organization.moat)} />
-        <Field label="Position sur le marché" value={labelFor(PART_MARCHE, organization.partMarcheRelative)} />
+        <Field label="Scalabilité" value={labelFor(SCALABILITE, organization.scalabilite)} hint={glossaryText("scalabilite")} />
+        <Field label="Avantage concurrentiel (moat)" value={labelFor(MOAT, organization.moat)} hint={glossaryText("moat")} />
+        <Field label="Position sur le marché" value={labelFor(PART_MARCHE, organization.partMarcheRelative)} hint={glossaryText("part-marche")} />
         <Field label="Complétude de l'équipe" value={labelFor(COMPLETUDE_EQUIPE, organization.completudeEquipe)} />
         <Field label="Droits investisseurs" value={labelFor(DROITS_INVESTISSEUR, organization.droitsInvestisseur)} />
         <Field label="Transparence financière" value={labelFor(TRANSPARENCE, organization.transparence)} />
-        <Field label="Track record du dirigeant" value={labelFor(TRACK_RECORD, organization.trackRecord)} />
+        <Field label="Track record du dirigeant" value={labelFor(TRACK_RECORD, organization.trackRecord)} hint={glossaryText("track-record")} />
       </FieldSection>
     </div>
   );
 }
 
-function DocumentsTab({ documents, onPreview }: { documents: FundingDocument[]; onPreview: (id: string) => void }) {
+function DocumentsTab({ documents, error, onPreview }: { documents: FundingDocument[]; error: boolean; onPreview: (id: string) => void }) {
+  if (error) {
+    return <p className="text-center text-[12px] text-red-500">Impossible de charger les documents. Réessayez plus tard.</p>;
+  }
   if (documents.length === 0) {
     return <p className="text-center text-[12px] text-slate-400">Aucun document disponible pour cette opportunité.</p>;
   }
@@ -480,9 +505,11 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
 
   const [isFavorited, setIsFavorited]       = useState(false);
   const [favLoading, setFavLoading]         = useState(false);
+  const [isSettling, setIsSettling]         = useState(false);
 
   const [activeTab, setActiveTab] = useState<"finance" | "entreprise" | "documents">("finance");
   const [documents, setDocuments] = useState<FundingDocument[]>([]);
+  const [documentsError, setDocumentsError] = useState(false);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
 
   async function refreshEngagement() {
@@ -519,13 +546,20 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
             // Le RCCM/les bilans vivent au niveau de l'organisation (checklist
             // KYC, versée une seule fois) ; les pièces jointes propres au
             // dossier vivent sur la demande — les deux sources sont
-            // pertinentes pour l'analyse d'un investisseur.
-            const [orgDocs, requestDocs] = await Promise.all([
-              api.get<FundingDocument[]>(`/documents/organization/${opp.organization.id}`, token).catch(() => []),
-              api.get<FundingDocument[]>(`/documents/funding-request/${id}`, token).catch(() => []),
+            // pertinentes pour l'analyse d'un investisseur. Un même document
+            // peut porter à la fois organizationId et fundingRequestId (ex.
+            // pièce jointe à la demande) et donc apparaître dans les deux
+            // réponses — dédoublonné par id ci-dessous.
+            const results = await Promise.allSettled([
+              api.get<FundingDocument[]>(`/documents/organization/${opp.organization.id}`, token),
+              api.get<FundingDocument[]>(`/documents/funding-request/${id}`, token),
             ]);
-            setDocuments([...orgDocs, ...requestDocs]);
-          } catch { /* ignore */ }
+            const merged = results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
+            setDocuments([...new Map(merged.map((d) => [d.id, d])).values()]);
+            setDocumentsError(results.every((r) => r.status === "rejected"));
+          } catch {
+            setDocumentsError(true);
+          }
         }
       } catch {
         setError("Impossible de charger cette opportunité.");
@@ -596,6 +630,20 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
     }
   }
 
+  async function handleProofUploaded(doc: { id: string }) {
+    if (!engagement) return;
+    setIsSettling(true);
+    try {
+      await api.patch(`/investments/${engagement.id}/settle`, { settlementProofId: doc.id }, token!);
+      alertSuccess("Preuve transmise — en attente de validation par notre équipe.");
+      await refreshEngagement();
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec de l'envoi de la preuve.");
+    } finally {
+      setIsSettling(false);
+    }
+  }
+
   async function handleToggleFavorite() {
     if (!token) return;
     setFavLoading(true);
@@ -653,6 +701,7 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
 
   const lastOffer        = engagement?.negotiationOffers?.[0] ?? null;
   const isCommitted      = engagement?.status === "COMMITTED";
+  const isSettlementSubmitted = engagement?.status === "SETTLEMENT_SUBMITTED";
   const isNegotiating    = engagement?.status === "NEGOTIATING";
   const pmeHasBall       = lastOffer?.proposedBy === "PME" && lastOffer?.status === "PENDING";
   const investorWaiting  = lastOffer?.proposedBy === "INVESTOR" && lastOffer?.status === "PENDING";
@@ -662,11 +711,11 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
     ? remaining
     : amountMode === "percent"
       ? Math.round(remaining * (Number(percent || 0) / 100))
-      : Number(amount || 0);
+      : (amount ? parseAmountInput(amount) || 0 : 0);
   const investPercentOfRemaining = isSingleInvestor
     ? 100
     : remaining > 0
-      ? (amountMode === "percent" ? Number(percent || 0) : (Number(amount || 0) / remaining) * 100)
+      ? (amountMode === "percent" ? Number(percent || 0) : ((amount ? parseAmountInput(amount) || 0 : 0) / remaining) * 100)
       : 0;
 
   const gainEstimate  = investAmount && proposedReturn
@@ -729,6 +778,7 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
             label="Rendement proposé"
             value={opportunity.expectedReturn ? `${Number(opportunity.expectedReturn)}%` : "—"}
             valueClass="text-green-600"
+            hint={glossaryText("taux-rendement")}
             icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 6 13.5 20.5 8.5 10.5 1 18" /></svg>}
           />
           <StatCard
@@ -740,6 +790,7 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
             label="Score risque"
             value={scoreReport ? `${Math.round(Number(scoreReport.autoScore))}/100 · ${scoreReport.grade}` : "Non évalué"}
             valueClass={gradeColorClass(scoreReport?.grade)}
+            hint={glossaryText("score-risque")}
             icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>}
           />
         </div>
@@ -784,7 +835,7 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
                   <EntrepriseTab organization={opportunity.organization} />
                 )}
                 {activeTab === "documents" && (
-                  <DocumentsTab documents={documents} onPreview={setPreviewDocId} />
+                  <DocumentsTab documents={documents} error={documentsError} onPreview={setPreviewDocId} />
                 )}
               </div>
             </div>
@@ -795,7 +846,10 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
 
             {/* Évaluation du risque */}
             <div className="rounded-[18px] border border-slate-200 bg-white p-5 text-center">
-              <p className="mb-2 text-[13px] font-bold text-slate-900">Évaluation du risque</p>
+              <p className="mb-2 flex items-center justify-center gap-1 text-[13px] font-bold text-slate-900">
+                Évaluation du risque
+                <InfoTooltip text={glossaryText("score-risque")} />
+              </p>
               {scoreReport ? (
                 <>
                   <p className={`text-[32px] font-extrabold ${gradeColorClass(scoreReport.grade)}`}>
@@ -822,19 +876,112 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
 
               {/* COMMITTED */}
               {isCommitted && (
-                <div className="rounded-[10px] bg-green-50 p-4 text-center">
-                  <svg className="mx-auto mb-2 text-green-600" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  <p className="text-[13px] font-bold text-green-700">Engagement confirmé</p>
-                  <p className="text-[12px] text-green-600">
-                    Taux figé : {Number(engagement?.lockedReturn)}%
-                  </p>
+                <div className="space-y-3">
+                  {/* Bandeau engagement — discret, l'action de virement prime désormais */}
+                  <div className="flex items-center gap-2 rounded-[10px] bg-green-50 px-4 py-2.5">
+                    <svg className="shrink-0 text-green-600" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    <p className="text-[12px] font-semibold text-green-700">
+                      Engagement confirmé · Taux figé {Number(engagement?.lockedReturn)}%
+                    </p>
+                  </div>
                   {engagement?.conditions && (
-                    <p className="mt-2 text-left text-[11px] text-green-700">
+                    <p className="text-[11px] text-slate-500">
                       <span className="font-semibold">Conditions : </span>{engagement.conditions}
                     </p>
                   )}
+
+                  {/* Action requise — virement hors plateforme : mise en évidence forte, */}
+                  {/* coordonnées + dépôt de preuve regroupés dans un seul bloc visible. */}
+                  <div className={`overflow-hidden rounded-[14px] border-2 ${engagement?.settlementRejectionReason ? "border-red-300 bg-red-50" : "border-amber-300 bg-amber-50"}`}>
+                    <div className={`flex items-center gap-2 px-4 py-3 ${engagement?.settlementRejectionReason ? "bg-red-100" : "bg-amber-100"}`}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={engagement?.settlementRejectionReason ? "text-red-700" : "text-amber-700"}>
+                        <path d="M12 9v4M12 17h.01" />
+                        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L14.71 3.86a2 2 0 0 0-3.42 0Z" />
+                      </svg>
+                      <p className={`text-[13px] font-extrabold ${engagement?.settlementRejectionReason ? "text-red-700" : "text-amber-700"}`}>
+                        {engagement?.settlementRejectionReason ? "Preuve rejetée — nouvelle soumission requise" : "Action requise · Virement hors plateforme"}
+                      </p>
+                    </div>
+
+                    <div className="p-4">
+                      {engagement?.settlementRejectionReason && (
+                        <p className="mb-3 rounded-[8px] bg-white p-3 text-[12px] font-medium text-red-700">
+                          Motif du rejet : « {engagement.settlementRejectionReason} »
+                        </p>
+                      )}
+
+                      <p className="mb-3 text-[12px] font-semibold text-slate-800">
+                        Montant à virer :{" "}
+                        <span className="text-[15px] font-extrabold text-slate-900">
+                          {fmtAmount(engagement?.amountCommitted ?? 0)}
+                        </span>
+                      </p>
+
+                      {/* Comptes LeFinancier — jamais un compte PME, configurés par un admin */}
+                      <div className="mb-3 space-y-2">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Vers ce compte LeFinancier</p>
+                        {opportunity.platformBankAccounts.length > 0 ? (
+                          opportunity.platformBankAccounts.map((acc) => (
+                            <div key={acc.id} className="rounded-[8px] bg-white p-3">
+                              <div className="space-y-1.5 text-[12px]">
+                                <div className="flex justify-between">
+                                  <span className="text-slate-500">Banque</span>
+                                  <span className="font-semibold text-slate-900">{acc.bankName}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-500">Titulaire du compte</span>
+                                  <span className="font-semibold text-slate-900">{acc.accountHolder}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-500">Numéro de compte / IBAN</span>
+                                  <span className="font-semibold text-slate-900">{acc.accountNumber}</span>
+                                </div>
+                                {acc.swiftCode && (
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-500">Code SWIFT/BIC</span>
+                                    <span className="font-semibold text-slate-900">{acc.swiftCode}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="rounded-[8px] bg-white p-3">
+                            <p className="text-[12px] text-slate-400">
+                              Aucun compte configuré pour le moment — contactez notre équipe pour connaître la marche à suivre.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Dépôt + soumission explicite de la preuve */}
+                      <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                        Une fois le virement effectué
+                      </p>
+                      {isSettling ? (
+                        <p className="text-[12px] text-slate-500">Finalisation de la soumission...</p>
+                      ) : (
+                        <UploadZone
+                          documentType="SETTLEMENT_PROOF"
+                          fundingRequestId={opportunity.id}
+                          onUploaded={handleProofUploaded}
+                          compact
+                          deferSubmit
+                          submitLabel="Soumettre la preuve"
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SETTLEMENT_SUBMITTED */}
+              {isSettlementSubmitted && (
+                <div className="rounded-[10px] bg-blue-50 p-4 text-center">
+                  <p className="text-[13px] font-bold text-blue-700">Preuve de virement transmise</p>
+                  <p className="mt-1 text-[12px] text-blue-600">En attente de validation par notre équipe.</p>
                 </div>
               )}
 
@@ -1009,8 +1156,7 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
 
                     {isSingleInvestor ? (
                       <input
-                        type="number"
-                        value={remaining}
+                        value={remaining.toLocaleString("fr-FR")}
                         readOnly
                         className="w-full rounded-[8px] border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-500 outline-none"
                       />
@@ -1032,11 +1178,10 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
                     ) : (
                       <>
                         <input
-                          type="number"
+                          inputMode="numeric"
                           placeholder={`Max : ${remaining.toLocaleString("fr-FR")}`}
                           value={amount}
-                          max={remaining}
-                          onChange={(e) => setAmount(e.target.value)}
+                          onChange={(e) => setAmount(formatAmountInput(e.target.value))}
                           className="w-full rounded-[8px] border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-blue-600"
                         />
                         <p className="mt-1 text-[11px] text-slate-400">
@@ -1111,7 +1256,10 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
                         </span>
                       </div>
                       <div className="mt-1 flex justify-between">
-                        <span className="text-slate-500">Gain estimé</span>
+                        <span className="flex items-center gap-1 text-slate-500">
+                          Gain estimé
+                          <InfoTooltip text={glossaryText("gain-estime")} />
+                        </span>
                         <span className="font-semibold text-green-600">{fmtAmount(gainEstimate)}</span>
                       </div>
                       <div className="mt-1 flex justify-between">

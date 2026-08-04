@@ -393,6 +393,20 @@ export class FundingRepository implements IFundingRepository {
     return count > 0;
   }
 
+  // Dévoile les coordonnées bancaires de la PME (cf. findOneWithDetails) une fois
+  // l'engagement confirmé — pas avant, pour ne jamais les exposer à un investisseur
+  // qui ne fait que consulter l'opportunité.
+  async hasCommittedInvestment(fundingRequestId: string, investorIds: string[]): Promise<boolean> {
+    const count = await this.prisma.investment.count({
+      where: {
+        fundingRequestId,
+        investorId: { in: investorIds },
+        status: { in: ['COMMITTED', 'SETTLEMENT_SUBMITTED', 'SETTLED_OFF_PLATFORM'] },
+      },
+    });
+    return count > 0;
+  }
+
   async findOrganizationOwner(organizationId: string) {
     return this.prisma.organizationMember.findFirst({
       where: { organizationId, role: 'OWNER' },

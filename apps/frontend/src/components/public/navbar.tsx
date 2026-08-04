@@ -29,6 +29,7 @@ export function Navbar() {
             <Link href="/comment-ca-marche" className="hover:text-blue-700">Comment ça marche</Link>
             <Link href="/opportunites" className="hover:text-blue-700">Opportunités</Link>
             <Link href="/tarifs" className="hover:text-blue-700">Tarifs</Link>
+            <Link href="/glossaire" className="hover:text-blue-700">Glossaire</Link>
             <Link href="/faq" className="hover:text-blue-700">FAQ</Link>
           </div>
 
@@ -77,6 +78,7 @@ export function Navbar() {
               { href: "/comment-ca-marche", label: "Comment ça marche" },
               { href: "/opportunites", label: "Opportunités" },
               { href: "/tarifs", label: "Tarifs" },
+              { href: "/glossaire", label: "Glossaire" },
               { href: "/faq", label: "FAQ" },
             ].map(({ href, label }) => (
               <Link

@@ -18,6 +18,8 @@ export interface MyInvestment {
   lockedReturn: string | null;
   status: string;
   createdAt: string;
+  settlementProofId: string | null;
+  settlementRejectionReason: string | null;
   negotiationOffers: NegotiationOffer[];
   fundingRequest: {
     id: string;

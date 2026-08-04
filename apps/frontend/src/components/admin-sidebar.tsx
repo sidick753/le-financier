@@ -118,6 +118,18 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
+  {
+    href: "/admin/plateforme",
+    label: "Plateforme",
+    badgeKey: null,
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+        <rect x="3" y="10" width="18" height="10" rx="1.5" />
+        <path d="M7 10V7a5 5 0 0 1 10 0v3" />
+        <line x1="12" y1="14" x2="12" y2="16" />
+      </svg>
+    ),
+  },
 ] satisfies Array<{ href: string; label: string; badgeKey: keyof SidebarBadges | null; icon: React.ReactNode }>;
 
 export function AdminSidebar() {

@@ -13,6 +13,7 @@ import { RepaymentModule } from './repayment/repayment.module';
 import { ScoringModule } from './scoring/scoring.module';
 import { InstitutionsModule } from './institutions/institutions.module';
 import { MailModule } from './mail/mail.module';
+import { PlatformBankAccountsModule } from './platform-bank-accounts/platform-bank-accounts.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { MailModule } from './mail/mail.module';
     ScoringModule,
     InstitutionsModule,
     MailModule,
+    PlatformBankAccountsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -33,6 +33,7 @@ export function Footer() {
             <div className="flex flex-col gap-2.5">
               <Link href="/comment-ca-marche" className="text-sm text-slate-500 transition hover:text-slate-200">Comment ça marche</Link>
               <Link href="/tarifs"            className="text-sm text-slate-500 transition hover:text-slate-200">Tarifs</Link>
+              <Link href="/glossaire"         className="text-sm text-slate-500 transition hover:text-slate-200">Glossaire</Link>
               <Link href="/faq"               className="text-sm text-slate-500 transition hover:text-slate-200">FAQ</Link>
             </div>
           </div>

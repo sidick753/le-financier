@@ -21,4 +21,5 @@ export interface IDocumentsRepository {
   findPersonalDocuments(userId: string): Promise<Document[]>;
   updateStatus(id: string, status: Document['status'], rejectionReason?: string): Promise<Document>;
   delete(id: string): Promise<Document>;
+  hasInvestmentEngagement(fundingRequestId: string, investorIds: string[]): Promise<boolean>;
 }

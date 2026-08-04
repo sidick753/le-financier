@@ -5,6 +5,8 @@ import { OrganizationsRepository } from '../organizations/organizations.reposito
 import { ScoringService } from '../scoring/scoring.service';
 import { DocumentsService } from '../documents/documents.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { InstitutionsService } from '../institutions/institutions.service';
+import { PlatformBankAccountsService } from '../platform-bank-accounts/platform-bank-accounts.service';
 import { CreateFundingRequestDto } from './dto/create-funding-request.dto';
 import { UpdateFundingRequestDto } from './dto/update-funding-request.dto';
 import { FundingAdminFilters } from './interfaces/funding-repository.interface';
@@ -18,6 +20,8 @@ export class FundingService {
     private scoringService: ScoringService,
     private documentsService: DocumentsService,
     private notificationsService: NotificationsService,
+    private institutionsService: InstitutionsService,
+    private platformBankAccountsService: PlatformBankAccountsService,
   ) {}
 
   async create(dto: CreateFundingRequestDto, userId: string) {
@@ -168,15 +172,28 @@ export class FundingService {
         ? await this.fundingRepository.hasActiveInvestor(id)
         : false;
 
-    // Cet endpoint est consultable publiquement (opportunités PUBLISHED) : les
-    // coordonnées bancaires de virement de la PME ne doivent jamais y figurer,
-    // même si elles sont incluses dans la relation `organization` (utilisée en
-    // interne par d'autres services pour le décaissement).
+    // Les coordonnées bancaires de la PME ne doivent JAMAIS être exposées à un
+    // investisseur, quel que soit son statut — seul un admin les consulte, pour
+    // le décaissement/la réclamation (cf. organizations.controller.ts). Ce que
+    // l'investisseur reçoit une fois son engagement confirmé (COMMITTED ou
+    // au-delà), c'est le compte bancaire de la plateforme elle-même, vers
+    // lequel le virement doit être fait.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars -- omission volontaire via destructuring
     const { bankName, bankAccountHolder, bankAccountNumber, bankSwiftCode, ...publicOrganization } =
       fundingRequest.organization;
 
-    return { ...fundingRequest, organization: publicOrganization, hasActiveInvestor };
+    const investorIds = userId ? await this.institutionsService.getFellowMemberUserIds(userId) : [];
+    const hasCommitted =
+      investorIds.length > 0 &&
+      (await this.fundingRepository.hasCommittedInvestment(id, investorIds));
+    const platformBankAccounts = hasCommitted ? await this.platformBankAccountsService.findActive() : [];
+
+    return {
+      ...fundingRequest,
+      organization: publicOrganization,
+      hasActiveInvestor,
+      platformBankAccounts,
+    };
   }
 
   async findOneAdmin(id: string) {

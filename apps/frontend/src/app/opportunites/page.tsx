@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Navbar } from "@/components/public/navbar";
 import { Footer } from "@/components/public/footer";
 import { useOpportunities, type Opportunity } from "@/lib/use-opportunities";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
+import { glossaryText } from "@/lib/financial-glossary";
 
 const CATEGORIES = [
   { value: "",        label: "Tous les types" },
@@ -63,7 +65,10 @@ function OpportunityCard({ opp }: { opp: Opportunity }) {
         <span className="font-medium text-slate-900">{fmtDuration(opp.durationMonths, opp.category)}</span>
       </div>
       <div className="flex items-center justify-between py-[9px] text-sm">
-        <span className="font-medium text-slate-500">Rendement</span>
+        <span className="flex items-center gap-1 font-medium text-slate-500">
+          Rendement
+          <InfoTooltip text={glossaryText("taux-rendement")} />
+        </span>
         <span className="font-medium text-green-600">{opp.expectedReturn ? `${Number(opp.expectedReturn)}%` : "—"}</span>
       </div>
 

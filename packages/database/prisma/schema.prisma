@@ -845,6 +845,25 @@ model Commission {
   @@map("commissions")
 }
 
+// Comptes bancaires de LeFinancier elle-même (pas ceux d'une PME) : c'est vers
+// l'un de ces comptes que les investisseurs virent leurs fonds une fois un
+// engagement confirmé — jamais directement vers le compte de la PME. Gérés
+// exclusivement par un admin ; les coordonnées de la PME (Organization.bank*)
+// ne restent visibles qu'à l'admin, pour le décaissement/la réclamation.
+model PlatformBankAccount {
+  id            String  @id @default(uuid())
+  bankName      String
+  accountHolder String
+  accountNumber String
+  swiftCode     String?
+  isActive      Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("platform_bank_accounts")
+}
+
 enum NotificationChannel {
   EMAIL
   IN_APP

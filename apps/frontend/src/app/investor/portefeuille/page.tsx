@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useInvestorData, type MyInvestment } from "@/lib/use-investor-data";
 import { useNegotiationSocket } from "@/lib/use-negotiation-socket";
+import { useNotifications } from "@/lib/use-notifications";
 import { NotifBell } from "@/components/ui/notif-bell";
 import { ScheduleTimeline } from "@/components/repayment-schedule-timeline";
+import { formatCompactAmount } from "@/lib/admin-ui";
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
@@ -27,12 +29,6 @@ const CATEGORY_DOT: Record<string, string> = {
 };
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-
-function fmtShort(v: number): string {
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1).replace(".0", "")}M`;
-  if (v >= 1_000) return `${(v / 1_000).toFixed(0)}K`;
-  return v.toLocaleString("fr-FR");
-}
 
 function fmtFull(v: number): string {
   return `${v.toLocaleString("fr-FR")} F CFA`;
@@ -120,6 +116,7 @@ function StatusBadge({ status }: { status: string }) {
   const cfg: Record<string, { label: string; cls: string }> = {
     NEGOTIATING:          { label: "En négociation",  cls: "bg-yellow-50 text-yellow-700 border border-yellow-200" },
     COMMITTED:            { label: "En cours",        cls: "bg-amber-50 text-amber-700 border border-amber-200" },
+    SETTLEMENT_SUBMITTED: { label: "Preuve envoyée",  cls: "bg-blue-50 text-blue-700 border border-blue-200" },
     SETTLED_OFF_PLATFORM: { label: "Terminé",         cls: "bg-gray-100 text-gray-500" },
     CANCELLED:            { label: "Annulé",          cls: "bg-red-50 text-red-600" },
     REJECTED:             { label: "Rejeté",          cls: "bg-red-50 text-red-600" },
@@ -144,10 +141,12 @@ function InvestmentCard({ inv }: { inv: MyInvestment }) {
   const gain        = rate != null ? Math.round((amount * rate) / 100) : null;
   const total       = gain != null ? amount + gain : null;
   const isSettled   = inv.status === "SETTLED_OFF_PLATFORM";
+  const isCommitted = inv.status === "COMMITTED";
+  const isSubmitted = inv.status === "SETTLEMENT_SUBMITTED";
   const isNeg       = inv.status === "NEGOTIATING";
   const lastOffer   = inv.negotiationOffers?.[0];
   const pmeHasBall  = isNeg && lastOffer?.proposedBy === "PME" && lastOffer?.status === "PENDING";
-  const nextPayment = dur && rate && !isSettled
+  const nextPayment = dur && rate && !isSettled && !isCommitted && !isSubmitted
     ? Math.round(amount * (1 + rate / 100) / dur)
     : null;
 
@@ -248,6 +247,26 @@ function InvestmentCard({ inv }: { inv: MyInvestment }) {
           </p>
           <p className="text-[12px] font-semibold text-green-700">Reçu : {fmtFull(total)}</p>
         </div>
+      ) : isCommitted ? (
+        <div className={`flex items-center justify-between rounded-lg px-4 py-2.5 ${inv.settlementRejectionReason ? "bg-red-50" : "bg-amber-50"}`}>
+          <p className={`text-[12px] font-medium ${inv.settlementRejectionReason ? "text-red-700" : "text-amber-700"}`}>
+            {inv.settlementRejectionReason
+              ? `Preuve de virement rejetée : « ${inv.settlementRejectionReason} ». Nouvelle soumission requise.`
+              : "En attente de virement hors plateforme"}
+          </p>
+          <a
+            href={`/investor/opportunites/${inv.fundingRequest.id}`}
+            className={`shrink-0 text-[12px] font-medium hover:underline ${inv.settlementRejectionReason ? "text-red-700" : "text-amber-700"}`}
+          >
+            Voir →
+          </a>
+        </div>
+      ) : isSubmitted ? (
+        <div className="rounded-lg bg-blue-50 px-4 py-2.5">
+          <p className="text-[12px] font-medium text-blue-700">
+            Preuve de virement transmise — en attente de validation par notre équipe.
+          </p>
+        </div>
       ) : nextPayment ? (
         <div className="flex items-center justify-between rounded-lg bg-blue-50 px-4 py-2.5">
           <div className="flex items-center gap-2">
@@ -307,7 +326,13 @@ function InvestmentCard({ inv }: { inv: MyInvestment }) {
 
 export default function PortefeuillePage() {
   const { investments, isLoading, error, refresh } = useInvestorData();
+  const { markAllAsReadForLink } = useNotifications();
   useNegotiationSocket(refresh);
+
+  // Efface le badge "nouvellement confirmée" du menu dès que l'investisseur consulte la page.
+  useEffect(() => {
+    markAllAsReadForLink("/investor/portefeuille");
+  }, [markAllAsReadForLink]);
 
   const stats = useMemo(() => {
     const active = investments.filter((i) =>
@@ -392,7 +417,7 @@ export default function PortefeuillePage() {
           <div className="rounded-[18px] border border-slate-200 bg-white px-5 py-4">
             <p className="text-[12px] font-medium text-slate-500">Capital investi</p>
             <p className="mt-2 text-[28px] font-extrabold leading-none tracking-tight text-slate-900">
-              {isLoading ? "…" : fmtShort(stats.totalCommitted)}
+              {isLoading ? "…" : formatCompactAmount(stats.totalCommitted)}
             </p>
             <p className="mt-1 text-[11px] text-slate-400">
               {isLoading ? "" : `${stats.totalCommitted.toLocaleString("fr-FR")} F CFA`}
@@ -420,7 +445,7 @@ export default function PortefeuillePage() {
           <div className="rounded-[18px] border border-slate-200 bg-white px-5 py-4">
             <p className="text-[12px] font-medium text-slate-500">Gains totaux</p>
             <p className="mt-2 text-[28px] font-extrabold leading-none tracking-tight text-green-600">
-              {isLoading ? "…" : stats.totalGains > 0 ? fmtShort(stats.totalGains) : "—"}
+              {isLoading ? "…" : stats.totalGains > 0 ? formatCompactAmount(stats.totalGains) : "—"}
             </p>
             {stats.totalGains > 0 && (
               <p className="mt-1 text-[11px] text-slate-400">
@@ -537,7 +562,7 @@ export default function PortefeuillePage() {
                         </div>
                       </div>
                       <p className="text-[12px] font-semibold text-slate-900">
-                        {payout ? fmtShort(payout) : "—"}
+                        {payout ? formatCompactAmount(payout) : "—"}
                       </p>
                     </div>
                   ))}

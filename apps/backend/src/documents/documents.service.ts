@@ -111,6 +111,13 @@ export class DocumentsService {
     return this.documentsRepository.findAllByOrganizationId(organizationId);
   }
 
+  // Utilisé par l'autorisation d'upload d'une preuve de virement (SETTLEMENT_PROOF) :
+  // l'investisseur n'est jamais membre de l'organisation PME, seul un engagement
+  // sur cette demande (le sien ou celui d'un collègue de la même institution) l'autorise.
+  async hasInvestmentEngagement(fundingRequestId: string, investorIds: string[]) {
+    return this.documentsRepository.hasInvestmentEngagement(fundingRequestId, investorIds);
+  }
+
   async findPersonalDocuments(userId: string) {
     return this.documentsRepository.findPersonalDocuments(userId);
   }

@@ -32,6 +32,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { RejectionReasonDto } from '../common/dto/rejection-reason.dto';
 import { OrganizationsRepository } from '../organizations/organizations.repository';
 import { FundingRepository } from '../funding/funding.repository';
+import { InstitutionsService } from '../institutions/institutions.service';
 
 @ApiTags('Documents')
 @ApiBearerAuth('jwt')
@@ -42,6 +43,7 @@ export class DocumentsController {
     private documentsService: DocumentsService,
     private organizationsRepository: OrganizationsRepository,
     private fundingRepository: FundingRepository,
+    private institutionsService: InstitutionsService,
   ) {}
 
   @ApiOperation({
@@ -117,7 +119,19 @@ Le fichier est stocké dans l'object storage (S3/MinIO).`,
         req.user.id,
       );
       if (!isMember) {
-        throw new ForbiddenException("Vous n'avez pas accès à cette organisation.");
+        // Preuve de virement : c'est l'investisseur (jamais membre de l'organisation
+        // PME) qui dépose ce document — autorisé s'il a un engagement sur cette
+        // demande, lui ou un collègue de la même institution.
+        const isSettlementProofByInvestor =
+          dto.type === 'SETTLEMENT_PROOF' &&
+          !!dto.fundingRequestId &&
+          (await this.documentsService.hasInvestmentEngagement(
+            dto.fundingRequestId,
+            await this.institutionsService.getFellowMemberUserIds(req.user.id),
+          ));
+        if (!isSettlementProofByInvestor) {
+          throw new ForbiddenException("Vous n'avez pas accès à cette organisation.");
+        }
       }
     }
 
@@ -154,7 +168,7 @@ Le fichier est stocké dans l'object storage (S3/MinIO).`,
     return this.documentsService.getDownloadUrl(id, req.user.id, req.user.role);
   }
 
-  @ApiOperation({ summary: 'Statut KYC d\'une organisation', description: 'Retourne la checklist KYC de l\'organisation avec le statut de chaque document requis.' })
+  @ApiOperation({ summary: 'Statut KYC d\'une organisation', description: 'Retourne la checklist KYC de l\'organisation avec le statut de chaque document requis. Accessible aux membres de l\'organisation et à l\'admin (revue KYC).' })
   @ApiParam({ name: 'organizationId', description: 'UUID de l\'organisation' })
   @ApiResponse({ status: 200, description: '{ completed: boolean, items: { key, label, status }[] }' })
   @Get('organization/:organizationId/kyc-status')
@@ -162,12 +176,15 @@ Le fichier est stocké dans l'object storage (S3/MinIO).`,
     @Param('organizationId') organizationId: string,
     @Request() req,
   ) {
-    const isMember = await this.organizationsRepository.isMember(
-      organizationId,
-      req.user.id,
-    );
-    if (!isMember) {
-      throw new ForbiddenException("Vous n'avez pas accès à cette organisation.");
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN';
+    if (!isAdmin) {
+      const isMember = await this.organizationsRepository.isMember(
+        organizationId,
+        req.user.id,
+      );
+      if (!isMember) {
+        throw new ForbiddenException("Vous n'avez pas accès à cette organisation.");
+      }
     }
     return this.documentsService.getKycStatus(organizationId);
   }

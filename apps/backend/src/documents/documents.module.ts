@@ -6,9 +6,10 @@ import { StorageService } from './storage/storage.service';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { FundingModule } from '../funding/funding.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { InstitutionsModule } from '../institutions/institutions.module';
 
 @Module({
-  imports: [OrganizationsModule, forwardRef(() => FundingModule), NotificationsModule],
+  imports: [OrganizationsModule, forwardRef(() => FundingModule), NotificationsModule, InstitutionsModule],
   controllers: [DocumentsController],
   providers: [DocumentsService, DocumentsRepository, StorageService],
   exports: [DocumentsService],
