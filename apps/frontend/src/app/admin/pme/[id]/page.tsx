@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
@@ -9,8 +9,11 @@ import { RejectReasonModal } from "@/components/reject-reason-modal";
 import { DocumentPreviewModal } from "@/components/document-preview-modal";
 import { ScoringSnapshotModal } from "@/components/scoring-snapshot-modal";
 import { ORG_STATUS_CONFIG, formatAdminDate, formatCompactAmount, formatFullAmount, formatFileSize } from "@/lib/admin-ui";
+import { getDocumentLabel } from "@/lib/document-labels";
+import type { KycItem } from "@/lib/use-kyc-status";
 import { useAdminBadges } from "@/lib/admin-badges-context";
 import { alertError, alertSuccess } from "@/lib/alert";
+import { NotifBell } from "@/components/ui/notif-bell";
 import {
   SECTEURS,
   TAILLE_MARCHE,
@@ -101,6 +104,7 @@ interface OrganizationDetail {
   documents: Array<{
     id: string;
     type: string;
+    kycRequirementKey: string | null;
     fileName: string;
     title: string | null;
     sizeBytes: number;
@@ -133,10 +137,11 @@ export default function AdminPmeDetailPage() {
   const [snapshotReportId, setSnapshotReportId] = useState<string | null>(null);
   const [docActionLoading, setDocActionLoading] = useState<string | null>(null);
   const [docRejectId, setDocRejectId] = useState<string | null>(null);
+  const [kycItems, setKycItems] = useState<KycItem[]>([]);
 
   function load() {
     if (!token) return;
-    setIsLoading(true);
+    if (!org) setIsLoading(true);
     api
       .get<OrganizationDetail>(`/organizations/admin/${id}`, token)
       .then(setOrg)
@@ -145,6 +150,22 @@ export default function AdminPmeDetailPage() {
   }
 
   useEffect(load, [id, token]);
+
+  useEffect(() => {
+    if (!token || !id) return;
+    api
+      .get<KycItem[]>(`/documents/organization/${id}/kyc-status`, token)
+      .then(setKycItems)
+      .catch(() => {});
+  }, [id, token]);
+
+  // Plusieurs exigences KYC (Bilan N-2, Bilan N-1, Attestation fiscale...) partagent le
+  // même DocumentType FINANCIAL_STATEMENT — kycRequirementKey permet de les distinguer
+  // à l'affichage (cf. getDocumentLabel), sinon elles apparaissent toutes identiques.
+  const kycLabelsByKey = useMemo(
+    () => Object.fromEntries(kycItems.map((i) => [i.key, i.label])),
+    [kycItems],
+  );
 
   async function handleVerify() {
     setActionLoading(true);
@@ -256,29 +277,32 @@ export default function AdminPmeDetailPage() {
   const pmeReport = org.scoringReports.find((r) => r.product === "ORGANISATION");
 
   return (
-    <div className="p-8">
-      <button
-        onClick={() => router.push("/admin/pme")}
-        className="mb-4 text-xs font-medium text-gray-500 hover:text-brand-700"
-      >
-        ← Retour à la liste des PME
-      </button>
-
-      {/* Header */}
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <div className="mb-1 flex items-center gap-3">
-            <h1 className="text-2xl font-semibold text-gray-900">{org.legalName}</h1>
-            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${config.className}`}>
-              {config.label}
-            </span>
+    <>
+      <header className="sticky top-0 z-10 flex h-[60px] items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
+        <div className="flex min-w-0 items-center gap-3">
+          <button
+            onClick={() => router.push("/admin/pme")}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] text-slate-400 transition hover:bg-slate-50 hover:text-slate-900"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="19" y1="12" x2="5" y2="12" />
+              <polyline points="12 19 5 12 12 5" />
+            </svg>
+          </button>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="truncate text-[15px] font-black tracking-tight text-gray-900">{org.legalName}</p>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${config.className}`}>
+                {config.label}
+              </span>
+            </div>
+            <p className="truncate text-xs text-gray-500">
+              RCCM {org.registrationNumber} · {org.sector} · Inscrite le {formatAdminDate(org.createdAt)}
+            </p>
           </div>
-          <p className="text-sm text-gray-500">
-            RCCM {org.registrationNumber} · {org.sector} · Inscrite le {formatAdminDate(org.createdAt)}
-          </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex shrink-0 gap-2">
           {org.verificationStatus === "PENDING" && (
             <>
               <button
@@ -315,8 +339,11 @@ export default function AdminPmeDetailPage() {
               Réactiver
             </button>
           )}
+          <NotifBell href="/admin/notifications" />
         </div>
-      </div>
+      </header>
+
+      <div className="p-8">
 
       {org.rejectionReason && (
         <div className="mb-6 rounded-xl border border-red-100 bg-red-50 p-4">
@@ -336,7 +363,7 @@ export default function AdminPmeDetailPage() {
       {/* Coordonnées bancaires — utilisées pour le versement des fonds levés */}
       <div className="mb-6 rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-sm font-semibold text-gray-900">Coordonnées bancaires</p>
+          <p className="text-base font-semibold text-gray-900">Coordonnées bancaires</p>
         </div>
         <div className="grid grid-cols-4 gap-4 p-5">
           <div>
@@ -362,7 +389,7 @@ export default function AdminPmeDetailPage() {
           critère commun au scoring de chaque demande de financement (FACTURE/PRET/EQUITY). */}
       <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-sm font-semibold text-gray-900">Score PME indépendant</p>
+          <p className="text-base font-semibold text-gray-900">Score PME indépendant</p>
           <div className="flex items-center gap-3">
             {pmeReport && (
               <button
@@ -431,16 +458,30 @@ export default function AdminPmeDetailPage() {
           <Field label="Antécédents du dirigeant" value={org.dirigeantAntecedents || "—"} span2 />
           <div>
             <p className="text-xs text-gray-500">Personne politiquement exposée (PEP)</p>
-            <label className="mt-1 flex items-center gap-2 text-sm font-medium text-gray-900">
-              <input
-                type="checkbox"
-                checked={org.dirigeantEstPep}
-                disabled={actionLoading}
-                onChange={(e) => handleTogglePep(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-brand-700 focus:ring-brand-700"
-              />
-              {org.dirigeantEstPep ? "Oui" : "Non"}
-            </label>
+            <div className="mt-1 flex items-center gap-4 text-sm font-medium text-gray-900">
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="dirigeantEstPep"
+                  checked={org.dirigeantEstPep === true}
+                  disabled={actionLoading}
+                  onChange={() => handleTogglePep(true)}
+                  className="h-4 w-4 border-gray-300 text-brand-700 focus:ring-brand-700"
+                />
+                Oui
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="dirigeantEstPep"
+                  checked={org.dirigeantEstPep === false}
+                  disabled={actionLoading}
+                  onChange={() => handleTogglePep(false)}
+                  className="h-4 w-4 border-gray-300 text-brand-700 focus:ring-brand-700"
+                />
+                Non
+              </label>
+            </div>
             {org.dirigeantEstPep && (
               <p className="mt-1 text-[11px] text-amber-600">Déclenche une alerte AML à chaque virement validé.</p>
             )}
@@ -462,7 +503,7 @@ export default function AdminPmeDetailPage() {
         {/* Membres */}
         <div className="rounded-xl border border-gray-200 bg-white">
           <div className="border-b border-gray-100 p-5">
-            <p className="text-sm font-semibold text-gray-900">Membres</p>
+            <p className="text-base font-semibold text-gray-900">Membres</p>
           </div>
           <div className="divide-y divide-gray-100">
             {org.members.length === 0 && (
@@ -487,7 +528,7 @@ export default function AdminPmeDetailPage() {
         {/* Documents */}
         <div className="rounded-xl border border-gray-200 bg-white">
           <div className="border-b border-gray-100 p-5">
-            <p className="text-sm font-semibold text-gray-900">Documents</p>
+            <p className="text-base font-semibold text-gray-900">Documents</p>
           </div>
           <div className="divide-y divide-gray-100">
             {org.documents.length === 0 && (
@@ -501,7 +542,7 @@ export default function AdminPmeDetailPage() {
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-gray-900">{doc.title ?? doc.fileName}</p>
                       <p className="truncate text-xs text-gray-500">
-                        {doc.title && `${doc.fileName} · `}{doc.type} · {formatFileSize(doc.sizeBytes)}
+                        {doc.title && `${doc.fileName} · `}{getDocumentLabel(doc, kycLabelsByKey)} · {formatFileSize(doc.sizeBytes)}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -547,7 +588,7 @@ export default function AdminPmeDetailPage() {
       {/* Demandes de financement */}
       <div className="mt-4 rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-sm font-semibold text-gray-900">Demandes de financement</p>
+          <p className="text-base font-semibold text-gray-900">Demandes de financement</p>
         </div>
         <div className="divide-y divide-gray-100">
           {org.fundingRequests.length === 0 && (
@@ -611,7 +652,8 @@ export default function AdminPmeDetailPage() {
           onConfirm={handleRejectDocument}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -639,7 +681,7 @@ function CreditSection({ title, children }: { title: string; children: React.Rea
   return (
     <div className="rounded-xl border border-gray-200 bg-white">
       <div className="border-b border-gray-100 p-5">
-        <p className="text-sm font-semibold text-gray-900">{title}</p>
+        <p className="text-base font-semibold text-gray-900">{title}</p>
       </div>
       <div className="grid grid-cols-4 gap-4 p-5">{children}</div>
     </div>

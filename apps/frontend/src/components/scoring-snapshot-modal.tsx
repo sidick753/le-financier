@@ -52,6 +52,35 @@ interface Report {
   validatedBy: { firstName: string; lastName: string } | null;
 }
 
+const DETAIL_KEY_LABELS: Record<string, string> = {
+  dscr: "DSCR",
+  garantieCouverture: "Couverture garantie",
+  fluxMobileMoneyMensuel: "Flux Mobile Money mensuel",
+  dirigeantExperienceAns: "Expérience dirigeant (ans)",
+  experienceSecteurAns: "Expérience secteur (ans)",
+  tcamCa3ansPct: "TCAM CA 3 ans",
+  tauxImpaye12mPct: "Taux d'impayé (12 mois)",
+  partPlusGrosClientPct: "Part du plus gros client",
+  autonomieFinancierePct: "Autonomie financière",
+  tauxEndettementPct: "Taux d'endettement",
+};
+
+// Clés dont la valeur numérique est déjà un pourcentage (0-100).
+const DETAIL_PCT_KEYS = new Set([
+  "tcamCa3ansPct", "tauxImpaye12mPct", "partPlusGrosClientPct",
+  "autonomieFinancierePct", "tauxEndettementPct",
+]);
+
+// Ratios de couverture (ex. DSCR 1.83× = le cash-flow couvre 1.83x la dette) — un
+// multiplicateur, pas un pourcentage ni un score.
+const DETAIL_RATIO_KEYS = new Set(["dscr", "garantieCouverture"]);
+
+function formatDetailValue(key: string, value: number): string {
+  if (DETAIL_PCT_KEYS.has(key)) return `${value.toFixed(1)} %`;
+  if (DETAIL_RATIO_KEYS.has(key)) return `${value.toFixed(2)}×`;
+  return value.toFixed(1);
+}
+
 const NON_SCORED_FIELD_LABELS: Record<string, string> = {
   nbClientsActifs: "Nombre de clients actifs",
   ratioLiquidite: "Ratio de liquidité",
@@ -115,7 +144,7 @@ export function ScoringSnapshotModal({ reportId, onClose }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <div>
-            <p className="text-sm font-semibold text-gray-900">
+            <p className="text-base font-semibold text-gray-900">
               Snapshot de scoring — {report?.organization.legalName ?? "…"}
             </p>
             <p className="text-xs text-gray-400">
@@ -142,7 +171,7 @@ export function ScoringSnapshotModal({ reportId, onClose }: Props) {
           {[
             { id: "synthese", label: "Synthèse" },
             { id: "criteres", label: "Détail des critères" },
-            { id: "json", label: "JSON brut" },
+            // { id: "json", label: "JSON brut" },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -317,9 +346,9 @@ export function ScoringSnapshotModal({ reportId, onClose }: Props) {
                       <div className="grid grid-cols-3 gap-2">
                         {Object.entries(criterion.detail).map(([key, value]) => (
                           <div key={key} className="rounded-md bg-gray-50 p-2 text-center">
-                            <p className="text-xs text-gray-400">{key}</p>
+                            <p className="text-xs text-gray-400">{DETAIL_KEY_LABELS[key] ?? key}</p>
                             <p className="text-xs font-medium text-gray-900">
-                              {value !== null ? value.toFixed(1) : "—"}
+                              {value !== null ? formatDetailValue(key, value) : "—"}
                             </p>
                           </div>
                         ))}
@@ -333,7 +362,8 @@ export function ScoringSnapshotModal({ reportId, onClose }: Props) {
                 ))
               ) : (
                 <p className="text-center text-sm text-gray-400">
-                  Détail par critère non disponible pour ce rapport — consultez l'onglet "JSON brut" pour les données de calcul complètes.
+                  Détail par critère non disponible pour ce rapport
+                  {/* Détail par critère non disponible pour ce rapport — consultez l'onglet "JSON brut" pour les données de calcul complètes. */}
                 </p>
               )}
             </div>

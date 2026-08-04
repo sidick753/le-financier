@@ -8,8 +8,11 @@ import { api } from "@/lib/api";
 import { useAdminBadges } from "@/lib/admin-badges-context";
 import { RejectReasonModal } from "@/components/reject-reason-modal";
 import { DocumentPreviewModal } from "@/components/document-preview-modal";
-import { FUNDING_STATUS_CONFIG, CLAIM_STATUS_CONFIG, formatAdminDate, formatFullAmount, formatFileSize } from "@/lib/admin-ui";
+import { ScoringSnapshotModal } from "@/components/scoring-snapshot-modal";
+import { FUNDING_STATUS_CONFIG, CLAIM_STATUS_CONFIG, ORG_STATUS_CONFIG, formatAdminDate, formatFullAmount, formatFileSize } from "@/lib/admin-ui";
 import { alertError, alertSuccess } from "@/lib/alert";
+import { OrganizationProfileSummary, type OrganizationProfileSummaryData } from "@/components/organization-profile-summary";
+import { NotifBell } from "@/components/ui/notif-bell";
 
 const CATEGORY_LABELS: Record<string, string> = {
   FACTURE: "Affacturage",
@@ -69,11 +72,7 @@ interface FundingRequestDetail {
     registrationNumber: string;
     sector: string;
     verificationStatus: string;
-    bankName: string | null;
-    bankAccountHolder: string | null;
-    bankAccountNumber: string | null;
-    bankSwiftCode: string | null;
-  };
+  } & OrganizationProfileSummaryData;
   documents: Array<{
     id: string;
     type: string;
@@ -103,6 +102,7 @@ export default function AdminOpportuniteDetailPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
+  const [snapshotReportId, setSnapshotReportId] = useState<string | null>(null);
   const [settlementActionId, setSettlementActionId] = useState<string | null>(null);
   const [rejectSettlementFor, setRejectSettlementFor] = useState<string | null>(null);
   const [claimActionId, setClaimActionId] = useState<string | null>(null);
@@ -110,7 +110,7 @@ export default function AdminOpportuniteDetailPage() {
 
   function load() {
     if (!token) return;
-    setIsLoading(true);
+    if (!fr) setIsLoading(true);
     api
       .get<FundingRequestDetail>(`/funding-requests/admin/${id}`, token)
       .then(setFr)
@@ -251,33 +251,36 @@ export default function AdminOpportuniteDetailPage() {
   const hasBankInfo = fr.organization.bankAccountNumber;
 
   return (
-    <div className="p-8">
-      <button
-        onClick={() => router.push("/admin/opportunites")}
-        className="mb-4 text-xs font-medium text-gray-500 hover:text-brand-700"
-      >
-        ← Retour à la liste des opportunités
-      </button>
-
-      {/* Header */}
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <div className="mb-1 flex items-center gap-3">
-            <h1 className="text-2xl font-semibold text-gray-900">{fr.title}</h1>
-            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${config.className}`}>
-              {config.label}
-            </span>
+    <>
+      <header className="sticky top-0 z-10 flex h-[60px] items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
+        <div className="flex min-w-0 items-center gap-3">
+          <button
+            onClick={() => router.push("/admin/opportunites")}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] text-slate-400 transition hover:bg-slate-50 hover:text-slate-900"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="19" y1="12" x2="5" y2="12" />
+              <polyline points="12 19 5 12 12 5" />
+            </svg>
+          </button>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="truncate text-[15px] font-black tracking-tight text-gray-900">{fr.title}</p>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${config.className}`}>
+                {config.label}
+              </span>
+            </div>
+            <p className="truncate text-xs text-gray-500">
+              <Link href={`/admin/pme/${fr.organization.id}`} className="hover:text-brand-700 hover:underline">
+                {fr.organization.legalName}
+              </Link>
+              {" · "}
+              {CATEGORY_LABELS[fr.category] ?? fr.category} · Soumise le {formatAdminDate(fr.createdAt)}
+            </p>
           </div>
-          <p className="text-sm text-gray-500">
-            <Link href={`/admin/pme/${fr.organization.id}`} className="hover:text-brand-700 hover:underline">
-              {fr.organization.legalName}
-            </Link>
-            {" · "}
-            {CATEGORY_LABELS[fr.category] ?? fr.category} · Soumise le {formatAdminDate(fr.createdAt)}
-          </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex shrink-0 gap-2">
           {fr.status === "UNDER_REVIEW" && (
             <>
               <button
@@ -314,9 +317,11 @@ export default function AdminOpportuniteDetailPage() {
               Réactiver
             </button>
           )}
+          <NotifBell href="/admin/notifications" />
         </div>
-      </div>
+      </header>
 
+      <div className="p-8">
       {fr.rejectionReason && (
         <div className="mb-6 rounded-xl border border-red-100 bg-red-50 p-4">
           <p className="text-xs font-semibold text-red-700">Motif du rejet</p>
@@ -365,13 +370,23 @@ export default function AdminOpportuniteDetailPage() {
       <div className="grid grid-cols-2 gap-4 items-start">
         {/* Description */}
         <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <p className="mb-2 text-sm font-semibold text-gray-900">Description</p>
+          <p className="mb-2 text-base font-semibold text-gray-900">Description</p>
           <p className="text-sm leading-relaxed text-gray-600">{fr.description}</p>
         </div>
 
         {/* Scoring */}
         <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <p className="mb-2 text-sm font-semibold text-gray-900">Scoring</p>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-base font-semibold text-gray-900">Scoring</p>
+            {report && (
+              <button
+                onClick={() => setSnapshotReportId(report.id)}
+                className="text-xs font-medium text-brand-700 hover:underline"
+              >
+                Voir le détail (DSCR, garantie...)
+              </button>
+            )}
+          </div>
           {report ? (
             <div className="flex items-center gap-4">
               <p className="text-2xl font-bold text-gray-900">
@@ -392,10 +407,30 @@ export default function AdminOpportuniteDetailPage() {
         </div>
       </div>
 
+      {/* Profil de la PME — toutes les infos nécessaires pour approuver en connaissance de
+          cause, sans quitter la page (identité, coordonnées bancaires, profil de crédit). */}
+      <div className="mt-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <p className="text-base font-semibold text-gray-900">Profil de la PME</p>
+            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${(ORG_STATUS_CONFIG[fr.organization.verificationStatus] ?? ORG_STATUS_CONFIG.PENDING).className}`}>
+              {(ORG_STATUS_CONFIG[fr.organization.verificationStatus] ?? ORG_STATUS_CONFIG.PENDING).label}
+            </span>
+          </div>
+          <Link
+            href={`/admin/pme/${fr.organization.id}`}
+            className="text-xs font-medium text-brand-700 hover:underline"
+          >
+            Voir la fiche PME complète →
+          </Link>
+        </div>
+        <OrganizationProfileSummary org={fr.organization} />
+      </div>
+
       {/* Investissements */}
       <div className="mt-4 rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-sm font-semibold text-gray-900">Investissements</p>
+          <p className="text-base font-semibold text-gray-900">Investissements</p>
           {fr.investorMode === "SINGLE_INVESTOR" && (
             <p className="mt-0.5 text-xs text-amber-600">
               Investisseur unique attendu — un seul engagement à 100% du montant est accepté sur ce dossier.
@@ -465,7 +500,7 @@ export default function AdminOpportuniteDetailPage() {
       {/* Réclamations de la PME */}
       <div className="mt-4 rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-sm font-semibold text-gray-900">Réclamations</p>
+          <p className="text-base font-semibold text-gray-900">Réclamations</p>
           <p className="mt-0.5 text-xs text-gray-500">
             La PME peut réclamer les fonds déjà validés à tout moment, même avant 100% financé.
           </p>
@@ -524,7 +559,7 @@ export default function AdminOpportuniteDetailPage() {
       {/* Documents */}
       <div className="mt-4 rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-sm font-semibold text-gray-900">Documents</p>
+          <p className="text-base font-semibold text-gray-900">Documents</p>
         </div>
         <div className="divide-y divide-gray-100">
           {fr.documents.length === 0 && (
@@ -587,7 +622,12 @@ export default function AdminOpportuniteDetailPage() {
       {previewDocId && (
         <DocumentPreviewModal documentId={previewDocId} onClose={() => setPreviewDocId(null)} />
       )}
-    </div>
+
+      {snapshotReportId && (
+        <ScoringSnapshotModal reportId={snapshotReportId} onClose={() => setSnapshotReportId(null)} />
+      )}
+      </div>
+    </>
   );
 }
 
