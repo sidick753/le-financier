@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { useNegotiationSocket } from "@/lib/use-negotiation-socket";
 import { DocumentPreviewModal } from "@/components/document-preview-modal";
 import { UploadZone } from "@/components/upload-zone";
-import { FundingDocument, DOCUMENT_TYPE_LABELS, DOCUMENT_STATUS_CONFIG, formatFileSize } from "@/lib/document-labels";
+import { FundingDocument, DOCUMENT_STATUS_CONFIG, formatFileSize, getDocumentLabel, getStaticKycLabels } from "@/lib/document-labels";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { glossaryText } from "@/lib/financial-glossary";
 import { formatAmountInput, parseAmountInput } from "@/lib/admin-ui";
@@ -440,7 +440,17 @@ function EntrepriseTab({ organization }: { organization: OpportunityOrganization
   );
 }
 
-function DocumentsTab({ documents, error, onPreview }: { documents: FundingDocument[]; error: boolean; onPreview: (id: string) => void }) {
+function DocumentsTab({
+  documents,
+  error,
+  onPreview,
+  kycLabelsByKey,
+}: {
+  documents: FundingDocument[];
+  error: boolean;
+  onPreview: (id: string) => void;
+  kycLabelsByKey: Record<string, string>;
+}) {
   if (error) {
     return <p className="text-center text-[12px] text-red-500">Impossible de charger les documents. Réessayez plus tard.</p>;
   }
@@ -456,7 +466,7 @@ function DocumentsTab({ documents, error, onPreview }: { documents: FundingDocum
             <div className="min-w-0">
               <p className="truncate text-[13px] font-medium text-slate-900">{doc.fileName}</p>
               <p className="mt-0.5 text-[11px] text-slate-400">
-                {DOCUMENT_TYPE_LABELS[doc.type] ?? doc.type} · {formatFileSize(doc.sizeBytes)}
+                {getDocumentLabel(doc, kycLabelsByKey)} · {formatFileSize(doc.sizeBytes)}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -512,6 +522,15 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
   const [documentsError, setDocumentsError] = useState(false);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
 
+  // Plusieurs exigences KYC (Bilan N-2, Bilan N-1, Attestation fiscale...) partagent le
+  // même DocumentType FINANCIAL_STATEMENT — kycRequirementKey permet de les distinguer
+  // à l'affichage (cf. getDocumentLabel), sinon elles apparaissent toutes identiques.
+  // On utilise la carte statique (voir getStaticKycLabels) plutôt que
+  // /documents/organization/:id/kyc-status : cet endpoint est réservé aux membres de
+  // l'organisation et à l'admin, alors que cette page est aussi vue par un
+  // investisseur/une institution externes à l'organisation.
+  const kycLabelsByKey = useMemo(() => getStaticKycLabels(), []);
+
   async function refreshEngagement() {
     if (!token) return;
     try {
@@ -533,7 +552,7 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
   useEffect(() => {
     async function load() {
       try {
-        const opp = await api.get<Opportunity>(`/funding-requests/${id}`);
+        const opp = await api.get<Opportunity>(`/funding-requests/${id}`, token ?? undefined);
         setOpportunity(opp);
         if (opp.expectedReturn) setProposedReturn(String(Number(opp.expectedReturn)));
         await refreshEngagement();
@@ -835,7 +854,7 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
                   <EntrepriseTab organization={opportunity.organization} />
                 )}
                 {activeTab === "documents" && (
-                  <DocumentsTab documents={documents} error={documentsError} onPreview={setPreviewDocId} />
+                  <DocumentsTab documents={documents} error={documentsError} onPreview={setPreviewDocId} kycLabelsByKey={kycLabelsByKey} />
                 )}
               </div>
             </div>
@@ -1092,6 +1111,31 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
                       </button>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* SETTLED_OFF_PLATFORM — virement validé, capital effectivement investi */}
+              {engagement?.status === "SETTLED_OFF_PLATFORM" && (
+                <div className="rounded-[10px] bg-green-50 p-4 text-center">
+                  <svg className="mx-auto mb-2 text-green-600" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <p className="text-[13px] font-bold text-green-700">Investissement validé</p>
+                  <p className="text-[12px] text-green-600">
+                    {fmtAmount(engagement.amountCommitted)}
+                    {requested > 0 && ` (${((Number(engagement.amountCommitted) / requested) * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}% du montant demandé)`}
+                  </p>
+                  <p className="mt-1 text-[12px] text-green-600">
+                    Virement confirmé
+                    {engagement.lockedReturn ? ` — taux figé ${Number(engagement.lockedReturn)}%` : ""}
+                  </p>
+                </div>
+              )}
+
+              {/* CANCELLED — engagement annulé par l'une des deux parties après confirmation */}
+              {engagement?.status === "CANCELLED" && (
+                <div className="rounded-[10px] bg-slate-50 p-4 text-center">
+                  <p className="text-[13px] font-semibold text-slate-500">Engagement annulé</p>
                 </div>
               )}
 

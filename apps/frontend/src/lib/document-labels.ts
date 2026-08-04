@@ -26,6 +26,25 @@ export const DOCUMENT_STATUS_CONFIG: Record<string, { label: string; badgeClass:
   REJECTED:       { label: "Rejeté",   badgeClass: "bg-red-50 text-red-600" },
 };
 
+// Miroir de apps/backend/src/documents/kyc-checklist.ts::getKycRequirements() — cette
+// liste est statique (dérivée de l'année courante, aucune donnée propre à une
+// organisation), donc sûre à dupliquer ici. Nécessaire car GET
+// /documents/organization/:id/kyc-status (qui donne aussi le statut de complétude,
+// lui sensible) est réservé aux membres de l'organisation et à l'admin — un
+// investisseur/une institution consultant l'opportunité d'une autre organisation ne
+// peut donc pas s'appuyer dessus pour simplement traduire kycRequirementKey en libellé.
+export function getStaticKycLabels(): Record<string, string> {
+  const currentYear = new Date().getFullYear();
+  return {
+    RCCM: "RCCM",
+    [`BILAN_${currentYear - 2}`]: `Bilan ${currentYear - 2}`,
+    [`BILAN_${currentYear - 1}`]: `Bilan ${currentYear - 1}`,
+    CNI_DIRIGEANT: "Carte CNI Dirigeant",
+    [`ATTESTATION_FISCALE_${currentYear}`]: `Attestation fiscale ${currentYear}`,
+    PLAN_TRESORERIE: "Plan de trésorerie",
+  };
+}
+
 // Plusieurs exigences KYC (ex: Bilan 2024, Bilan 2025, Attestation fiscale, Plan de
 // trésorerie) partagent le même DocumentType FINANCIAL_STATEMENT — kycRequirementKey
 // (via kycLabelsByKey, ex: { BILAN_2024: "Bilan 2024" }) permet de les distinguer à l'affichage.
