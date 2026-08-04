@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAdminData } from "@/lib/use-admin-data";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
+import { NotifBell } from "@/components/ui/notif-bell";
 
 function formatAmount(value: number) {
   if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}Md`;
@@ -59,14 +60,16 @@ export default function AdminDashboardPage() {
   }, 0);
 
   return (
-    <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Dashboard Admin</h1>
-        <p className="text-sm text-gray-500">
-          Vue d&apos;ensemble de la plateforme LeFinancier
-        </p>
-      </div>
+    <>
+      <header className="sticky top-0 z-10 flex h-[60px] items-center justify-between border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
+        <div>
+          <p className="text-[15px] font-black tracking-tight text-gray-900">Dashboard Admin</p>
+          <p className="text-xs text-gray-500">Vue d&apos;ensemble de la plateforme LeFinancier</p>
+        </div>
+        <NotifBell href="/admin/notifications" />
+      </header>
 
+      <div className="p-8">
       {/* 5 stats */}
       <div className="mb-6 grid grid-cols-5 gap-4">
         <StatCard
@@ -112,7 +115,7 @@ export default function AdminDashboardPage() {
         {/* Vérifications en attente */}
         <div className="flex flex-col rounded-xl border border-gray-200 bg-white">
           <div className="flex items-center justify-between border-b border-gray-100 p-5">
-            <p className="text-sm font-semibold text-gray-900">
+            <p className="text-base font-semibold text-gray-900">
               Vérifications en attente
             </p>
             {pendingOrgs.length > 0 && (
@@ -165,7 +168,7 @@ export default function AdminDashboardPage() {
         {/* Opportunités à modérer */}
         <div className="flex flex-col rounded-xl border border-gray-200 bg-white">
           <div className="flex items-center justify-between border-b border-gray-100 p-5">
-            <p className="text-sm font-semibold text-gray-900">
+            <p className="text-base font-semibold text-gray-900">
               Opportunités à modérer
             </p>
             {pendingFunding.length > 0 && (
@@ -252,7 +255,7 @@ export default function AdminDashboardPage() {
       {/* Reporting BCEAO */}
       {/* <div className="mt-4 rounded-xl border border-gray-200 bg-white p-5">
         <div className="mb-4 flex items-center justify-between">
-          <p className="text-sm font-semibold text-gray-900">
+          <p className="text-base font-semibold text-gray-900">
             Reporting Réglementaire BCEAO
           </p>
           <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
@@ -320,7 +323,8 @@ export default function AdminDashboardPage() {
           disponible dans une prochaine version.
         </p>
       </div> */}
-    </div>
+      </div>
+    </>
   );
 }
 

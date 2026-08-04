@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { PersonalProfileSection } from "@/components/ui/personal-profile-section";
 import { PasswordSecuritySection } from "@/components/ui/password-security-section";
+import { NotifBell } from "@/components/ui/notif-bell";
 
 type Tab = "profil" | "securite";
 
@@ -17,14 +18,16 @@ export default function AdminParametresPage() {
   const [tab, setTab] = useState<Tab>("profil");
 
   return (
-    <div className="p-8">
-      <div className="mb-6 flex items-center justify-between">
+    <>
+      <header className="sticky top-0 z-10 flex h-[60px] items-center justify-between border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Paramètres</h1>
-          <p className="mt-1 text-sm text-gray-500">Configuration de votre compte {user?.role === "SUPER_ADMIN" ? "super admin" : "admin"}.</p>
+          <p className="text-[15px] font-black tracking-tight text-gray-900">Paramètres</p>
+          <p className="text-xs text-gray-500">Configuration de votre compte {user?.role === "SUPER_ADMIN" ? "super admin" : "admin"}.</p>
         </div>
-      </div>
+        <NotifBell href="/admin/notifications" />
+      </header>
 
+      <div className="p-8">
       <div className="mb-6 flex gap-6 border-b border-gray-200">
         {TABS.map((t) => (
           <button
@@ -43,6 +46,7 @@ export default function AdminParametresPage() {
 
       {tab === "profil" && <PersonalProfileSection />}
       {tab === "securite" && <PasswordSecuritySection />}
-    </div>
+      </div>
+    </>
   );
 }

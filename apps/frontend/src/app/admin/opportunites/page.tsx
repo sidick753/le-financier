@@ -9,6 +9,7 @@ import { useAdminBadges } from "@/lib/admin-badges-context";
 import { FUNDING_STATUS_CONFIG, formatAdminDate, formatCompactAmount } from "@/lib/admin-ui";
 import { useSortableRows } from "@/lib/use-sortable-rows";
 import { SortableTh } from "@/components/ui/sortable-th";
+import { NotifBell } from "@/components/ui/notif-bell";
 
 const CATEGORY_LABELS: Record<string, string> = {
   FACTURE: "Affacturage",
@@ -179,12 +180,16 @@ function AdminOpportunitesPageContent() {
   );
 
   return (
-    <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Opportunités</h1>
-        <p className="text-sm text-gray-500">Toutes les opportunités publiées sur la plateforme</p>
-      </div>
+    <>
+      <header className="sticky top-0 z-10 flex h-[60px] items-center justify-between border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
+        <div>
+          <p className="text-[15px] font-black tracking-tight text-gray-900">Opportunités</p>
+          <p className="text-xs text-gray-500">Toutes les opportunités publiées sur la plateforme</p>
+        </div>
+        <NotifBell href="/admin/notifications" />
+      </header>
 
+      <div className="p-8">
       {/* Stats */}
       <div className="mb-6 grid grid-cols-4 gap-4">
         {[
@@ -351,6 +356,7 @@ function AdminOpportunitesPageContent() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }

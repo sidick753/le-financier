@@ -8,6 +8,7 @@ import { useScoringWeights, ScoringWeightCriterion } from "@/lib/use-scoring-wei
 import { useSortableRows } from "@/lib/use-sortable-rows";
 import { SortableTh } from "@/components/ui/sortable-th";
 import { ScoringSnapshotModal } from "@/components/scoring-snapshot-modal";
+import { NotifBell } from "@/components/ui/notif-bell";
 
 type Tab = "automatise" | "configuration" | "historique";
 
@@ -291,17 +292,21 @@ export default function AdminScoringPage() {
   });
 
   return (
-    <div className="p-8">
-      <div className="mb-6 flex items-center justify-between">
+    <>
+      <header className="sticky top-0 z-10 flex h-[60px] items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Moteur de scoring LeFinancier™</h1>
-          <p className="text-sm text-gray-500">3 moteurs distincts · Affacturage · Prêt MLT · Equity</p>
+          <p className="text-[15px] font-black tracking-tight text-gray-900">Moteur de scoring LeFinancier™</p>
+          <p className="text-xs text-gray-500">3 moteurs distincts · Affacturage · Prêt MLT · Equity</p>
         </div>
-        <span className="flex items-center gap-2 rounded-full bg-green-100 px-3 py-1.5 text-xs font-medium text-green-700">
-          ✓ Moteur actif
-        </span>
-      </div>
+        <div className="flex shrink-0 items-center gap-3">
+          <span className="flex items-center gap-2 rounded-full bg-green-100 px-3 py-1.5 text-xs font-medium text-green-700">
+            ✓ Moteur actif
+          </span>
+          <NotifBell href="/admin/notifications" />
+        </div>
+      </header>
 
+      <div className="p-8">
       {/* Onglets */}
       <div className="mb-6 flex border-b border-gray-200">
         {[
@@ -543,7 +548,7 @@ export default function AdminScoringPage() {
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${productCfg.className}`}>
                       {productCfg.label}
                     </span>
-                    <p className="text-sm font-semibold text-gray-900">Moteur {productCfg.label}</p>
+                    <p className="text-base font-semibold text-gray-900">Moteur {productCfg.label}</p>
                   </div>
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                     total === 100 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
@@ -607,7 +612,7 @@ export default function AdminScoringPage() {
           })}
 
           <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <p className="mb-4 text-sm font-semibold text-gray-900">
+            <p className="mb-4 text-base font-semibold text-gray-900">
               Barème des grades (commun aux 3 moteurs)
             </p>
             <div className="space-y-2">
@@ -794,6 +799,7 @@ export default function AdminScoringPage() {
           onClose={() => setSnapshotReportId(null)}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 }

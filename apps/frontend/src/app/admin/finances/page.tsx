@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { formatAdminDate, formatCompactAmount } from "@/lib/admin-ui";
 import { useSortableRows } from "@/lib/use-sortable-rows";
 import { SortableTh } from "@/components/ui/sortable-th";
+import { NotifBell } from "@/components/ui/notif-bell";
 
 const FILTERS = ["Toutes", "Perçues", "En attente"] as const;
 const FILTER_TO_STATUS: Record<string, string | undefined> = {
@@ -202,14 +203,16 @@ function AdminFinancesPageContent() {
   });
 
   return (
-    <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Finances</h1>
-        <p className="text-sm text-gray-500">
-          Revenus de la plateforme et transactions de commission
-        </p>
-      </div>
+    <>
+      <header className="sticky top-0 z-10 flex h-[60px] items-center justify-between border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
+        <div>
+          <p className="text-[15px] font-black tracking-tight text-gray-900">Finances</p>
+          <p className="text-xs text-gray-500">Revenus de la plateforme et transactions de commission</p>
+        </div>
+        <NotifBell href="/admin/notifications" />
+      </header>
 
+      <div className="p-8">
       {/* 4 stats */}
       <div className="mb-6 grid grid-cols-4 gap-4">
         {[
@@ -229,7 +232,7 @@ function AdminFinancesPageContent() {
         {/* Graphiques mensuels : commissions et volume ont des échelles trop différentes
             pour partager un axe (voir dataviz), donc deux petits graphiques distincts. */}
         <div className="col-span-2 rounded-xl border border-gray-200 bg-white p-5">
-          <p className="mb-4 text-sm font-semibold text-gray-900">
+          <p className="mb-4 text-base font-semibold text-gray-900">
             Revenus et volume mensuels {currentYear}
           </p>
           <div className="grid grid-cols-2 gap-6">
@@ -247,7 +250,7 @@ function AdminFinancesPageContent() {
         {/* Répartition : 2 catégories en part-du-tout → une barre empilée, pas un donut
             (un donut à 2 tranches se lit moins bien qu'une barre, voir dataviz). */}
         <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <p className="mb-4 text-sm font-semibold text-gray-900">Répartition commissions</p>
+          <p className="mb-4 text-base font-semibold text-gray-900">Répartition commissions</p>
           {!stats || stats.total === 0 ? (
             <p className="text-xs text-gray-400">Aucune commission pour le moment.</p>
           ) : (
@@ -315,7 +318,7 @@ function AdminFinancesPageContent() {
       {/* Transactions */}
       <div className="rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-sm font-semibold text-gray-900">Transactions de commission</p>
+          <p className="text-base font-semibold text-gray-900">Transactions de commission</p>
         </div>
         {isLoading && <p className="p-5 text-sm text-gray-400">Chargement...</p>}
         {!isLoading && commissions.length === 0 && (
@@ -404,7 +407,7 @@ function AdminFinancesPageContent() {
           reliée de façon fiable à chaque commission), pas par partenaire institutionnel. */}
       <div className="mt-4 rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-sm font-semibold text-gray-900">Top PME par volume</p>
+          <p className="text-base font-semibold text-gray-900">Top PME par volume</p>
         </div>
         {topOrganizations.length === 0 && (
           <p className="p-5 text-sm text-gray-400">Aucune donnée pour le moment.</p>
@@ -438,6 +441,7 @@ function AdminFinancesPageContent() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }

@@ -9,6 +9,7 @@ import { RejectReasonModal } from "@/components/reject-reason-modal";
 import { DocumentPreviewModal } from "@/components/document-preview-modal";
 import { formatAdminDate, formatFullAmount } from "@/lib/admin-ui";
 import { alertError, alertSuccess } from "@/lib/alert";
+import { NotifBell } from "@/components/ui/notif-bell";
 
 interface PendingPayment {
   id: string;
@@ -126,13 +127,18 @@ export default function AdminRemboursementsPage() {
   }
 
   return (
-    <div className="p-8">
-      <h1 className="mb-1 text-2xl font-semibold text-gray-900">Remboursements à valider</h1>
-      <p className="mb-6 text-sm text-gray-500">
-        Une PME rembourse sur le compte de la plateforme, dépose un justificatif, puis un admin valide avant
-        que le montant (commission déduite) soit reversé à l'investisseur concerné.
-      </p>
+    <>
+      <header className="sticky top-0 z-10 flex h-[60px] items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
+        <div className="min-w-0">
+          <p className="text-[15px] font-black tracking-tight text-gray-900">Remboursements à valider</p>
+          <p className="truncate text-xs text-gray-500">
+            Une PME rembourse sur le compte de la plateforme, dépose un justificatif, puis un admin valide.
+          </p>
+        </div>
+        <NotifBell href="/admin/notifications" />
+      </header>
 
+      <div className="p-8">
       {error && <p className="text-sm text-red-500">{error}</p>}
 
       {!payments && !error && <p className="text-sm text-gray-400">Chargement...</p>}
@@ -276,6 +282,7 @@ export default function AdminRemboursementsPage() {
       {previewDocId && (
         <DocumentPreviewModal documentId={previewDocId} onClose={() => setPreviewDocId(null)} />
       )}
-    </div>
+      </div>
+    </>
   );
 }
