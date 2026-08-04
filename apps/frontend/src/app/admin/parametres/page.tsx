@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { PersonalProfileSection } from "@/components/ui/personal-profile-section";
 import { PasswordSecuritySection } from "@/components/ui/password-security-section";
+import { PushNotificationsSection } from "@/components/ui/push-notifications-section";
 import { NotifBell } from "@/components/ui/notif-bell";
 
 type Tab = "profil" | "securite";
@@ -45,7 +46,12 @@ export default function AdminParametresPage() {
       </div>
 
       {tab === "profil" && <PersonalProfileSection />}
-      {tab === "securite" && <PasswordSecuritySection />}
+      {tab === "securite" && (
+        <div className="space-y-6">
+          <PasswordSecuritySection />
+          <PushNotificationsSection />
+        </div>
+      )}
       </div>
     </>
   );

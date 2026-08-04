@@ -7,6 +7,7 @@ import { NotificationsRepository } from './notifications.repository';
 import { NotificationsGateway } from './notifications.gateway';
 import { UsersModule } from '../users/users.module';
 import { MailModule } from '../mail/mail.module';
+import { PushModule } from '../push/push.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { MailModule } from '../mail/mail.module';
     }),
     UsersModule,
     MailModule,
+    PushModule,
   ],
   controllers: [NotificationsController],
   providers: [

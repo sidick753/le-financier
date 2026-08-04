@@ -58,6 +58,7 @@ model User {
   repaymentPaymentsValidated RepaymentPayment[]     @relation("RepaymentPaymentValidator")
   payoutClaimsRequested      PayoutClaim[]          @relation("PayoutClaimRequester")
   payoutClaimsDecided        PayoutClaim[]          @relation("PayoutClaimDecider")
+  pushSubscriptions          PushSubscription[]
 
   @@index([role])
   @@map("users")
@@ -74,6 +75,23 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+// Un abonnement Web Push par (utilisateur, navigateur/appareil) — endpoint unique
+// fourni par le PushManager du navigateur. Supprimé silencieusement dès qu'un envoi
+// échoue en 404/410 (abonnement expiré côté navigateur — voir PushNotificationsService).
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }
 
 

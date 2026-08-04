@@ -3,6 +3,7 @@ import { NotificationsRepository } from './notifications.repository';
 import { NotificationsGateway } from './notifications.gateway';
 import { UsersRepository } from '../users/users.repository';
 import { MailService, renderEmail } from '../mail/mail.service';
+import { PushService } from '../push/push.service';
 
 export interface NotifyOptions {
   // Coûteux à envoyer par défaut (un email par notif in-app noierait les
@@ -19,6 +20,7 @@ export class NotificationsService {
     private notificationsGateway: NotificationsGateway,
     private usersRepository: UsersRepository,
     private mailService: MailService,
+    private pushService: PushService,
   ) {}
 
   async notify(userId: string, title: string, body: string, link?: string, options?: NotifyOptions) {
@@ -31,6 +33,16 @@ export class NotificationsService {
 
     this.notificationsGateway.emitToUser(userId, 'notification', notification);
 
+    // Best-effort, comme le socket ci-dessus : suit chaque notif in-app sans
+    // opt-in par appelant (contrairement à l'email, coûteux/intrusif) — no-op
+    // silencieux si l'utilisateur n'a aucun abonnement ou si les clés VAPID ne
+    // sont pas configurées (voir PushService).
+    try {
+      await this.pushService.sendToUser(userId, { title, body, link });
+    } catch {
+      // ignoré — ne doit jamais faire échouer la notification elle-même
+    }
+
     if (options?.email) {
       const user = await this.usersRepository.findById(userId);
       if (user) {
@@ -42,9 +54,9 @@ export class NotificationsService {
     return notification;
   }
 
-  async notifyAdmins(title: string, body: string) {
+  async notifyAdmins(title: string, body: string, link?: string, options?: NotifyOptions) {
     const adminIds = await this.usersRepository.findAdminIds();
-    await Promise.all(adminIds.map((adminId) => this.notify(adminId, title, body)));
+    await Promise.all(adminIds.map((adminId) => this.notify(adminId, title, body, link, options)));
   }
 
   async findMine(userId: string) {

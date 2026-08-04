@@ -5,6 +5,7 @@ import { useInstitutionSettings } from "@/lib/use-institution-settings";
 import { NotifBell } from "@/components/ui/notif-bell";
 import { PersonalProfileSection } from "@/components/ui/personal-profile-section";
 import { PasswordSecuritySection } from "@/components/ui/password-security-section";
+import { PushNotificationsSection } from "@/components/ui/push-notifications-section";
 import { EyeIcon } from "@/components/ui/eye-icon";
 import { INPUT_GRAY as INPUT } from "@/components/ui/form-styles";
 import { formatAmountInput, parseAmountInput } from "@/lib/admin-ui";
@@ -251,6 +252,7 @@ export default function InstitutionParametresPage() {
       {tab === "securite" && (
         <div className="max-w-2xl space-y-5">
           <PasswordSecuritySection />
+          <PushNotificationsSection />
 
           <div className="rounded-xl border border-gray-200 bg-white p-6">
             <p className="mb-2 text-base font-semibold text-gray-900">Clé API</p>

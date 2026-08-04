@@ -16,6 +16,7 @@ import { InstitutionsModule } from './institutions/institutions.module';
 import { MailModule } from './mail/mail.module';
 import { PlatformBankAccountsModule } from './platform-bank-accounts/platform-bank-accounts.module';
 import { RemindersModule } from './reminders/reminders.module';
+import { PushModule } from './push/push.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { RemindersModule } from './reminders/reminders.module';
     MailModule,
     PlatformBankAccountsModule,
     RemindersModule,
+    PushModule,
   ],
   controllers: [AppController],
   providers: [AppService],

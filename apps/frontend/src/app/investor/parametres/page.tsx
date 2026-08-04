@@ -4,6 +4,7 @@ import { useState } from "react";
 import { NotifBell } from "@/components/ui/notif-bell";
 import { PersonalProfileSection } from "@/components/ui/personal-profile-section";
 import { PasswordSecuritySection } from "@/components/ui/password-security-section";
+import { PushNotificationsSection } from "@/components/ui/push-notifications-section";
 import { IdentityDocumentSection } from "@/components/identity-document-section";
 
 type Tab = "profil" | "securite";
@@ -49,7 +50,12 @@ export default function InvestorParametresPage() {
             <IdentityDocumentSection />
           </>
         )}
-        {tab === "securite" && <PasswordSecuritySection />}
+        {tab === "securite" && (
+          <div className="space-y-6">
+            <PasswordSecuritySection />
+            <PushNotificationsSection />
+          </div>
+        )}
       </div>
     </>
   );

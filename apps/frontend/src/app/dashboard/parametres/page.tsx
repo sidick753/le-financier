@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { NotifBell } from "@/components/ui/notif-bell";
 import { PersonalProfileSection } from "@/components/ui/personal-profile-section";
 import { PasswordSecuritySection } from "@/components/ui/password-security-section";
+import { PushNotificationsSection } from "@/components/ui/push-notifications-section";
 import { INPUT_GRAY } from "@/components/ui/form-styles";
 import { SelectWithOther } from "@/components/ui/select-with-other";
 import {
@@ -687,7 +688,12 @@ function ParametresPageContent() {
           </div>
         )}
 
-        {tab === "securite" && <PasswordSecuritySection />}
+        {tab === "securite" && (
+          <div className="space-y-6">
+            <PasswordSecuritySection />
+            <PushNotificationsSection />
+          </div>
+        )}
       </div>
     </>
   );
