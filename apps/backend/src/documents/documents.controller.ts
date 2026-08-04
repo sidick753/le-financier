@@ -99,21 +99,46 @@ Le fichier est stocké dans l'object storage (S3/MinIO).`,
       organizationId = fundingRequest.organizationId;
     }
 
-    if (!organizationId) {
+    // Sans organisation ni demande liée, seule une pièce d'identité déposée
+    // pour son propre compte est acceptée (ex. investisseur particulier sans
+    // organisation) — l'appartenance est alors garantie par `uploadedById`.
+    const isPersonalDocument =
+      !organizationId && ['KYC_ID', 'KYC_PROOF_OF_ADDRESS'].includes(dto.type);
+
+    if (!organizationId && !isPersonalDocument) {
       throw new BadRequestException(
         "organizationId ou fundingRequestId est requis pour associer ce document.",
       );
     }
 
-    const isMember = await this.organizationsRepository.isMember(
-      organizationId,
-      req.user.id,
-    );
-    if (!isMember) {
-      throw new ForbiddenException("Vous n'avez pas accès à cette organisation.");
+    if (organizationId) {
+      const isMember = await this.organizationsRepository.isMember(
+        organizationId,
+        req.user.id,
+      );
+      if (!isMember) {
+        throw new ForbiddenException("Vous n'avez pas accès à cette organisation.");
+      }
     }
 
     return this.documentsService.upload(file, { ...dto, organizationId }, req.user.id);
+  }
+
+  @ApiOperation({
+    summary: "Documents personnels d'un utilisateur",
+    description:
+      "Documents rattachés directement à un utilisateur, sans organisation ni demande liée (ex. pièce d'identité d'un investisseur particulier). Accessible au titulaire du compte et à l'admin, pour la revue KYC.",
+  })
+  @ApiParam({ name: 'userId', description: "UUID de l'utilisateur" })
+  @ApiResponse({ status: 200, description: 'Liste de documents' })
+  @ApiResponse({ status: 403, description: 'Accès non autorisé' })
+  @Get('user/:userId')
+  findPersonalDocuments(@Param('userId') userId: string, @Request() req) {
+    const isAdmin = req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN';
+    if (!isAdmin && req.user.id !== userId) {
+      throw new ForbiddenException("Vous n'avez pas accès à ces documents.");
+    }
+    return this.documentsService.findPersonalDocuments(userId);
   }
 
   @ApiOperation({

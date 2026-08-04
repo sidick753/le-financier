@@ -125,7 +125,7 @@ export class InstitutionsRepository {
   async findMembersWithStats(institutionId: string) {
     const members = await this.prisma.institutionMember.findMany({
       where: { institutionId },
-      include: { user: { select: { firstName: true, lastName: true, email: true, kycStatus: true } } },
+      include: { user: { select: { firstName: true, lastName: true, email: true, kycStatus: true, kycRejectionReason: true } } },
       orderBy: { createdAt: 'asc' },
     });
 
@@ -144,6 +144,7 @@ export class InstitutionsRepository {
         lastName: member.user.lastName,
         email: member.user.email,
         kycStatus: member.user.kycStatus,
+        kycRejectionReason: member.user.kycRejectionReason,
         role: member.role,
         status: member.status,
         specialty: member.specialty,

@@ -1,50 +1,31 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { useAdminBadges } from "@/lib/admin-badges-context";
 import type { AdminUser } from "@/lib/use-admin-data";
-import { USER_ROLE_CONFIG, KYC_STATUS_CONFIG, formatAdminDate, formatCompactAmount } from "@/lib/admin-ui";
+import { KYC_STATUS_CONFIG, formatAdminDate, formatCompactAmount } from "@/lib/admin-ui";
 import { useSortableRows } from "@/lib/use-sortable-rows";
 import { SortableTh } from "@/components/ui/sortable-th";
+import { NotifBell } from "@/components/ui/notif-bell";
 
-const FILTERS = ["Tous", "Particuliers", "Institutions/Banques"] as const;
-const FILTER_TO_ROLE: Record<string, string> = {
-  Tous: "INVESTOR,INSTITUTION",
-  Particuliers: "INVESTOR",
-  "Institutions/Banques": "INSTITUTION",
-};
 const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 300;
 
 interface AdminStats {
   total: number;
-  institutions: number;
-  particuliers: number;
+  pendingKyc: number;
   totalEngaged: number;
 }
 
 export default function AdminInvestisseursPage() {
-  return (
-    <Suspense fallback={null}>
-      <AdminInvestisseursPageContent />
-    </Suspense>
-  );
-}
-
-function AdminInvestisseursPageContent() {
-  const searchParams = useSearchParams();
   const { token } = useAuth();
   const { refreshBadges } = useAdminBadges();
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState(
-    searchParams.get("role") === "INSTITUTION" ? "Institutions/Banques" : "Tous",
-  );
   const [page, setPage] = useState(1);
 
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -68,7 +49,9 @@ function AdminInvestisseursPageContent() {
     setIsLoading(true);
     const requestId = ++latestRequestId.current;
     const params = new URLSearchParams();
-    params.set("role", FILTER_TO_ROLE[filter]);
+    // Les institutions/banques ont leur propre dossier dans /admin/partenaires —
+    // cette page ne couvre que les investisseurs particuliers.
+    params.set("role", "INVESTOR");
     if (search) params.set("search", search);
     params.set("page", String(page));
     params.set("limit", String(PAGE_SIZE));
@@ -90,7 +73,7 @@ function AdminInvestisseursPageContent() {
       .catch(() => {
         if (requestId === latestRequestId.current) setIsLoading(false);
       });
-  }, [token, filter, search, page]);
+  }, [token, search, page]);
 
   const fetchStats = useCallback(() => {
     if (!token) return;
@@ -120,7 +103,6 @@ function AdminInvestisseursPageContent() {
 
   const { sortedRows: sortedUsers, sortKey, direction, toggleSort } = useSortableRows(users, {
     name: (u) => `${u.firstName} ${u.lastName}`,
-    role: (u) => u.role,
     status: (u) => u.kycStatus,
     active: (u) =>
       u.investments.filter((i) => ["COMMITTED", "SETTLED_OFF_PLATFORM"].includes(i.status)).length,
@@ -132,24 +114,29 @@ function AdminInvestisseursPageContent() {
   });
 
   return (
-    <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Investisseurs</h1>
-        <p className="text-sm text-gray-500">Tous les investisseurs inscrits sur la plateforme</p>
-      </div>
+    <>
+      <header className="sticky top-0 z-10 flex h-[60px] items-center justify-between border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
+        <div>
+          <p className="text-[15px] font-black tracking-tight text-gray-900">Investisseurs</p>
+          <p className="text-xs text-gray-500">
+            Investisseurs particuliers inscrits sur la plateforme — les institutions/banques sont gérées dans Partenaires
+          </p>
+        </div>
+        <NotifBell href="/admin/notifications" />
+      </header>
 
+      <div className="p-8">
       {/* Stats */}
-      <div className="mb-6 grid grid-cols-4 gap-4">
+      <div className="mb-6 grid grid-cols-3 gap-4">
         <StatCard label="Total investisseurs" value={stats ? stats.total : "…"} />
-        <StatCard label="Institutions" value={stats ? stats.institutions : "…"} />
-        <StatCard label="Particuliers" value={stats ? stats.particuliers : "…"} />
+        <StatCard label="KYC en attente" value={stats ? stats.pendingKyc : "…"} />
         <StatCard
           label="Engagements totaux"
           value={stats ? `${formatCompactAmount(stats.totalEngaged)} FCFA` : "…"}
         />
       </div>
 
-      {/* Filtres + recherche */}
+      {/* Recherche */}
       <div className="mb-4 flex items-center gap-3">
         <input
           type="text"
@@ -158,22 +145,6 @@ function AdminInvestisseursPageContent() {
           onChange={(e) => setSearchInput(e.target.value)}
           className="flex-1 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
         />
-        <div className="flex gap-2">
-          {FILTERS.map((f) => (
-            <button
-              key={f}
-              onClick={() => {
-                setFilter(f);
-                setPage(1);
-              }}
-              className={`rounded-full px-4 py-1.5 text-xs font-medium transition ${
-                filter === f ? "bg-brand-700 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Tableau */}
@@ -188,7 +159,6 @@ function AdminInvestisseursPageContent() {
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500">
                   <SortableTh label="Investisseur" sortKey="name" currentKey={sortKey} direction={direction} onSort={toggleSort} />
-                  <SortableTh label="Type" sortKey="role" currentKey={sortKey} direction={direction} onSort={toggleSort} />
                   <SortableTh label="Statut" sortKey="status" currentKey={sortKey} direction={direction} onSort={toggleSort} />
                   <SortableTh label="Actifs" sortKey="active" currentKey={sortKey} direction={direction} onSort={toggleSort} />
                   <SortableTh label="Engagé" sortKey="engaged" currentKey={sortKey} direction={direction} onSort={toggleSort} align="right" />
@@ -198,7 +168,6 @@ function AdminInvestisseursPageContent() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {sortedUsers.map((u) => {
-                  const roleConfig = USER_ROLE_CONFIG[u.role] ?? USER_ROLE_CONFIG.INVESTOR;
                   const kycConfig = KYC_STATUS_CONFIG[u.kycStatus] ?? KYC_STATUS_CONFIG.PENDING;
                   const activeInv = u.investments.filter((i) =>
                     ["COMMITTED", "SETTLED_OFF_PLATFORM"].includes(i.status),
@@ -214,11 +183,6 @@ function AdminInvestisseursPageContent() {
                           {u.firstName} {u.lastName}
                         </p>
                         <p className="text-xs text-gray-400">{u.email}</p>
-                      </td>
-                      <td className="px-5 py-3">
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${roleConfig.className}`}>
-                          {roleConfig.label}
-                        </span>
                       </td>
                       <td className="px-5 py-3">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${kycConfig.className}`}>
@@ -242,7 +206,7 @@ function AdminInvestisseursPageContent() {
                           >
                             Voir le dossier →
                           </Link>
-                          {u.kycStatus === "PENDING" && (
+                          {/* {u.kycStatus === "PENDING" && (
                             <>
                               <button
                                 onClick={() => handleAction(u.id, "verify-kyc")}
@@ -259,7 +223,7 @@ function AdminInvestisseursPageContent() {
                                 Rejeter
                               </button>
                             </>
-                          )}
+                          )} */}
                         </div>
                       </td>
                     </tr>
@@ -296,7 +260,8 @@ function AdminInvestisseursPageContent() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

@@ -34,6 +34,7 @@ model User {
   cniNumber    String?   // Numéro de carte nationale d'identité (rôle INVESTOR)
   role         UserRole
   kycStatus    KycStatus @default(PENDING)
+  kycRejectionReason String? // motif communiqué à l'utilisateur quand un admin rejette son KYC via /reject-kyc (hors rejet de document précis)
   isActive     Boolean   @default(true)
   twoFaEnabled Boolean   @default(false)
 

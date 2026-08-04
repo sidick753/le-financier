@@ -111,6 +111,10 @@ export class DocumentsService {
     return this.documentsRepository.findAllByOrganizationId(organizationId);
   }
 
+  async findPersonalDocuments(userId: string) {
+    return this.documentsRepository.findPersonalDocuments(userId);
+  }
+
   async findAllByFundingRequestId(fundingRequestId: string) {
     return this.documentsRepository.findAllByFundingRequestId(fundingRequestId);
   }

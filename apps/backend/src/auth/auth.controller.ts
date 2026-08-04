@@ -5,6 +5,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { RejectionReasonDto } from '../common/dto/rejection-reason.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
@@ -151,13 +152,13 @@ export class AuthController {
   }
 
   @ApiBearerAuth('jwt')
-  @ApiOperation({ summary: '[Admin] Rejeter KYC utilisateur' })
+  @ApiOperation({ summary: '[Admin] Rejeter KYC utilisateur', description: 'Le motif est obligatoire — enregistré et communiqué à l\'utilisateur (notification + visible sur son profil).' })
   @ApiParam({ name: 'id', description: 'UUID de l\'utilisateur' })
   @ApiResponse({ status: 200, description: 'KYC mis à jour à REJECTED' })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
   @Patch('admin/users/:id/reject-kyc')
-  rejectUserKyc(@Param('id') id: string) {
-    return this.authService.updateUserKyc(id, 'REJECTED');
+  rejectUserKyc(@Param('id') id: string, @Body() dto: RejectionReasonDto) {
+    return this.authService.updateUserKyc(id, 'REJECTED', dto.reason);
   }
 }

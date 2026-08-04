@@ -185,15 +185,15 @@ export class AuthService {
     return user;
   }
 
-  async updateUserKyc(id: string, status: 'VERIFIED' | 'REJECTED') {
-    const updated = await this.usersRepository.updateKycStatus(id, status);
+  async updateUserKyc(id: string, status: 'VERIFIED' | 'REJECTED', reason?: string) {
+    const updated = await this.usersRepository.updateKycStatus(id, status, reason);
 
     await this.notificationsService.notify(
       id,
       status === 'VERIFIED' ? 'Identité vérifiée' : 'Vérification d\'identité rejetée',
       status === 'VERIFIED'
         ? 'Votre pièce d\'identité a été validée.'
-        : 'Votre pièce d\'identité a été rejetée. Veuillez la resoumettre.',
+        : `Votre pièce d'identité a été rejetée. Motif : ${reason}. Veuillez la resoumettre.`,
     );
 
     return updated;

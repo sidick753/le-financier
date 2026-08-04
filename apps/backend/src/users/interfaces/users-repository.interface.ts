@@ -25,15 +25,13 @@ export interface IUsersRepository {
   }): Promise<{ data: any[]; total: number }>;
   getInvestorStats(): Promise<{
     total: number;
-    institutions: number;
-    particuliers: number;
     pendingKyc: number;
     totalEngaged: number;
   }>;
   create(data: CreateUserData): Promise<User>;
   findByIdPublic(id: string): Promise<PublicUser | null>;
   updateProfile(id: string, data: { firstName?: string; lastName?: string; phone?: string; cniNumber?: string }): Promise<PublicUser>;
-  updateKycStatus(id: string, status: 'VERIFIED' | 'REJECTED'): Promise<PublicUser>;
+  updateKycStatus(id: string, status: 'VERIFIED' | 'REJECTED', reason?: string): Promise<PublicUser>;
   updatePassword(id: string, passwordHash: string): Promise<User>;
   createRefreshToken(userId: string, token: string, expiresAt: Date): Promise<any>;
   findRefreshToken(token: string): Promise<any>;

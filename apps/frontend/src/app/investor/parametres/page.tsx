@@ -4,6 +4,7 @@ import { useState } from "react";
 import { NotifBell } from "@/components/ui/notif-bell";
 import { PersonalProfileSection } from "@/components/ui/personal-profile-section";
 import { PasswordSecuritySection } from "@/components/ui/password-security-section";
+import { IdentityDocumentSection } from "@/components/identity-document-section";
 
 type Tab = "profil" | "securite";
 
@@ -42,7 +43,12 @@ export default function InvestorParametresPage() {
           ))}
         </div>
 
-        {tab === "profil" && <PersonalProfileSection showCni />}
+        {tab === "profil" && (
+          <>
+            <PersonalProfileSection showCni />
+            <IdentityDocumentSection />
+          </>
+        )}
         {tab === "securite" && <PasswordSecuritySection />}
       </div>
     </>

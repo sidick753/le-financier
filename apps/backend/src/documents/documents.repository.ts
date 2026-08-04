@@ -28,6 +28,15 @@ export class DocumentsRepository implements IDocumentsRepository {
     });
   }
 
+  // Documents rattachés directement à un utilisateur (ex. pièce d'identité
+  // d'un investisseur particulier), sans organisation ni demande de financement.
+  async findPersonalDocuments(userId: string) {
+    return this.prisma.document.findMany({
+      where: { uploadedById: userId, organizationId: null, fundingRequestId: null },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async updateStatus(id: string, status: Document['status'], rejectionReason?: string) {
     return this.prisma.document.update({
       where: { id },

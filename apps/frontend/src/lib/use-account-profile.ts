@@ -16,6 +16,7 @@ export interface AccountProfile {
   cniNumber: string | null;
   role: string;
   kycStatus: string;
+  kycRejectionReason: string | null;
   isActive: boolean;
   createdAt: string;
 }

@@ -7,6 +7,8 @@ import { api } from "@/lib/api";
 import { useAdminBadges } from "@/lib/admin-badges-context";
 import { KYC_STATUS_CONFIG, formatAdminDate, formatFullAmount } from "@/lib/admin-ui";
 import { alertError, alertSuccess } from "@/lib/alert";
+import { NotifBell } from "@/components/ui/notif-bell";
+import { RejectReasonModal } from "@/components/reject-reason-modal";
 
 const MEMBER_ROLE_LABELS: Record<string, string> = {
   OWNER: "Propriétaire",
@@ -39,6 +41,7 @@ interface InstitutionDetail {
     lastName: string;
     email: string;
     kycStatus: string;
+    kycRejectionReason: string | null;
     role: string;
     status: string;
     specialty: string | null;
@@ -58,10 +61,11 @@ export default function AdminPartenaireDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [kycRejectUserId, setKycRejectUserId] = useState<string | null>(null);
 
   function load() {
     if (!token) return;
-    setIsLoading(true);
+    if (!institution) setIsLoading(true);
     api
       .get<InstitutionDetail>(`/institutions/admin/${id}`, token)
       .then(setInstitution)
@@ -71,13 +75,29 @@ export default function AdminPartenaireDetailPage() {
 
   useEffect(load, [id, token]);
 
-  async function handleKyc(userId: string, action: "verify-kyc" | "reject-kyc") {
+  async function handleVerifyKyc(userId: string) {
     setActionLoading(true);
     try {
-      await api.patch(`/auth/admin/users/${userId}/${action}`, {}, token!);
+      await api.patch(`/auth/admin/users/${userId}/verify-kyc`, {}, token!);
       load();
       refreshBadges();
-      alertSuccess(action === "verify-kyc" ? "KYC validé." : "KYC rejeté.");
+      alertSuccess("KYC validé.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec de l'action.");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleRejectKyc(reason: string) {
+    if (!kycRejectUserId) return;
+    setActionLoading(true);
+    try {
+      await api.patch(`/auth/admin/users/${kycRejectUserId}/reject-kyc`, { reason }, token!);
+      setKycRejectUserId(null);
+      load();
+      refreshBadges();
+      alertSuccess("KYC rejeté.");
     } catch (err) {
       alertError(err instanceof Error ? err.message : "Échec de l'action.");
     } finally {
@@ -97,45 +117,51 @@ export default function AdminPartenaireDetailPage() {
   const config = owner ? KYC_STATUS_CONFIG[owner.kycStatus] ?? KYC_STATUS_CONFIG.PENDING : null;
 
   return (
-    <div className="p-8">
-      <button
-        onClick={() => router.push("/admin/partenaires")}
-        className="mb-4 text-xs font-medium text-gray-500 hover:text-brand-700"
-      >
-        ← Retour à la liste des partenaires
-      </button>
-
-      {/* Header */}
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <div className="mb-1 flex items-center gap-3">
-            <h1 className="text-2xl font-semibold text-gray-900">{institution.name}</h1>
-            {config && (
-              <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${config.className}`}>
-                {config.label}
-              </span>
+    <>
+      <header className="sticky top-0 z-10 flex h-[60px] items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
+        <div className="flex min-w-0 items-center gap-3">
+          <button
+            onClick={() => router.push("/admin/partenaires")}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] text-slate-400 transition hover:bg-slate-50 hover:text-slate-900"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="19" y1="12" x2="5" y2="12" />
+              <polyline points="12 19 5 12 12 5" />
+            </svg>
+          </button>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="truncate text-[15px] font-black tracking-tight text-gray-900">{institution.name}</p>
+              {config && (
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${config.className}`}>
+                  {config.label}
+                </span>
+              )}
+            </div>
+            <p className="truncate text-xs text-gray-500">
+              {institution.type ?? "Institution"}
+              {institution.bceaoApprovalNumber && ` · Agrément ${institution.bceaoApprovalNumber}`}
+              {" · "}Inscrit le {formatAdminDate(institution.createdAt)}
+            </p>
+            {owner?.kycStatus === "REJECTED" && owner.kycRejectionReason && (
+              <p className="mt-0.5 truncate text-xs text-red-600">Motif : {owner.kycRejectionReason}</p>
             )}
           </div>
-          <p className="text-sm text-gray-500">
-            {institution.type ?? "Institution"}
-            {institution.bceaoApprovalNumber && ` · Agrément ${institution.bceaoApprovalNumber}`}
-            {" · "}Inscrit le {formatAdminDate(institution.createdAt)}
-          </p>
         </div>
 
         {owner && (
-          <div className="flex gap-2">
+          <div className="flex shrink-0 gap-2">
             {owner.kycStatus === "PENDING" && (
               <>
                 <button
-                  onClick={() => handleKyc(owner.userId, "verify-kyc")}
+                  onClick={() => handleVerifyKyc(owner.userId)}
                   disabled={actionLoading}
                   className="rounded-md bg-green-600 px-4 py-2 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
                 >
                   Valider
                 </button>
                 <button
-                  onClick={() => handleKyc(owner.userId, "reject-kyc")}
+                  onClick={() => setKycRejectUserId(owner.userId)}
                   disabled={actionLoading}
                   className="rounded-md border border-red-200 px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
                 >
@@ -145,7 +171,7 @@ export default function AdminPartenaireDetailPage() {
             )}
             {owner.kycStatus === "VERIFIED" && (
               <button
-                onClick={() => handleKyc(owner.userId, "reject-kyc")}
+                onClick={() => setKycRejectUserId(owner.userId)}
                 disabled={actionLoading}
                 className="rounded-md border border-orange-200 px-4 py-2 text-xs font-medium text-orange-600 hover:bg-orange-50 disabled:opacity-50"
               >
@@ -154,7 +180,7 @@ export default function AdminPartenaireDetailPage() {
             )}
             {owner.kycStatus === "REJECTED" && (
               <button
-                onClick={() => handleKyc(owner.userId, "verify-kyc")}
+                onClick={() => handleVerifyKyc(owner.userId)}
                 disabled={actionLoading}
                 className="rounded-md bg-brand-700 px-4 py-2 text-xs font-medium text-white hover:bg-brand-800 disabled:opacity-50"
               >
@@ -163,8 +189,10 @@ export default function AdminPartenaireDetailPage() {
             )}
           </div>
         )}
-      </div>
+        <NotifBell href="/admin/notifications" />
+      </header>
 
+      <div className="p-8">
       {/* Infos générales */}
       <div className="mb-6 grid grid-cols-4 gap-4">
         <InfoCard
@@ -186,7 +214,7 @@ export default function AdminPartenaireDetailPage() {
       {/* Membres */}
       <div className="rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-sm font-semibold text-gray-900">Membres</p>
+          <p className="text-base font-semibold text-gray-900">Membres</p>
         </div>
         <div className="divide-y divide-gray-100">
           {institution.members.length === 0 && (
@@ -227,7 +255,18 @@ export default function AdminPartenaireDetailPage() {
           })}
         </div>
       </div>
-    </div>
+      </div>
+
+      {kycRejectUserId && (
+        <RejectReasonModal
+          title="Rejeter le KYC de ce contact"
+          confirmLabel="Confirmer le rejet"
+          isSubmitting={actionLoading}
+          onClose={() => setKycRejectUserId(null)}
+          onConfirm={handleRejectKyc}
+        />
+      )}
+    </>
   );
 }
 

@@ -11,6 +11,7 @@ const PUBLIC_USER_SELECT = {
   cniNumber: true,
   role: true,
   kycStatus: true,
+  kycRejectionReason: true,
   isActive: true,
   createdAt: true,
 } satisfies Prisma.UserSelect;
@@ -52,8 +53,10 @@ export class UsersRepository implements IUsersRepository {
         firstName: true,
         lastName: true,
         phone: true,
+        cniNumber: true,
         role: true,
         kycStatus: true,
+        kycRejectionReason: true,
         isActive: true,
         createdAt: true,
         investments: {
@@ -127,31 +130,33 @@ export class UsersRepository implements IUsersRepository {
     return { data, total: count ?? data.length };
   }
 
+  // Les institutions/banques ont leur propre dossier et leurs propres stats
+  // dans /admin/partenaires — ces chiffres ne portent que sur les
+  // investisseurs particuliers (role INVESTOR) pour éviter le double comptage.
   async getInvestorStats() {
-    const investorRoles: Prisma.UserWhereInput = { role: { in: ['INVESTOR', 'INSTITUTION'] } };
-    const [total, institutions, particuliers, pendingKyc, committed] = await Promise.all([
-      this.prisma.user.count({ where: investorRoles }),
-      this.prisma.user.count({ where: { role: 'INSTITUTION' } }),
+    const [total, pendingKyc, committed] = await Promise.all([
       this.prisma.user.count({ where: { role: 'INVESTOR' } }),
-      this.prisma.user.count({ where: { ...investorRoles, kycStatus: 'PENDING' } }),
+      this.prisma.user.count({ where: { role: 'INVESTOR', kycStatus: 'PENDING' } }),
       this.prisma.investment.aggregate({
         _sum: { amountCommitted: true },
-        where: { status: { in: ['COMMITTED', 'SETTLED_OFF_PLATFORM'] } },
+        where: {
+          status: { in: ['COMMITTED', 'SETTLED_OFF_PLATFORM'] },
+          investor: { role: 'INVESTOR' },
+        },
       }),
     ]);
     return {
       total,
-      institutions,
-      particuliers,
       pendingKyc,
       totalEngaged: Number(committed._sum.amountCommitted ?? 0),
     };
   }
 
-  async updateKycStatus(id: string, status: 'VERIFIED' | 'REJECTED') {
+  async updateKycStatus(id: string, status: 'VERIFIED' | 'REJECTED', reason?: string) {
     return this.prisma.user.update({
       where: { id },
-      data: { kycStatus: status },
+      // Un nouveau rejet remplace l'ancien motif ; une validation l'efface.
+      data: { kycStatus: status, kycRejectionReason: status === 'REJECTED' ? (reason ?? null) : null },
       select: PUBLIC_USER_SELECT,
     });
   }
