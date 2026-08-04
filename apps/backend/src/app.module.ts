@@ -12,6 +12,7 @@ import { WatchlistModule } from './watchlist/watchlist.module';
 import { RepaymentModule } from './repayment/repayment.module';
 import { ScoringModule } from './scoring/scoring.module';
 import { InstitutionsModule } from './institutions/institutions.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { InstitutionsModule } from './institutions/institutions.module';
     RepaymentModule,
     ScoringModule,
     InstitutionsModule,
+    MailModule,
   ],
   controllers: [AppController],
   providers: [AppService],
