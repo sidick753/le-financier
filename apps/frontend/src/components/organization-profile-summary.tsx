@@ -51,7 +51,24 @@ export interface OrganizationProfileSummaryData {
   partMarcheRelative: string | null;
 }
 
-export function OrganizationProfileSummary({ org }: { org: OrganizationProfileSummaryData }) {
+// Le contact (email/téléphone) n'existe pas sur Organization elle-même — une PME
+// est toujours représentée par un membre, jamais en son nom propre (cf. le
+// propriétaire de l'organisation). Prop séparée plutôt qu'ajoutée à
+// OrganizationProfileSummaryData : ce n'est pas un attribut du profil de crédit.
+interface OrganizationOwner {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string | null;
+}
+
+export function OrganizationProfileSummary({
+  org,
+  owner,
+}: {
+  org: OrganizationProfileSummaryData;
+  owner?: OrganizationOwner | null;
+}) {
   return (
     <div className="space-y-4">
       <CreditSection title="Identité">
@@ -59,6 +76,9 @@ export function OrganizationProfileSummary({ org }: { org: OrganizationProfileSu
         <Field label="Année de création" value={org.foundedYear?.toString() ?? "—"} />
         <Field label="Ville" value={org.city ?? "—"} />
         <Field label="Adresse" value={org.address ?? "—"} />
+        <Field label="Contact (propriétaire)" value={owner ? `${owner.firstName} ${owner.lastName}` : "—"} />
+        <Field label="Email" value={owner?.email ?? "—"} />
+        <Field label="Téléphone" value={owner?.phone ?? "—"} />
       </CreditSection>
 
       <CreditSection title="Coordonnées bancaires">

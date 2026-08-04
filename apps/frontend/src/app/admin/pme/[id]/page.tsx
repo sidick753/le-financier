@@ -352,8 +352,10 @@ export default function AdminPmeDetailPage() {
         </div>
       )}
 
-      {/* Infos générales */}
-      <div className="mb-6 grid grid-cols-4 gap-4">
+      {/* Infos générales — l'email n'existe pas sur Organization (jamais d'email "PME" en
+          propre) : on affiche celui du propriétaire, seul repère de contact fiable. */}
+      <div className="mb-6 grid grid-cols-5 gap-4">
+        <InfoCard label="Email du propriétaire" value={owner?.user.email ?? "—"} />
         <InfoCard label="Forme juridique" value={org.legalForm ?? "—"} />
         <InfoCard label="Année de création" value={org.foundedYear?.toString() ?? "—"} />
         <InfoCard label="Ville" value={org.city ?? "—"} />
