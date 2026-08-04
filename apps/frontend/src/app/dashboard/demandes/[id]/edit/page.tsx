@@ -9,6 +9,7 @@ import { UploadZone } from "@/components/upload-zone";
 import { FundingDocument, DOCUMENT_TYPE_LABELS, DOCUMENT_STATUS_CONFIG, formatFileSize } from "@/lib/document-labels";
 import { EDITABLE_STATUSES } from "@/lib/funding-status";
 import { alertError, confirmDialog } from "@/lib/alert";
+import { formatAmountInput, parseAmountInput } from "@/lib/admin-ui";
 
 const CATEGORY_OPTIONS: { value: "FACTURE" | "PRET" | "EQUITY"; label: string }[] = [
   { value: "FACTURE", label: "Financement de facture" },
@@ -21,11 +22,6 @@ const ADD_DOC_TYPE_OPTIONS = [
   { value: "FINANCIAL_STATEMENT", label: "États financiers" },
   { value: "ORGANIZATION_LEGAL", label: "Document légal" },
 ];
-
-function fmtAmountInput(raw: string) {
-  const n = parseInt(raw.replace(/\D/g, ""), 10);
-  return isNaN(n) ? "" : n.toLocaleString("fr-FR");
-}
 
 interface FundingRequestDetail {
   id: string;
@@ -81,7 +77,7 @@ export default function EditDemandePage() {
         setCategory(r.category);
         setTitle(r.title);
         setDescription(r.description);
-        setAmount(fmtAmountInput(r.amountRequested));
+        setAmount(formatAmountInput(r.amountRequested));
         setDuration(r.durationMonths ? String(r.durationMonths) : "");
         setRate(r.expectedReturn ?? "");
         setInvestorMode(r.investorMode ?? "MULTIPLE_INVESTORS");
@@ -112,7 +108,7 @@ export default function EditDemandePage() {
     e.preventDefault();
     if (!token || !id) return;
 
-    const amountRaw = parseInt(amount.replace(/\D/g, ""), 10);
+    const amountRaw = parseAmountInput(amount);
     if (isNaN(amountRaw) || amountRaw < 1) {
       alertError("Montant invalide.");
       return;
@@ -234,7 +230,7 @@ export default function EditDemandePage() {
                   type="text"
                   inputMode="numeric"
                   value={amount}
-                  onChange={(e) => setAmount(fmtAmountInput(e.target.value))}
+                  onChange={(e) => setAmount(formatAmountInput(e.target.value))}
                   className="h-10 w-full rounded-[10px] border border-slate-200 px-3 text-[13px] text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
                 />
               </div>

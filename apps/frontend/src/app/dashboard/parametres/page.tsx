@@ -9,7 +9,9 @@ import { NotifBell } from "@/components/ui/notif-bell";
 import { PersonalProfileSection } from "@/components/ui/personal-profile-section";
 import { PasswordSecuritySection } from "@/components/ui/password-security-section";
 import { INPUT_GRAY } from "@/components/ui/form-styles";
+import { SelectWithOther } from "@/components/ui/select-with-other";
 import {
+  SECTEURS_ACTIVITE,
   SECTEURS,
   TAILLE_MARCHE,
   SCALABILITE,
@@ -21,6 +23,7 @@ import {
   TRANSPARENCE,
 } from "@/lib/credit-profile-options";
 import { alertError, alertSuccess } from "@/lib/alert";
+import { formatAmountInput, parseAmountInput } from "@/lib/admin-ui";
 
 type Tab = "profil" | "entreprise" | "bancaire" | "securite";
 
@@ -160,8 +163,8 @@ function ParametresPageContent() {
         setSecteurSaisonnalite(p.secteurSaisonnalite ?? false);
         setSecteurImportDevises(p.secteurImportDevises ?? false);
         setSecteurSoutienPublic(p.secteurSoutienPublic ?? false);
-        setCashFlowAnnuel(p.cashFlowAnnuel ? String(Number(p.cashFlowAnnuel)) : "");
-        setFluxMobileMoneyMensuel(p.fluxMobileMoneyMensuel ? String(Number(p.fluxMobileMoneyMensuel)) : "");
+        setCashFlowAnnuel(p.cashFlowAnnuel ? formatAmountInput(p.cashFlowAnnuel) : "");
+        setFluxMobileMoneyMensuel(p.fluxMobileMoneyMensuel ? formatAmountInput(p.fluxMobileMoneyMensuel) : "");
         setAutonomieFinanciere(toPercentString(p.autonomieFinanciere));
         setTauxEndettement(toPercentString(p.tauxEndettement));
         setRatioLiquidite(toPercentString(p.ratioLiquidite));
@@ -224,8 +227,8 @@ function ParametresPageContent() {
           secteurSaisonnalite,
           secteurImportDevises,
           secteurSoutienPublic,
-          cashFlowAnnuel: cashFlowAnnuel ? Number(cashFlowAnnuel) : undefined,
-          fluxMobileMoneyMensuel: fluxMobileMoneyMensuel ? Number(fluxMobileMoneyMensuel) : undefined,
+          cashFlowAnnuel: cashFlowAnnuel ? parseAmountInput(cashFlowAnnuel) : undefined,
+          fluxMobileMoneyMensuel: fluxMobileMoneyMensuel ? parseAmountInput(fluxMobileMoneyMensuel) : undefined,
           autonomieFinanciere: fromPercentInput(autonomieFinanciere),
           tauxEndettement: fromPercentInput(tauxEndettement),
           ratioLiquidite: fromPercentInput(ratioLiquidite),
@@ -333,7 +336,7 @@ function ParametresPageContent() {
                   C'est ce que l'admin voit dans la fiche PME (Forme juridique, Année de
                   création, Ville, Adresse). */}
               <section className="rounded-xl border border-gray-200 bg-white p-6">
-                <h2 className="mb-1 text-sm font-semibold text-gray-900">Identité de l'entreprise</h2>
+                <h2 className="mb-1 text-base font-semibold text-gray-900">Identité de l'entreprise</h2>
                 <p className="mb-4 text-xs text-gray-500">
                   Visible par notre équipe lors de la vérification KYC et sur votre profil auprès des investisseurs.
                 </p>
@@ -341,8 +344,13 @@ function ParametresPageContent() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">Secteur d'activité</label>
-                    <input type="text" placeholder="Ex : Agroalimentaire" value={sector} onChange={(e) => setSector(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                    <SelectWithOther
+                      value={sector}
+                      onChange={setSector}
+                      options={SECTEURS_ACTIVITE}
+                      otherPlaceholder="Précisez votre secteur d'activité"
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                    />
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">Forme juridique</label>
@@ -383,21 +391,18 @@ function ParametresPageContent() {
 
               {/* Secteur & structure */}
               <section className="rounded-xl border border-gray-200 bg-white p-6">
-                <h2 className="mb-1 text-sm font-semibold text-gray-900">Secteur & structure</h2>
+                <h2 className="mb-1 text-base font-semibold text-gray-900">Secteur & structure</h2>
                 <p className="mb-4 text-xs text-gray-500">Utilisé par le moteur de scoring Prêt MLT.</p>
 
                 <div className="mb-4">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Secteur d'activité principal</label>
-                  <select
+                  <SelectWithOther
                     value={secteurCode}
-                    onChange={(e) => setSecteurCode(e.target.value)}
+                    onChange={setSecteurCode}
+                    options={SECTEURS}
+                    otherPlaceholder="Précisez le secteur"
                     className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
-                  >
-                    <option value="">Sélectionner</option>
-                    {SECTEURS.map((s) => (
-                      <option key={s.value} value={s.value}>{s.label}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
 
                 <div className="flex flex-wrap gap-4">
@@ -418,19 +423,19 @@ function ParametresPageContent() {
 
               {/* Santé financière */}
               <section className="rounded-xl border border-gray-200 bg-white p-6">
-                <h2 className="mb-1 text-sm font-semibold text-gray-900">Santé financière</h2>
+                <h2 className="mb-1 text-base font-semibold text-gray-900">Santé financière</h2>
                 <p className="mb-4 text-xs text-gray-500">Utilisé par les moteurs Prêt MLT et Equity.</p>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">Cash-flow annuel (FCFA)</label>
-                    <input type="number" placeholder="Ex : 8 000 000" value={cashFlowAnnuel} onChange={(e) => setCashFlowAnnuel(e.target.value)}
+                    <input inputMode="numeric" placeholder="Ex : 8 000 000" value={cashFlowAnnuel} onChange={(e) => setCashFlowAnnuel(formatAmountInput(e.target.value))}
                       className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
                     <p className="mt-1 text-xs text-gray-400">D'après vos états financiers, si disponibles.</p>
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">Flux Mobile Money mensuel (FCFA)</label>
-                    <input type="number" placeholder="Ex : 900 000" value={fluxMobileMoneyMensuel} onChange={(e) => setFluxMobileMoneyMensuel(e.target.value)}
+                    <input inputMode="numeric" placeholder="Ex : 900 000" value={fluxMobileMoneyMensuel} onChange={(e) => setFluxMobileMoneyMensuel(formatAmountInput(e.target.value))}
                       className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
                     <p className="mt-1 text-xs text-gray-400">À défaut de bilan formel — moyenne des 6 derniers mois.</p>
                   </div>
@@ -477,6 +482,7 @@ function ParametresPageContent() {
                     <label className="mb-1 block text-sm font-medium text-gray-700">Marge brute (%)</label>
                     <input type="number" step="0.1" placeholder="Ex : 40" value={margeBrute} onChange={(e) => setMargeBrute(e.target.value)}
                       className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none" />
+                    <p className="mt-1 text-xs text-gray-400">Chiffre d&apos;affaires moins le coût direct de vos produits/services, en % du CA.</p>
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">Runway (mois)</label>
@@ -489,7 +495,7 @@ function ParametresPageContent() {
 
               {/* Profil du dirigeant */}
               <section className="rounded-xl border border-gray-200 bg-white p-6">
-                <h2 className="mb-1 text-sm font-semibold text-gray-900">Profil du dirigeant</h2>
+                <h2 className="mb-1 text-base font-semibold text-gray-900">Profil du dirigeant</h2>
                 <p className="mb-4 text-xs text-gray-500">Utilisé par les moteurs Prêt MLT et Equity.</p>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -517,13 +523,14 @@ function ParametresPageContent() {
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">Track record du dirigeant</label>
-                    <select value={trackRecord} onChange={(e) => setTrackRecord(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                      <option value="">Sélectionner</option>
-                      {TRACK_RECORD.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
+                    <SelectWithOther
+                      value={trackRecord}
+                      onChange={setTrackRecord}
+                      options={TRACK_RECORD}
+                      otherPlaceholder="Précisez"
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                    />
+                    <p className="mt-1 text-xs text-gray-400">Vos résultats et votre historique dans ce secteur, tels qu'un investisseur les jugerait.</p>
                   </div>
                 </div>
 
@@ -536,87 +543,92 @@ function ParametresPageContent() {
 
               {/* Équipe, gouvernance & marché — Equity */}
               <section className="rounded-xl border border-gray-200 bg-white p-6">
-                <h2 className="mb-1 text-sm font-semibold text-gray-900">Équipe, gouvernance & marché</h2>
+                <h2 className="mb-1 text-base font-semibold text-gray-900">Équipe, gouvernance & marché</h2>
                 <p className="mb-4 text-xs text-gray-500">Utilisé par le moteur de scoring Equity.</p>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">Taille du marché</label>
-                    <select value={tailleMarche} onChange={(e) => setTailleMarche(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                      <option value="">Sélectionner</option>
-                      {TAILLE_MARCHE.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
+                    <SelectWithOther
+                      value={tailleMarche}
+                      onChange={setTailleMarche}
+                      options={TAILLE_MARCHE}
+                      otherPlaceholder="Précisez"
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                    />
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">Scalabilité</label>
-                    <select value={scalabilite} onChange={(e) => setScalabilite(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                      <option value="">Sélectionner</option>
-                      {SCALABILITE.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
+                    <SelectWithOther
+                      value={scalabilite}
+                      onChange={setScalabilite}
+                      options={SCALABILITE}
+                      otherPlaceholder="Précisez"
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                    />
+                    <p className="mt-1 text-xs text-gray-400">Votre capacité à générer plus de revenus sans augmenter vos coûts dans les mêmes proportions.</p>
                   </div>
                 </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-4">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">Avantage concurrentiel (moat)</label>
-                    <select value={moat} onChange={(e) => setMoat(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                      <option value="">Sélectionner</option>
-                      {MOAT.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
+                    <SelectWithOther
+                      value={moat}
+                      onChange={setMoat}
+                      options={MOAT}
+                      otherPlaceholder="Précisez"
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                    />
+                    <p className="mt-1 text-xs text-gray-400">Ce qui vous protège durablement de la concurrence (marque, technologie, réseau...).</p>
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">Position sur le marché</label>
-                    <select value={partMarcheRelative} onChange={(e) => setPartMarcheRelative(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                      <option value="">Sélectionner</option>
-                      {PART_MARCHE.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
+                    <SelectWithOther
+                      value={partMarcheRelative}
+                      onChange={setPartMarcheRelative}
+                      options={PART_MARCHE}
+                      otherPlaceholder="Précisez"
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                    />
+                    <p className="mt-1 text-xs text-gray-400">Votre place face à vos concurrents : leader, challenger, suiveur ou marginal.</p>
                   </div>
                 </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-4">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">Complétude de l'équipe</label>
-                    <select value={completudeEquipe} onChange={(e) => setCompletudeEquipe(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                      <option value="">Sélectionner</option>
-                      {COMPLETUDE_EQUIPE.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
+                    <SelectWithOther
+                      value={completudeEquipe}
+                      onChange={setCompletudeEquipe}
+                      options={COMPLETUDE_EQUIPE}
+                      otherPlaceholder="Précisez"
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                    />
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">Droits investisseurs</label>
-                    <select value={droitsInvestisseur} onChange={(e) => setDroitsInvestisseur(e.target.value)}
-                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                      <option value="">Sélectionner</option>
-                      {DROITS_INVESTISSEUR.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
+                    <SelectWithOther
+                      value={droitsInvestisseur}
+                      onChange={setDroitsInvestisseur}
+                      options={DROITS_INVESTISSEUR}
+                      otherPlaceholder="Précisez"
+                      className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                    />
+                    <p className="mt-1 text-xs text-gray-400">Ce qu'un pacte d'associés accorderait à un investisseur qui entrerait au capital.</p>
                   </div>
                 </div>
 
-                <div className="mt-4">
+                <div className="mt-4 max-w-xs">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Transparence financière</label>
-                  <select value={transparence} onChange={(e) => setTransparence(e.target.value)}
-                    className="w-full max-w-xs rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none">
-                    <option value="">Sélectionner</option>
-                    {TRANSPARENCE.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
+                  <SelectWithOther
+                    value={transparence}
+                    onChange={setTransparence}
+                    options={TRANSPARENCE}
+                    otherPlaceholder="Précisez"
+                    className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+                  />
+                  <p className="mt-1 text-xs text-gray-400">Le niveau de fiabilité de vos comptes : audités, formels, déclaratifs ou peu documentés.</p>
                 </div>
               </section>
 
@@ -641,7 +653,7 @@ function ParametresPageContent() {
             </p>
 
             <section className="rounded-xl border border-gray-200 bg-white p-6">
-              <h2 className="mb-4 text-sm font-semibold text-gray-900">Coordonnées bancaires</h2>
+              <h2 className="mb-4 text-base font-semibold text-gray-900">Coordonnées bancaires</h2>
               <div className="space-y-4">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">Nom de la banque</label>

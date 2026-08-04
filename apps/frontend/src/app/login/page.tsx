@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { getPostAuthRedirectPath } from "@/lib/role-redirect";
 import { Logo } from "@/components/logo";
-import { alertError } from "@/lib/alert";
+import { inputAuthCls } from "@/components/ui/form-styles";
+import { FieldError } from "@/components/ui/field-error";
 
 const TEST_ACCOUNTS = [
   { role: "PME",          email: "test@lefinancier.ci",          password: "motdepasse123" },
@@ -15,29 +16,39 @@ const TEST_ACCOUNTS = [
   { role: "Admin",        email: "admin@lefinancier.ci",         password: "admin123456"   },
 ];
 
-const INPUT =
-  "w-full h-11 border-[1.5px] border-gray-200 rounded-lg px-3.5 text-sm text-slate-900 bg-white outline-none placeholder:text-gray-400 transition-[border-color,box-shadow] focus:border-blue-600 focus:shadow-[0_0_0_3px_rgba(37,99,235,0.1)]";
-
 export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
 
   function fillTestAccount(e: string, p: string) {
     setEmail(e);
     setPassword(p);
+    setErrors({});
   }
 
   async function handleSubmit(ev: FormEvent) {
     ev.preventDefault();
+
+    const newErrors: { email?: string; password?: string } = {};
+    if (!email.trim()) newErrors.email = "L'email est requis.";
+    if (!password) newErrors.password = "Le mot de passe est requis.";
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) return;
+
     setIsSubmitting(true);
     try {
       const response = await login(email, password);
       router.push(getPostAuthRedirectPath(response.user.role));
     } catch (err) {
-      alertError(err instanceof Error ? err.message : "Connexion impossible.");
+      // Message générique (par sécurité, on ne dit pas si c'est l'email ou le
+      // mot de passe qui est incorrect) — affiché sous le champ mot de passe
+      // plutôt qu'en toast, pour rester au plus près de la saisie fautive.
+      const msg = err instanceof Error ? err.message : "Connexion impossible.";
+      setErrors({ password: msg });
     } finally {
       setIsSubmitting(false);
     }
@@ -67,7 +78,7 @@ export default function LoginPage() {
             Accédez à votre espace LeFinancier
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-3.5">
+          <form onSubmit={handleSubmit} noValidate className="space-y-3.5">
             <div>
               <label htmlFor="email" className="mb-1.5 block text-[13px] font-semibold text-gray-700">
                 Email
@@ -79,10 +90,14 @@ export default function LoginPage() {
                 autoFocus
                 autoComplete="username"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (errors.email) setErrors((er) => ({ ...er, email: undefined }));
+                }}
                 placeholder="votre@email.com"
-                className={INPUT}
+                className={inputAuthCls(errors.email ? false : null)}
               />
+              <FieldError msg={errors.email ?? ""} show={!!errors.email} />
             </div>
 
             <div>
@@ -95,10 +110,14 @@ export default function LoginPage() {
                 required
                 autoComplete="current-password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (errors.password) setErrors((er) => ({ ...er, password: undefined }));
+                }}
                 placeholder="••••••••"
-                className={INPUT}
+                className={inputAuthCls(errors.password ? false : null)}
               />
+              <FieldError msg={errors.password ?? ""} show={!!errors.password} />
             </div>
 
             <div className="flex items-center justify-between pb-2">

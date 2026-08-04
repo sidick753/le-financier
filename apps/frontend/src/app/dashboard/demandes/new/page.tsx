@@ -8,6 +8,9 @@ import { usePmeData } from "@/lib/use-pme-data";
 import { api } from "@/lib/api";
 import { UploadZone as RealUploadZone } from "@/components/upload-zone";
 import { alertError } from "@/lib/alert";
+import { formatAmountInput, parseAmountInput } from "@/lib/admin-ui";
+import { inputWhiteCls } from "@/components/ui/form-styles";
+import { FieldError } from "@/components/ui/field-error";
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
@@ -99,11 +102,6 @@ const STEPS = ["Type & Montant", "Détails", "Documents", "Résumé"];
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-function fmtInput(raw: string) {
-  const n = parseInt(raw.replace(/\D/g, ""), 10);
-  return isNaN(n) ? "" : n.toLocaleString("fr-FR");
-}
-
 function parseDurationToMonths(s: string): number | undefined {
   if (!s) return undefined;
   const jours = s.match(/(\d+)\s*jours?/i);
@@ -120,9 +118,11 @@ function parseDurationToMonths(s: string): number | undefined {
 function Step1({
   data,
   onChange,
+  amountError,
 }: {
   data: FormData;
   onChange: (k: keyof FormData, v: string) => void;
+  amountError?: boolean;
 }) {
   const cfg = TYPE_CONFIG[data.type];
 
@@ -178,11 +178,12 @@ function Step1({
           <input
             type="text"
             value={data.amount}
-            onChange={(e) => onChange("amount", fmtInput(e.target.value))}
+            onChange={(e) => onChange("amount", formatAmountInput(e.target.value))}
             placeholder="Ex : 10 000 000"
             inputMode="numeric"
-            className="h-[42px] w-full rounded-[10px] border border-slate-200 px-3.5 text-[13px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+            className={inputWhiteCls(amountError)}
           />
+          <FieldError msg="Le montant souhaité est requis." show={!!amountError} />
         </div>
         <div>
           <label className="mb-1.5 block text-[13px] font-semibold text-slate-900">Durée</label>
@@ -262,9 +263,11 @@ function Step1({
 function Step2({
   data,
   onChange,
+  descriptionError,
 }: {
   data: FormData;
   onChange: (k: keyof FormData, v: string) => void;
+  descriptionError?: boolean;
 }) {
   return (
     <div className="rounded-[18px] border border-slate-200 bg-white p-7">
@@ -291,8 +294,13 @@ function Step2({
           onChange={(e) => onChange("description", e.target.value)}
           placeholder="Décrivez votre besoin de financement, le contexte, et comment vous comptez utiliser les fonds..."
           rows={4}
-          className="w-full resize-y rounded-[10px] border border-slate-200 px-3.5 py-3 text-[13px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+          className={`resize-y ${
+            descriptionError
+              ? "w-full rounded-[10px] border border-red-400 bg-red-50/60 px-3.5 py-3 text-[13px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-red-500 focus:ring-2 focus:ring-red-500/10"
+              : "w-full rounded-[10px] border border-slate-200 px-3.5 py-3 text-[13px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+          }`}
         />
+        <FieldError msg="La description détaillée est requise." show={!!descriptionError} />
         <p className="mt-1 text-[11px] text-slate-500">Une description claire augmente vos chances de recevoir des offres rapidement</p>
       </div>
 
@@ -356,17 +364,22 @@ const DOC_SLOTS_BY_TYPE: Record<FinancingType, DocSlotConfig[]> = {
   ],
 };
 
-function DocSlot({ slot, uploaded, onUploaded, organizationId, fundingRequestId }: {
+function DocSlot({ slot, uploaded, onUploaded, organizationId, fundingRequestId, missing }: {
   slot: DocSlotConfig;
   uploaded: boolean;
   onUploaded: () => void;
   organizationId: string;
   fundingRequestId: string;
+  missing?: boolean;
 }) {
   return (
     <div
       className={`mb-3.5 flex items-center justify-between gap-3 rounded-[14px] border-[1.5px] p-4 transition ${
-        uploaded ? "border-green-500 bg-green-50" : "border-slate-200 bg-white"
+        uploaded
+          ? "border-green-500 bg-green-50"
+          : missing
+            ? "border-red-400 bg-red-50/60"
+            : "border-slate-200 bg-white"
       }`}
     >
       <div className="min-w-0">
@@ -395,6 +408,7 @@ function DocSlot({ slot, uploaded, onUploaded, organizationId, fundingRequestId 
             Non obligatoire, mais chaque document ajouté renforce sérieusement votre dossier.
           </p>
         )}
+        <FieldError msg="Ce document est obligatoire." show={!!missing} />
       </div>
       {uploaded ? (
         <span className="shrink-0 text-[12px] font-semibold text-green-600">✓ Ajouté</span>
@@ -411,12 +425,13 @@ function DocSlot({ slot, uploaded, onUploaded, organizationId, fundingRequestId 
   );
 }
 
-function Step3({ data, organizationId, fundingRequestId, docs, onDocUploaded }: {
+function Step3({ data, organizationId, fundingRequestId, docs, onDocUploaded, attemptedSubmit }: {
   data: FormData;
   organizationId: string | null;
   fundingRequestId: string | null;
   docs: Record<string, boolean>;
   onDocUploaded: (key: string) => void;
+  attemptedSubmit: boolean;
 }) {
   const slots = DOC_SLOTS_BY_TYPE[data.type];
   return (
@@ -437,6 +452,7 @@ function Step3({ data, organizationId, fundingRequestId, docs, onDocUploaded }: 
             onUploaded={() => onDocUploaded(slot.key)}
             organizationId={organizationId}
             fundingRequestId={fundingRequestId}
+            missing={attemptedSubmit && !!slot.required && !docs[slot.key]}
           />
         ))
       )}
@@ -446,7 +462,7 @@ function Step3({ data, organizationId, fundingRequestId, docs, onDocUploaded }: 
 
 function Step4({ data }: { data: FormData }) {
   const cfg = TYPE_CONFIG[data.type];
-  const amountRaw = parseInt(data.amount.replace(/\s/g, ""), 10);
+  const amountRaw = parseAmountInput(data.amount);
   const amountFmt = isNaN(amountRaw) ? "—" : amountRaw.toLocaleString("fr-FR") + " F CFA";
 
   return (
@@ -527,24 +543,28 @@ export default function NewDemandePage() {
   const [creatingDraft, setCreatingDraft] = useState(false);
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [docs, setDocs] = useState<Record<string, boolean>>({});
+  const [errors, setErrors] = useState<{ amount?: boolean; description?: boolean }>({});
+  const [docsAttempted, setDocsAttempted] = useState(false);
 
   function onChange(k: keyof FormData, v: string) {
     setData((d) => ({ ...d, [k]: v }));
+    if (k === "amount" && errors.amount) setErrors((er) => ({ ...er, amount: false }));
+    if (k === "description" && errors.description) setErrors((er) => ({ ...er, description: false }));
   }
 
   function validate(): boolean {
     if (step === 1 && !data.amount.trim()) {
-      alertError("Veuillez entrer le montant souhaité.");
+      setErrors((er) => ({ ...er, amount: true }));
       return false;
     }
     if (step === 2 && !data.description.trim()) {
-      alertError("Veuillez rédiger une description détaillée.");
+      setErrors((er) => ({ ...er, description: true }));
       return false;
     }
     if (step === 3) {
+      setDocsAttempted(true);
       const missing = DOC_SLOTS_BY_TYPE[data.type].filter((slot) => slot.required && !docs[slot.key]);
       if (missing.length > 0) {
-        alertError(`Document(s) obligatoire(s) manquant(s) : ${missing.map((s) => s.label).join(", ")}.`);
         return false;
       }
     }
@@ -555,7 +575,7 @@ export default function NewDemandePage() {
   // réutilisé pour créer le brouillon (avant l'étape documents) et pour la
   // soumission finale.
   function buildPayload() {
-    const amountRaw = parseInt(data.amount.replace(/\s/g, ""), 10);
+    const amountRaw = parseAmountInput(data.amount);
     const typeLabel = TYPE_CONFIG[data.type].label;
     const title = data.title.trim() || `${typeLabel} — ${amountRaw.toLocaleString("fr-FR")} F CFA`;
 
@@ -660,25 +680,24 @@ export default function NewDemandePage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      <header className="sticky top-0 z-10 flex h-[60px] items-center gap-4 border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
+        <Link
+          href="/dashboard"
+          className="flex h-8 w-8 items-center justify-center rounded-[8px] text-slate-400 transition hover:bg-slate-50 hover:text-slate-900"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <line x1="19" y1="12" x2="5" y2="12" />
+            <polyline points="12 19 5 12 12 5" />
+          </svg>
+        </Link>
+        <div>
+          <p className="text-[15px] font-black tracking-tight text-slate-900">Créer une demande de financement</p>
+          <p className="text-xs text-slate-500">Étape {step} sur 4</p>
+        </div>
+      </header>
+
       <main className="px-8 py-10 md:px-12">
         <div className="mx-auto max-w-[680px]">
-
-          {/* Header */}
-          <div className="mb-4">
-            <Link
-              href="/dashboard"
-              className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-slate-500 transition hover:text-slate-900"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-              Retour au dashboard
-            </Link>
-            <h1 className="text-[22px] font-black tracking-tight text-slate-900">
-              Créer une demande de financement
-            </h1>
-            <p className="mt-1 text-[13px] font-medium text-slate-500">Étape {step} sur 4</p>
-          </div>
 
           {/* Progress bar */}
           <div className="mb-2.5 h-[5px] w-full overflow-hidden rounded-full bg-slate-200">
@@ -710,8 +729,8 @@ export default function NewDemandePage() {
           </div>
 
           {/* Step content */}
-          {step === 1 && <Step1 data={data} onChange={onChange} />}
-          {step === 2 && <Step2 data={data} onChange={onChange} />}
+          {step === 1 && <Step1 data={data} onChange={onChange} amountError={errors.amount} />}
+          {step === 2 && <Step2 data={data} onChange={onChange} descriptionError={errors.description} />}
           {step === 3 && (
             <Step3
               data={data}
@@ -719,6 +738,7 @@ export default function NewDemandePage() {
               fundingRequestId={createdId}
               docs={docs}
               onDocUploaded={(key) => setDocs((d) => ({ ...d, [key]: true }))}
+              attemptedSubmit={docsAttempted}
             />
           )}
           {step === 4 && <Step4 data={data} />}

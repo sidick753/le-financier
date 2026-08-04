@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useAccountProfile } from "@/lib/use-account-profile";
 import { EyeIcon } from "./eye-icon";
-import { INPUT_GRAY } from "./form-styles";
-import { alertError, alertSuccess } from "@/lib/alert";
+import { inputGrayCls } from "./form-styles";
+import { FieldError } from "./field-error";
+import { alertSuccess } from "@/lib/alert";
 
 // Bloc "Changement de mot de passe" — identique pour les 4 rôles (PME_OWNER,
 // INVESTOR, INSTITUTION, ADMIN), tous authentifiés via /auth/change-password.
@@ -16,12 +17,20 @@ export function PasswordSecuritySection() {
   const [confirmerMotDePasse, setConfirmerMotDePasse] = useState("");
   const [showMotDePasseActuel, setShowMotDePasseActuel] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [errors, setErrors] = useState<{ actuel?: string; nouveau?: string; confirmer?: string }>({});
 
   async function handleChangePassword() {
-    if (nouveauMotDePasse !== confirmerMotDePasse) {
-      alertError("Les deux mots de passe ne correspondent pas.");
-      return;
+    const newErrors: typeof errors = {};
+    if (!motDePasseActuel) newErrors.actuel = "Le mot de passe actuel est requis.";
+    if (!nouveauMotDePasse || nouveauMotDePasse.length < 8) {
+      newErrors.nouveau = "Le nouveau mot de passe doit contenir au moins 8 caractères.";
     }
+    if (nouveauMotDePasse !== confirmerMotDePasse) {
+      newErrors.confirmer = "Les deux mots de passe ne correspondent pas.";
+    }
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) return;
+
     setIsChangingPassword(true);
     try {
       await changePassword(motDePasseActuel, nouveauMotDePasse);
@@ -30,7 +39,9 @@ export function PasswordSecuritySection() {
       setConfirmerMotDePasse("");
       alertSuccess("Mot de passe mis à jour.");
     } catch (err) {
-      alertError(err instanceof Error ? err.message : "Erreur lors du changement de mot de passe.");
+      // Le rejet backend le plus fréquent est un mot de passe actuel incorrect
+      // — affiché sous ce champ plutôt qu'en toast générique.
+      setErrors({ actuel: err instanceof Error ? err.message : "Erreur lors du changement de mot de passe." });
     } finally {
       setIsChangingPassword(false);
     }
@@ -38,7 +49,7 @@ export function PasswordSecuritySection() {
 
   return (
     <div className="max-w-2xl rounded-xl border border-gray-200 bg-white p-6">
-      <p className="mb-4 text-sm font-semibold text-gray-900">Changement de mot de passe</p>
+      <p className="mb-4 text-base font-semibold text-gray-900">Changement de mot de passe</p>
       <div className="space-y-4">
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-700">Mot de passe actuel</label>
@@ -46,8 +57,11 @@ export function PasswordSecuritySection() {
             <input
               type={showMotDePasseActuel ? "text" : "password"}
               value={motDePasseActuel}
-              onChange={(e) => setMotDePasseActuel(e.target.value)}
-              className={`${INPUT_GRAY} pr-10`}
+              onChange={(e) => {
+                setMotDePasseActuel(e.target.value);
+                if (errors.actuel) setErrors((er) => ({ ...er, actuel: undefined }));
+              }}
+              className={`${inputGrayCls(!!errors.actuel)} pr-10`}
             />
             <button
               type="button"
@@ -57,24 +71,33 @@ export function PasswordSecuritySection() {
               <EyeIcon />
             </button>
           </div>
+          <FieldError msg={errors.actuel ?? ""} show={!!errors.actuel} />
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-700">Nouveau mot de passe</label>
           <input
             type="password"
             value={nouveauMotDePasse}
-            onChange={(e) => setNouveauMotDePasse(e.target.value)}
-            className={INPUT_GRAY}
+            onChange={(e) => {
+              setNouveauMotDePasse(e.target.value);
+              if (errors.nouveau) setErrors((er) => ({ ...er, nouveau: undefined }));
+            }}
+            className={inputGrayCls(!!errors.nouveau)}
           />
+          <FieldError msg={errors.nouveau ?? ""} show={!!errors.nouveau} />
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-700">Confirmer le nouveau mot de passe</label>
           <input
             type="password"
             value={confirmerMotDePasse}
-            onChange={(e) => setConfirmerMotDePasse(e.target.value)}
-            className={INPUT_GRAY}
+            onChange={(e) => {
+              setConfirmerMotDePasse(e.target.value);
+              if (errors.confirmer) setErrors((er) => ({ ...er, confirmer: undefined }));
+            }}
+            className={inputGrayCls(!!errors.confirmer)}
           />
+          <FieldError msg={errors.confirmer ?? ""} show={!!errors.confirmer} />
         </div>
         <button
           onClick={handleChangePassword}

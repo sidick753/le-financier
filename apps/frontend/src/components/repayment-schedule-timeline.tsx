@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { useRepaymentSchedule } from "@/lib/use-repayment-schedule";
-import { CLAIM_STATUS_CONFIG } from "@/lib/admin-ui";
+import { CLAIM_STATUS_CONFIG, formatAmountInput, parseAmountInput } from "@/lib/admin-ui";
 import { alertError, alertSuccess } from "@/lib/alert";
 
 // Échéancier de remboursement d'un investissement (dates, statuts, réclamation des
@@ -116,7 +116,7 @@ function ClaimAction({ scheduleId }: { scheduleId: string }) {
     if (!token) return;
     setSubmitting(true);
     try {
-      const value = amount.trim() ? Number(amount) : undefined;
+      const value = amount.trim() ? parseAmountInput(amount) : undefined;
       await api.post(`/repayments/schedule/${scheduleId}/claims`, { amount: value }, token);
       setAmount("");
       load();
@@ -150,12 +150,10 @@ function ClaimAction({ scheduleId }: { scheduleId: string }) {
           {claimable !== null && claimable > 0 && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <input
-                type="number"
-                min={0}
-                max={claimable}
+                inputMode="numeric"
                 placeholder={`Tout (${fmtFull(claimable)})`}
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={(e) => setAmount(formatAmountInput(e.target.value))}
                 className="h-8 w-40 rounded-lg border border-slate-200 px-2.5 text-[12px] text-slate-900 outline-none focus:border-blue-400"
               />
               <button

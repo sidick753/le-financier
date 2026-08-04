@@ -7,6 +7,7 @@ import { PersonalProfileSection } from "@/components/ui/personal-profile-section
 import { PasswordSecuritySection } from "@/components/ui/password-security-section";
 import { EyeIcon } from "@/components/ui/eye-icon";
 import { INPUT_GRAY as INPUT } from "@/components/ui/form-styles";
+import { formatAmountInput, parseAmountInput } from "@/lib/admin-ui";
 
 type Tab = "profil" | "institution" | "limites" | "securite";
 
@@ -53,9 +54,9 @@ export default function InstitutionParametresPage() {
     setAdresse(institution.address ?? "");
     setEmailInstitutionnel(institution.contactEmail ?? "");
     setTelephone(institution.contactPhone ?? "");
-    setEnveloppeMax(institution.envelopeMax ?? "");
-    setTicketMin(institution.ticketMin ?? "");
-    setTicketMax(institution.ticketMax ?? "");
+    setEnveloppeMax(institution.envelopeMax ? formatAmountInput(institution.envelopeMax) : "");
+    setTicketMin(institution.ticketMin ? formatAmountInput(institution.ticketMin) : "");
+    setTicketMax(institution.ticketMax ? formatAmountInput(institution.ticketMax) : "");
     setSecteursExclus(
       Object.fromEntries(SECTEURS_DISPONIBLES.map((s) => [s, institution.excludedSectors.includes(s)])),
     );
@@ -77,9 +78,9 @@ export default function InstitutionParametresPage() {
 
   async function handleSaveLimites() {
     await updateLimits({
-      envelopeMax: enveloppeMax ? Number(enveloppeMax) : undefined,
-      ticketMin: ticketMin ? Number(ticketMin) : undefined,
-      ticketMax: ticketMax ? Number(ticketMax) : undefined,
+      envelopeMax: enveloppeMax ? parseAmountInput(enveloppeMax) : undefined,
+      ticketMin: ticketMin ? parseAmountInput(ticketMin) : undefined,
+      ticketMax: ticketMax ? parseAmountInput(ticketMax) : undefined,
       excludedSectors: Object.keys(secteursExclus).filter((s) => secteursExclus[s]),
     });
     setSavedLimites(true);
@@ -138,7 +139,7 @@ export default function InstitutionParametresPage() {
 
       {tab === "institution" && (
         <div className="max-w-2xl rounded-xl border border-gray-200 bg-white p-6">
-          <p className="mb-4 text-sm font-semibold text-gray-900">Informations institutionnelles</p>
+          <p className="mb-4 text-base font-semibold text-gray-900">Informations institutionnelles</p>
           <div className="space-y-4">
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-700">Nom de l'institution</label>
@@ -185,19 +186,34 @@ export default function InstitutionParametresPage() {
 
       {tab === "limites" && (
         <div className="max-w-2xl rounded-xl border border-gray-200 bg-white p-6">
-          <p className="mb-4 text-sm font-semibold text-gray-900">Limites & Mandats d'investissement</p>
+          <p className="mb-4 text-base font-semibold text-gray-900">Limites & Mandats d'investissement</p>
           <div className="space-y-4">
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-700">Enveloppe annuelle max (FCFA)</label>
-              <input value={enveloppeMax} onChange={(e) => setEnveloppeMax(e.target.value)} className={INPUT} />
+              <input
+                inputMode="numeric"
+                value={enveloppeMax}
+                onChange={(e) => setEnveloppeMax(formatAmountInput(e.target.value))}
+                className={INPUT}
+              />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-700">Ticket minimum (FCFA)</label>
-              <input value={ticketMin} onChange={(e) => setTicketMin(e.target.value)} className={INPUT} />
+              <input
+                inputMode="numeric"
+                value={ticketMin}
+                onChange={(e) => setTicketMin(formatAmountInput(e.target.value))}
+                className={INPUT}
+              />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-700">Ticket maximum (FCFA)</label>
-              <input value={ticketMax} onChange={(e) => setTicketMax(e.target.value)} className={INPUT} />
+              <input
+                inputMode="numeric"
+                value={ticketMax}
+                onChange={(e) => setTicketMax(formatAmountInput(e.target.value))}
+                className={INPUT}
+              />
             </div>
             <div>
               <label className="mb-2 block text-xs font-medium text-gray-700">Secteurs exclus</label>
@@ -237,7 +253,7 @@ export default function InstitutionParametresPage() {
           <PasswordSecuritySection />
 
           <div className="rounded-xl border border-gray-200 bg-white p-6">
-            <p className="mb-2 text-sm font-semibold text-gray-900">Clé API</p>
+            <p className="mb-2 text-base font-semibold text-gray-900">Clé API</p>
             <p className="mb-3 text-xs text-gray-400">
               La clé API permet d'intégrer LeFinancier à votre système de gestion interne (core banking).
             </p>

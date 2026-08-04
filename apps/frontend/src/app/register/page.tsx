@@ -7,6 +7,8 @@ import { useAuth } from "@/lib/auth-context";
 import { getPostAuthRedirectPath } from "@/lib/role-redirect";
 import { Logo } from "@/components/logo";
 import { alertError } from "@/lib/alert";
+import { inputAuthCls as inputCls } from "@/components/ui/form-styles";
+import { FieldError } from "@/components/ui/field-error";
 
 type Role = "pme" | "investisseur" | "banque";
 
@@ -21,18 +23,6 @@ const EMAIL_CONFIG: Record<Role, { label: string; placeholder: string }> = {
   investisseur: { label: "Email",                placeholder: "marie.diallo@email.com" },
   banque:       { label: "Email institutionnel", placeholder: "contact@banque.ci"      },
 };
-
-function inputCls(valid: boolean | null) {
-  const base =
-    "w-full h-[42px] border-[1.5px] rounded-lg px-3 text-sm text-slate-900 bg-white outline-none placeholder:text-gray-400 transition-[border-color,box-shadow]";
-  if (valid === true)  return `${base} border-green-500`;
-  if (valid === false) return `${base} border-red-500`;
-  return `${base} border-gray-200 focus:border-blue-600 focus:shadow-[0_0_0_3px_rgba(37,99,235,0.1)]`;
-}
-
-function FieldError({ msg, show }: { msg: string; show: boolean }) {
-  return show ? <p className="mt-0.5 text-[11px] font-semibold text-red-600">{msg}</p> : null;
-}
 
 function BuildingIcon() {
   return (

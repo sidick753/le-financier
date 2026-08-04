@@ -9,7 +9,7 @@ import { NotifBell } from "@/components/ui/notif-bell";
 import { DocumentPreviewModal } from "@/components/document-preview-modal";
 import { FundingDocument, DOCUMENT_TYPE_LABELS, DOCUMENT_STATUS_CONFIG, formatFileSize } from "@/lib/document-labels";
 import { EDITABLE_STATUSES } from "@/lib/funding-status";
-import { CLAIM_STATUS_CONFIG } from "@/lib/admin-ui";
+import { CLAIM_STATUS_CONFIG, formatAmountInput, parseAmountInput } from "@/lib/admin-ui";
 import { alertError, alertSuccess, confirmDialog } from "@/lib/alert";
 
 // ── config ────────────────────────────────────────────────────────────────────
@@ -123,7 +123,7 @@ export default function DemandeDetailPage() {
     if (!token || !id) return;
     setClaimSubmitting(true);
     try {
-      const amount = claimAmount.trim() ? Number(claimAmount) : undefined;
+      const amount = claimAmount.trim() ? parseAmountInput(claimAmount) : undefined;
       await api.post(`/funding-requests/${id}/claims`, { amount }, token);
       setClaimAmount("");
       loadClaims();
@@ -304,12 +304,10 @@ export default function DemandeDetailPage() {
                 {claimable !== null && claimable > 0 && (
                   <div className="mb-4 flex flex-wrap items-center gap-2">
                     <input
-                      type="number"
-                      min={0}
-                      max={claimable}
+                      inputMode="numeric"
                       placeholder={`Tout (${fmtAmount(claimable, request.currency)})`}
                       value={claimAmount}
-                      onChange={(e) => setClaimAmount(e.target.value)}
+                      onChange={(e) => setClaimAmount(formatAmountInput(e.target.value))}
                       className="h-9 w-56 rounded-[9px] border border-slate-200 px-3 text-[13px] text-slate-900 outline-none focus:border-blue-400"
                     />
                     <button

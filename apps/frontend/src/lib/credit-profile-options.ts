@@ -8,6 +8,37 @@ export interface CreditProfileOption {
   label: string;
 }
 
+// Secteur d'activité descriptif de l'entreprise (identité — champ libre côté
+// backend), distinct de SECTEURS ci-dessous qui sert de classification au
+// moteur de scoring PRET (secteurCode). "Autre" déclenche un champ libre côté
+// formulaire — la valeur enregistrée reste une simple chaîne dans les deux cas.
+const SECTEURS_ACTIVITE_LABELS = [
+  "Agroalimentaire",
+  "Agriculture / Élevage",
+  "Commerce / Distribution",
+  "BTP / Construction",
+  "Transport & Logistique",
+  "Textile / Habillement",
+  "Technologie / Numérique",
+  "Santé",
+  "Éducation",
+  "Services financiers",
+  "Tourisme / Hôtellerie / Restauration",
+  "Industrie / Manufacture",
+  "Énergie / Mines",
+  "Import / Export",
+  "Services aux entreprises",
+  "Immobilier",
+  "Artisanat",
+];
+
+// Pas de code dédié (contrairement à SECTEURS) : la valeur enregistrée est le
+// libellé lui-même, tel quel — value === label.
+export const SECTEURS_ACTIVITE: CreditProfileOption[] = SECTEURS_ACTIVITE_LABELS.map((label) => ({
+  value: label,
+  label,
+}));
+
 export const SECTEURS: CreditProfileOption[] = [
   { value: "services_essentiels", label: "Services essentiels / Santé / Éducation" },
   { value: "agro", label: "Agriculture / Distribution alimentaire" },

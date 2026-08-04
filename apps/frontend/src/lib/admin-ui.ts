@@ -54,6 +54,23 @@ export function formatFullAmount(value: number) {
   return `${value.toLocaleString("fr-FR")} FCFA`;
 }
 
+// Formatage à la saisie : ajoute les séparateurs de milliers pendant que
+// l'utilisateur tape (ex : "10000000" -> "10 000 000"). À coupler avec
+// parseAmountInput() pour récupérer la valeur numérique à l'envoi.
+// Tronque une éventuelle partie décimale (ex : Decimal Prisma "5000000.50"
+// renvoyé tel quel par l'API) avant de retirer les séparateurs : sans ça, le
+// "." disparaîtrait avec le reste et les centimes se retrouveraient concaténés
+// à la partie entière (5000000.50 -> 500000050).
+export function formatAmountInput(raw: string) {
+  const n = parseInt(raw.split(".")[0].replace(/\D/g, ""), 10);
+  return isNaN(n) ? "" : n.toLocaleString("fr-FR");
+}
+
+// Reconvertit une valeur saisie via formatAmountInput() en nombre.
+export function parseAmountInput(formatted: string) {
+  return parseInt(formatted.replace(/\D/g, ""), 10);
+}
+
 export function formatFileSize(bytes: number) {
   if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} Mo`;
   return `${(bytes / 1_000).toFixed(0)} Ko`;
