@@ -18,6 +18,8 @@ export interface IRepaymentRepository {
   rejectPayment(paymentId: string, adminId: string, reason: string): Promise<any>;
   findPendingPayments(): Promise<any[]>;
   findPaymentsByInvestorIds(investorIds: string[]): Promise<any[]>;
+  findSchedulesDueOnDate(date: Date): Promise<any[]>;
+  markOverdueSchedules(): Promise<any[]>;
   getClaimableAmountForSchedule(scheduleId: string): Promise<number>;
   findScheduleInvestor(scheduleId: string): Promise<{ investorId: string } | null>;
   requestRepaymentClaim(
@@ -26,7 +28,7 @@ export interface IRepaymentRepository {
     authorizedInvestorIds: string[],
     amount?: number,
   ): Promise<any>;
-  approveRepaymentClaim(claimId: string, adminId: string): Promise<any>;
+  approveRepaymentClaim(claimId: string, adminId: string, proofDocumentId: string, paidAt: string): Promise<any>;
   rejectRepaymentClaim(claimId: string, adminId: string, reason: string): Promise<any>;
   findClaimsForSchedule(scheduleId: string): Promise<any[]>;
   findPendingRepaymentClaims(): Promise<any[]>;

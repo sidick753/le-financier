@@ -9,6 +9,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RejectionReasonDto } from '../common/dto/rejection-reason.dto';
 import { RequestClaimDto } from '../common/dto/request-claim.dto';
+import { ApproveClaimDto } from '../common/dto/approve-claim.dto';
 import { parsePositiveInt } from '../common/pagination.util';
 
 @ApiTags('Funding Requests')
@@ -303,8 +304,8 @@ export class FundingController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
   @Patch('claims/:claimId/approve')
-  approveClaim(@Param('claimId') claimId: string, @Request() req) {
-    return this.fundingService.approveClaim(claimId, req.user.id);
+  approveClaim(@Param('claimId') claimId: string, @Body() dto: ApproveClaimDto, @Request() req) {
+    return this.fundingService.approveClaim(claimId, req.user.id, dto.proofDocumentId, dto.paidAt);
   }
 
   @ApiBearerAuth('jwt')

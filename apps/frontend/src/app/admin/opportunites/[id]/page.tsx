@@ -7,9 +7,11 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { useAdminBadges } from "@/lib/admin-badges-context";
 import { RejectReasonModal } from "@/components/reject-reason-modal";
+import { ApproveClaimModal } from "@/components/approve-claim-modal";
 import { DocumentPreviewModal } from "@/components/document-preview-modal";
 import { ScoringSnapshotModal } from "@/components/scoring-snapshot-modal";
 import { FUNDING_STATUS_CONFIG, CLAIM_STATUS_CONFIG, ORG_STATUS_CONFIG, formatAdminDate, formatFullAmount, formatFileSize } from "@/lib/admin-ui";
+import { DOCUMENT_TYPE_LABELS, DOCUMENT_STATUS_CONFIG } from "@/lib/document-labels";
 import { alertError, alertSuccess } from "@/lib/alert";
 import { OrganizationProfileSummary, type OrganizationProfileSummaryData } from "@/components/organization-profile-summary";
 import { NotifBell } from "@/components/ui/notif-bell";
@@ -72,6 +74,11 @@ interface FundingRequestDetail {
     registrationNumber: string;
     sector: string;
     verificationStatus: string;
+    members: Array<{
+      id: string;
+      role: string;
+      user: { firstName: string; lastName: string; email: string; phone: string | null };
+    }>;
   } & OrganizationProfileSummaryData;
   documents: Array<{
     id: string;
@@ -79,6 +86,7 @@ interface FundingRequestDetail {
     fileName: string;
     sizeBytes: number;
     status: string;
+    rejectionReason: string | null;
   }>;
   scoringReports: Array<{
     id: string;
@@ -107,6 +115,9 @@ export default function AdminOpportuniteDetailPage() {
   const [rejectSettlementFor, setRejectSettlementFor] = useState<string | null>(null);
   const [claimActionId, setClaimActionId] = useState<string | null>(null);
   const [rejectClaimFor, setRejectClaimFor] = useState<string | null>(null);
+  const [approveClaimFor, setApproveClaimFor] = useState<string | null>(null);
+  const [docActionId, setDocActionId] = useState<string | null>(null);
+  const [rejectDocFor, setRejectDocFor] = useState<string | null>(null);
 
   function load() {
     if (!token) return;
@@ -177,10 +188,12 @@ export default function AdminOpportuniteDetailPage() {
     }
   }
 
-  async function handleApproveClaim(claimId: string) {
-    setClaimActionId(claimId);
+  async function handleApproveClaim(proofDocumentId: string, paidAt: string) {
+    if (!approveClaimFor) return;
+    setClaimActionId(approveClaimFor);
     try {
-      await api.patch(`/funding-requests/claims/${claimId}/approve`, {}, token!);
+      await api.patch(`/funding-requests/claims/${approveClaimFor}/approve`, { proofDocumentId, paidAt }, token!);
+      setApproveClaimFor(null);
       load();
       refreshBadges();
       alertSuccess("Réclamation validée.");
@@ -204,6 +217,34 @@ export default function AdminOpportuniteDetailPage() {
       alertError(err instanceof Error ? err.message : "Échec du rejet.");
     } finally {
       setClaimActionId(null);
+    }
+  }
+
+  async function handleApproveDoc(docId: string) {
+    setDocActionId(docId);
+    try {
+      await api.patch(`/documents/admin/${docId}/approve`, {}, token!);
+      load();
+      alertSuccess("Document validé.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec de la validation.");
+    } finally {
+      setDocActionId(null);
+    }
+  }
+
+  async function handleRejectDoc(reason: string) {
+    if (!rejectDocFor) return;
+    setDocActionId(rejectDocFor);
+    try {
+      await api.patch(`/documents/admin/${rejectDocFor}/reject`, { reason }, token!);
+      setRejectDocFor(null);
+      load();
+      alertSuccess("Document rejeté.");
+    } catch (err) {
+      alertError(err instanceof Error ? err.message : "Échec du rejet.");
+    } finally {
+      setDocActionId(null);
     }
   }
 
@@ -249,6 +290,10 @@ export default function AdminOpportuniteDetailPage() {
   const progress = requested > 0 ? Math.min(100, (raised / requested) * 100) : 0;
   const report = fr.scoringReports?.[0] ?? null;
   const hasBankInfo = fr.organization.bankAccountNumber;
+  const settledCount = fr.investments.filter((inv) => inv.status === "SETTLED_OFF_PLATFORM").length;
+  const pendingSettlementCount = fr.investments.filter((inv) => inv.status === "SETTLEMENT_SUBMITTED").length;
+  const committedCount = fr.investments.filter((inv) => inv.status === "COMMITTED").length;
+  const orgOwner = fr.organization.members.find((m) => m.role === "OWNER") ?? fr.organization.members[0];
 
   return (
     <>
@@ -285,7 +330,12 @@ export default function AdminOpportuniteDetailPage() {
             <>
               <button
                 onClick={handleApprove}
-                disabled={actionLoading}
+                disabled={actionLoading || fr.organization.verificationStatus !== "VERIFIED"}
+                title={
+                  fr.organization.verificationStatus !== "VERIFIED"
+                    ? "L'organisation doit d'abord être vérifiée (KYC) avant de publier cette demande."
+                    : undefined
+                }
                 className="rounded-md bg-green-600 px-4 py-2 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
               >
                 Approuver
@@ -350,10 +400,11 @@ export default function AdminOpportuniteDetailPage() {
           </p>
           <p className="mt-1 text-sm text-gray-600">
             {formatFullAmount(Number(fr.disbursedAmount))} versés à la PME (dernière réclamation le{" "}
-            {formatAdminDate(fr.disbursedAt)}, commission déduite du montant levé de {formatFullAmount(raised)}).
+            {formatAdminDate(fr.disbursedAt)}, commission de 2% déduite du montant levé de {formatFullAmount(raised)}).
           </p>
         </div>
       )}
+
 
       {/* Stats */}
       <div className="mb-6 grid grid-cols-5 gap-4">
@@ -407,34 +458,53 @@ export default function AdminOpportuniteDetailPage() {
         </div>
       </div>
 
-      {/* Profil de la PME — toutes les infos nécessaires pour approuver en connaissance de
-          cause, sans quitter la page (identité, coordonnées bancaires, profil de crédit). */}
-      <div className="mt-4">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <p className="text-base font-semibold text-gray-900">Profil de la PME</p>
-            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${(ORG_STATUS_CONFIG[fr.organization.verificationStatus] ?? ORG_STATUS_CONFIG.PENDING).className}`}>
-              {(ORG_STATUS_CONFIG[fr.organization.verificationStatus] ?? ORG_STATUS_CONFIG.PENDING).label}
-            </span>
-          </div>
-          <Link
-            href={`/admin/pme/${fr.organization.id}`}
-            className="text-xs font-medium text-brand-700 hover:underline"
-          >
-            Voir la fiche PME complète →
-          </Link>
-        </div>
-        <OrganizationProfileSummary org={fr.organization} />
-      </div>
-
-      {/* Investissements */}
-      <div className="mt-4 rounded-xl border border-gray-200 bg-white">
+            {/* Investissements — priorité haute : c'est ici que l'admin valide/rejette les
+          preuves de virement, l'action la plus fréquente et la plus urgente sur cette page.
+          Mis en évidence dès qu'un engagement existe, avec un rappel du montant validé/% du
+          montant demandé et une barre de progression (même donnée que la carte "Montant levé"
+          ci-dessus, mais au plus près du détail par investisseur). */}
+      <div className={`mb-4 rounded-xl border bg-white ${fr.investments.length > 0 ? "border-l-4 border-l-blue-500 border-gray-200" : "border-gray-200"}`}>
         <div className="border-b border-gray-100 p-5">
-          <p className="text-base font-semibold text-gray-900">Investissements</p>
+          <div className="flex items-center justify-between">
+            <p className="text-base font-semibold text-gray-900">Investissements</p>
+            <div className="flex items-center gap-1.5">
+              {settledCount > 0 && (
+                <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                  {settledCount} virement{settledCount > 1 ? "s" : ""} confirmé{settledCount > 1 ? "s" : ""}
+                </span>
+              )}
+              {pendingSettlementCount > 0 && (
+                <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                  {pendingSettlementCount} preuve{pendingSettlementCount > 1 ? "s" : ""} à valider
+                </span>
+              )}
+              {committedCount > 0 && (
+                <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700">
+                  {committedCount} en attente de virement
+                </span>
+              )}
+            </div>
+          </div>
           {fr.investorMode === "SINGLE_INVESTOR" && (
             <p className="mt-0.5 text-xs text-amber-600">
               Investisseur unique attendu — un seul engagement à 100% du montant est accepté sur ce dossier.
             </p>
+          )}
+          {fr.investments.length > 0 && (
+            <div className="mt-3">
+              <div className="mb-1 flex items-center justify-between text-xs">
+                <span className="font-medium text-gray-700">
+                  {formatFullAmount(raised)} validés{" "}
+                  <span className="text-gray-400">
+                    ({requested > 0 ? Math.round((raised / requested) * 100) : 0}% du montant demandé)
+                  </span>
+                </span>
+                <span className="text-gray-400">Reste {formatFullAmount(Math.max(0, requested - raised))}</span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+                <div className="h-full rounded-full bg-blue-600" style={{ width: `${progress}%` }} />
+              </div>
+            </div>
           )}
         </div>
         <div className="divide-y divide-gray-100">
@@ -498,7 +568,7 @@ export default function AdminOpportuniteDetailPage() {
       </div>
 
       {/* Réclamations de la PME */}
-      <div className="mt-4 rounded-xl border border-gray-200 bg-white">
+      <div className="mb-6 rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
           <p className="text-base font-semibold text-gray-900">Réclamations</p>
           <p className="mt-0.5 text-xs text-gray-500">
@@ -517,7 +587,9 @@ export default function AdminOpportuniteDetailPage() {
                 <div>
                   <p className="text-sm font-medium text-gray-900">
                     {formatFullAmount(Number(claim.amountRequested))}
-                    {claim.amountNet ? ` · net ${formatFullAmount(Number(claim.amountNet))}` : ""}
+                    {claim.amountNet
+                      ? ` · net ${formatFullAmount(Number(claim.amountNet))} (commission 2%)`
+                      : " (commission 2% au versement)"}
                   </p>
                   <p className="text-xs text-gray-500">
                     Réclamé par {claim.requestedBy.firstName} {claim.requestedBy.lastName} le{" "}
@@ -531,7 +603,7 @@ export default function AdminOpportuniteDetailPage() {
                   {claim.status === "REQUESTED" && (
                     <>
                       <button
-                        onClick={() => handleApproveClaim(claim.id)}
+                        onClick={() => setApproveClaimFor(claim.id)}
                         disabled={isPending}
                         className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
                       >
@@ -556,38 +628,90 @@ export default function AdminOpportuniteDetailPage() {
         </div>
       </div>
 
-      {/* Documents */}
-      <div className="mt-4 rounded-xl border border-gray-200 bg-white">
+
+      {/* Profil de la PME — toutes les infos nécessaires pour approuver en connaissance de
+          cause, sans quitter la page (identité, coordonnées bancaires, profil de crédit). */}
+      <div className="mt-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <p className="text-base font-semibold text-gray-900">Profil de la PME</p>
+            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${(ORG_STATUS_CONFIG[fr.organization.verificationStatus] ?? ORG_STATUS_CONFIG.PENDING).className}`}>
+              {(ORG_STATUS_CONFIG[fr.organization.verificationStatus] ?? ORG_STATUS_CONFIG.PENDING).label}
+            </span>
+          </div>
+          <Link
+            href={`/admin/pme/${fr.organization.id}`}
+            className="text-xs font-medium text-brand-700 hover:underline"
+          >
+            Voir la fiche PME complète →
+          </Link>
+        </div>
+        <OrganizationProfileSummary org={fr.organization} owner={orgOwner?.user ?? null} />
+      </div>
+
+      {/* Documents — dossier déposé par la PME (états financiers, statuts, pièces jointes).
+          Les preuves de virement (SETTLEMENT_PROOF) sont déposées par l'investisseur et déjà
+          visibles avec leur propre décision dans la section Investissements ci-dessus : pas
+          de doublon ici. */}
+      {/* <div className="mt-4 rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-base font-semibold text-gray-900">Documents</p>
+          <p className="text-base font-semibold text-gray-900">Documents de la PME</p>
+          <p className="mt-0.5 text-xs text-gray-500">
+            Pièces déposées par la PME pour ce dossier — validez ou rejetez celles encore en revue.
+          </p>
         </div>
         <div className="divide-y divide-gray-100">
-          {fr.documents.length === 0 && (
+          {fr.documents.filter((doc) => doc.type !== "SETTLEMENT_PROOF").length === 0 && (
             <p className="p-5 text-sm text-gray-400">Aucun document déposé.</p>
           )}
-          {fr.documents.map((doc) => (
-            <div key={doc.id} className="flex items-center justify-between p-4">
-              <div>
-                <p className="text-sm font-medium text-gray-900">{doc.fileName}</p>
-                <p className="text-xs text-gray-500">
-                  {doc.type} · {formatFileSize(doc.sizeBytes)}
-                </p>
+          {fr.documents.filter((doc) => doc.type !== "SETTLEMENT_PROOF").map((doc) => {
+            const docStatus = DOCUMENT_STATUS_CONFIG[doc.status] ?? DOCUMENT_STATUS_CONFIG.PENDING_REVIEW;
+            const isPending = docActionId === doc.id;
+            return (
+              <div key={doc.id} className="flex items-center justify-between p-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{doc.fileName}</p>
+                  <p className="text-xs text-gray-500">
+                    {DOCUMENT_TYPE_LABELS[doc.type] ?? doc.type} · {formatFileSize(doc.sizeBytes)}
+                  </p>
+                  {doc.status === "REJECTED" && doc.rejectionReason && (
+                    <p className="mt-1 text-xs text-red-600">Motif : {doc.rejectionReason}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setPreviewDocId(doc.id)}
+                    className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                  >
+                    Voir
+                  </button>
+                  {doc.status === "PENDING_REVIEW" && (
+                    <>
+                      <button
+                        onClick={() => handleApproveDoc(doc.id)}
+                        disabled={isPending}
+                        className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                      >
+                        Valider
+                      </button>
+                      <button
+                        onClick={() => setRejectDocFor(doc.id)}
+                        disabled={isPending}
+                        className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        Rejeter
+                      </button>
+                    </>
+                  )}
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${docStatus.badgeClass}`}>
+                    {docStatus.label}
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPreviewDocId(doc.id)}
-                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-                >
-                  Voir
-                </button>
-                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
-                  {doc.status}
-                </span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
-      </div>
+      </div> */}
 
       {showRejectModal && (
         <RejectReasonModal
@@ -603,6 +727,7 @@ export default function AdminOpportuniteDetailPage() {
         <RejectReasonModal
           title="Rejeter la preuve de virement"
           confirmLabel="Confirmer le rejet"
+          description="Ce motif sera communiqué à l'investisseur, qui pourra soumettre une nouvelle preuve."
           isSubmitting={settlementActionId === rejectSettlementFor}
           onClose={() => setRejectSettlementFor(null)}
           onConfirm={handleRejectSettlement}
@@ -616,6 +741,27 @@ export default function AdminOpportuniteDetailPage() {
           isSubmitting={claimActionId === rejectClaimFor}
           onClose={() => setRejectClaimFor(null)}
           onConfirm={handleRejectClaim}
+        />
+      )}
+
+      {approveClaimFor && (
+        <ApproveClaimModal
+          title="Valider cette réclamation"
+          fundingRequestId={id}
+          isSubmitting={claimActionId === approveClaimFor}
+          onClose={() => setApproveClaimFor(null)}
+          onConfirm={handleApproveClaim}
+        />
+      )}
+
+      {rejectDocFor && (
+        <RejectReasonModal
+          title="Rejeter ce document"
+          confirmLabel="Confirmer le rejet"
+          description="Ce motif sera communiqué à la PME, qui pourra déposer un nouveau document."
+          isSubmitting={docActionId === rejectDocFor}
+          onClose={() => setRejectDocFor(null)}
+          onConfirm={handleRejectDoc}
         />
       )}
 

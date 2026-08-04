@@ -12,6 +12,14 @@ import { UpdateFundingRequestDto } from './dto/update-funding-request.dto';
 import { FundingAdminFilters } from './interfaces/funding-repository.interface';
 import { EDITABLE_FUNDING_STATUSES, PUBLIC_FUNDING_STATUSES } from './funding-status.constants';
 
+const FRONTEND_URL = process.env.FRONTEND_URL ?? '';
+
+// PME : fiche de sa propre demande.
+const pmeFundingRequestLink = (fundingRequestId: string) => `${FRONTEND_URL}/dashboard/demandes/${fundingRequestId}`;
+
+// Admin : fiche d'opportunité, pour traiter la revue/réclamation concernée.
+const adminOpportunityLink = (fundingRequestId: string) => `${FRONTEND_URL}/admin/opportunites/${fundingRequestId}`;
+
 @Injectable()
 export class FundingService {
   constructor(
@@ -151,14 +159,18 @@ export class FundingService {
       throw new NotFoundException('Demande de financement introuvable.');
     }
 
+    // Calculé dans tous les cas (pas seulement pour les statuts non publics) : une
+    // fois PUBLISHED, ce même endpoint sert aussi bien la PME propriétaire (son
+    // propre dossier) qu'un investisseur externe — la distinction sert plus bas à
+    // ne jamais exposer un score encore auto (non validé par un admin) à ce dernier.
+    const isMember = userId
+      ? await this.organizationsRepository.isMember(fundingRequest.organizationId, userId)
+      : false;
+
     if (!PUBLIC_FUNDING_STATUSES.includes(fundingRequest.status)) {
       if (!userId) {
         throw new ForbiddenException("Cette demande n'est pas accessible publiquement.");
       }
-      const isMember = await this.organizationsRepository.isMember(
-        fundingRequest.organizationId,
-        userId,
-      );
       if (!isMember) {
         throw new ForbiddenException("Vous n'avez pas accès à cette demande.");
       }
@@ -179,7 +191,7 @@ export class FundingService {
     // au-delà), c'est le compte bancaire de la plateforme elle-même, vers
     // lequel le virement doit être fait.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars -- omission volontaire via destructuring
-    const { bankName, bankAccountHolder, bankAccountNumber, bankSwiftCode, ...publicOrganization } =
+    const { bankName, bankAccountHolder, bankAccountNumber, bankSwiftCode, scoringReports: orgScoringReports, ...publicOrganization } =
       fundingRequest.organization;
 
     const investorIds = userId ? await this.institutionsService.getFellowMemberUserIds(userId) : [];
@@ -188,9 +200,21 @@ export class FundingService {
       (await this.fundingRepository.hasCommittedInvestment(id, investorIds));
     const platformBankAccounts = hasCommitted ? await this.platformBankAccountsService.findActive() : [];
 
+    // Un rapport encore CALCULATED (calcul automatique) ou PENDING_VALIDATION n'a
+    // pas été relu par un analyste — jamais servir de base de décision à un
+    // investisseur externe. Le membre de l'organisation (son propre dossier, en
+    // cours d'instruction) continue de tout voir.
+    const scoringReports = isMember
+      ? fundingRequest.scoringReports
+      : fundingRequest.scoringReports.filter((r) => r.status === 'VALIDATED');
+    const orgValidatedScoringReports = isMember
+      ? orgScoringReports
+      : orgScoringReports.filter((r) => r.status === 'VALIDATED');
+
     return {
       ...fundingRequest,
-      organization: publicOrganization,
+      scoringReports,
+      organization: { ...publicOrganization, scoringReports: orgValidatedScoringReports },
       hasActiveInvestor,
       platformBankAccounts,
     };
@@ -251,6 +275,8 @@ export class FundingService {
     await this.notificationsService.notifyAdmins(
       'Nouveau dossier à examiner',
       `"${fundingRequest.title}" a été soumis pour révision.`,
+      adminOpportunityLink(fundingRequestId),
+      { email: true, ctaLabel: 'Examiner le dossier' },
     );
 
     return updated;
@@ -268,6 +294,15 @@ export class FundingService {
       );
     }
 
+    // La demande peut avoir un score impeccable, si l'organisation elle-même n'est
+    // pas encore vérifiée (KYC/RCCM), la publier reviendrait à présenter aux
+    // investisseurs une PME dont l'identité n'a pas été confirmée par un admin.
+    if (fundingRequest.organization.verificationStatus !== 'VERIFIED') {
+      throw new BadRequestException(
+        "L'organisation doit d'abord être vérifiée (KYC) avant de pouvoir publier une de ses demandes.",
+      );
+    }
+
     const updated = await this.fundingRepository.updateStatus(fundingRequestId, 'PUBLISHED');
 
     const owner = await this.fundingRepository.findOrganizationOwner(fundingRequest.organizationId);
@@ -276,6 +311,8 @@ export class FundingService {
         owner.userId,
         'Demande publiée',
         `Votre demande "${fundingRequest.title}" a été validée et est maintenant visible par les investisseurs.`,
+        pmeFundingRequestLink(fundingRequestId),
+        { email: true, ctaLabel: 'Voir ma demande' },
       );
     }
 
@@ -302,6 +339,8 @@ export class FundingService {
         owner.userId,
         'Demande rejetée',
         `Votre demande "${fundingRequest.title}" a été rejetée : ${reason}`,
+        pmeFundingRequestLink(fundingRequestId),
+        { email: true, ctaLabel: 'Voir ma demande' },
       );
     }
 
@@ -327,7 +366,20 @@ export class FundingService {
   async cancel(id: string) {
     const fr = await this.fundingRepository.findById(id);
     if (!fr) throw new NotFoundException('Demande introuvable.');
-    return this.fundingRepository.updateStatus(id, 'CANCELLED');
+    const updated = await this.fundingRepository.updateStatus(id, 'CANCELLED');
+
+    const owner = await this.fundingRepository.findOrganizationOwner(fr.organizationId);
+    if (owner) {
+      await this.notificationsService.notify(
+        owner.userId,
+        'Demande suspendue',
+        `Votre demande "${fr.title}" a été suspendue par un administrateur et n'est plus visible par les investisseurs.`,
+        pmeFundingRequestLink(id),
+        { email: true, ctaLabel: 'Voir ma demande' },
+      );
+    }
+
+    return updated;
   }
 
   async reactivate(id: string) {
@@ -336,7 +388,20 @@ export class FundingService {
     if (fr.status !== 'CANCELLED') {
       throw new BadRequestException('Seule une demande suspendue peut être réactivée.');
     }
-    return this.fundingRepository.updateStatus(id, 'PUBLISHED');
+    const updated = await this.fundingRepository.updateStatus(id, 'PUBLISHED');
+
+    const owner = await this.fundingRepository.findOrganizationOwner(fr.organizationId);
+    if (owner) {
+      await this.notificationsService.notify(
+        owner.userId,
+        'Demande réactivée',
+        `Votre demande "${fr.title}" est de nouveau visible par les investisseurs.`,
+        pmeFundingRequestLink(id),
+        { email: true, ctaLabel: 'Voir ma demande' },
+      );
+    }
+
+    return updated;
   }
 
   // PME : montant déjà validé par un admin mais pas encore réclamé — disponible dès
@@ -370,19 +435,23 @@ export class FundingService {
     await this.notificationsService.notifyAdmins(
       'Réclamation de financement à valider',
       `La PME réclame ${Number(claim.amountRequested).toLocaleString('fr-FR')} F CFA sur "${fundingRequest.title}".`,
+      adminOpportunityLink(id),
+      { email: true, ctaLabel: 'Valider la réclamation' },
     );
 
     return claim;
   }
 
   // [ADMIN] Valide la réclamation : commission prélevée, versement net à la PME.
-  async approveClaim(claimId: string, adminId: string) {
-    const approved = await this.fundingRepository.approveFundingClaim(claimId, adminId);
+  async approveClaim(claimId: string, adminId: string, proofDocumentId: string, paidAt: string) {
+    const approved = await this.fundingRepository.approveFundingClaim(claimId, adminId, proofDocumentId, paidAt);
 
     await this.notificationsService.notify(
       approved.requestedById,
       'Réclamation de financement validée',
-      `Votre réclamation de ${Number(approved.amountRequested).toLocaleString('fr-FR')} F CFA a été validée et versée.`,
+      `Votre réclamation de ${Number(approved.amountRequested).toLocaleString('fr-FR')} F CFA a été validée et versée, net de la commission plateforme de 2% : ${Number(approved.amountNet).toLocaleString('fr-FR')} F CFA.`,
+      approved.fundingRequestId ? pmeFundingRequestLink(approved.fundingRequestId) : undefined,
+      { email: true, ctaLabel: 'Voir ma demande' },
     );
 
     return approved;
@@ -396,6 +465,8 @@ export class FundingService {
       rejected.requestedById,
       'Réclamation de financement rejetée',
       `Votre réclamation a été rejetée : ${reason}`,
+      rejected.fundingRequestId ? pmeFundingRequestLink(rejected.fundingRequestId) : undefined,
+      { email: true, ctaLabel: 'Voir ma demande' },
     );
 
     return rejected;

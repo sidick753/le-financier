@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { useAdminBadges } from "@/lib/admin-badges-context";
 import { RejectReasonModal } from "@/components/reject-reason-modal";
+import { ApproveClaimModal } from "@/components/approve-claim-modal";
 import { DocumentPreviewModal } from "@/components/document-preview-modal";
 import { formatAdminDate, formatFullAmount } from "@/lib/admin-ui";
 import { alertError, alertSuccess } from "@/lib/alert";
@@ -50,6 +51,7 @@ export default function AdminRemboursementsPage() {
   const [rejectFor, setRejectFor] = useState<string | null>(null);
   const [claimActionId, setClaimActionId] = useState<string | null>(null);
   const [rejectClaimFor, setRejectClaimFor] = useState<string | null>(null);
+  const [approveClaimFor, setApproveClaimFor] = useState<string | null>(null);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
 
   function load() {
@@ -96,10 +98,12 @@ export default function AdminRemboursementsPage() {
     }
   }
 
-  async function handleApproveClaim(claimId: string) {
-    setClaimActionId(claimId);
+  async function handleApproveClaim(proofDocumentId: string, paidAt: string) {
+    if (!approveClaimFor) return;
+    setClaimActionId(approveClaimFor);
     try {
-      await api.patch(`/repayments/claims/${claimId}/approve`, {}, token!);
+      await api.patch(`/repayments/claims/${approveClaimFor}/approve`, { proofDocumentId, paidAt }, token!);
+      setApproveClaimFor(null);
       load();
       refreshBadges();
       alertSuccess("Réclamation validée.");
@@ -232,13 +236,13 @@ export default function AdminRemboursementsPage() {
                     </p>
                     <p className="text-xs text-gray-500">
                       Réclamé par {c.requestedBy.firstName} {c.requestedBy.lastName} ·{" "}
-                      {formatFullAmount(Number(c.amountRequested))}
+                      {formatFullAmount(Number(c.amountRequested))} (commission 3% au versement)
                       {" · "}le {formatAdminDate(c.requestedAt)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => handleApproveClaim(c.id)}
+                      onClick={() => setApproveClaimFor(c.id)}
                       disabled={isPending}
                       className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
                     >
@@ -276,6 +280,16 @@ export default function AdminRemboursementsPage() {
           isSubmitting={claimActionId === rejectClaimFor}
           onClose={() => setRejectClaimFor(null)}
           onConfirm={handleRejectClaim}
+        />
+      )}
+
+      {approveClaimFor && (
+        <ApproveClaimModal
+          title="Valider cette réclamation"
+          fundingRequestId={claims?.find((c) => c.id === approveClaimFor)?.repaymentSchedule.fundingRequest.id}
+          isSubmitting={claimActionId === approveClaimFor}
+          onClose={() => setApproveClaimFor(null)}
+          onConfirm={handleApproveClaim}
         />
       )}
 

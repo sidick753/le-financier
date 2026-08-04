@@ -8,6 +8,7 @@ interface Props {
   onConfirm: (reason: string) => void;
   onClose: () => void;
   isSubmitting?: boolean;
+  description?: string;
 }
 
 export function RejectReasonModal({
@@ -16,6 +17,7 @@ export function RejectReasonModal({
   onConfirm,
   onClose,
   isSubmitting,
+  description = "Ce motif sera communiqué à la PME.",
 }: Props) {
   const [reason, setReason] = useState("");
 
@@ -27,7 +29,7 @@ export function RejectReasonModal({
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
         <p className="mb-1 text-base font-semibold text-gray-900">{title}</p>
         <p className="mb-4 text-xs text-gray-500">
-          Ce motif sera communiqué à la PME.
+          {description}
         </p>
         <textarea
           autoFocus

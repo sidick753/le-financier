@@ -71,7 +71,15 @@ export class FundingRepository implements IFundingRepository {
     return this.prisma.fundingRequest.findUnique({
       where: { id },
       include: {
-        organization: true,
+        // members : nécessaire pour que l'admin voie le contact (email/téléphone) du
+        // propriétaire de la PME sans quitter la page d'opportunité.
+        organization: {
+          include: {
+            members: {
+              include: { user: { select: { firstName: true, lastName: true, email: true, phone: true } } },
+            },
+          },
+        },
         documents: true,
         scoringReports: { orderBy: { createdAt: 'desc' }, take: 1 },
         investments: {
@@ -127,7 +135,10 @@ export class FundingRepository implements IFundingRepository {
     // avec les enums Prisma attendus (InvestmentStatus[], etc.).
     const includeArgs: Prisma.FundingRequestInclude = {
       organization: true,
-      scoringReports: { orderBy: { createdAt: 'desc' }, take: 1 },
+      // Uniquement les rapports validés par un admin : un score encore auto
+      // (CALCULATED/PENDING_VALIDATION) ne doit jamais orienter un investisseur
+      // qui parcourt le marché (voir aussi FundingService.findOneWithDetails).
+      scoringReports: { where: { status: 'VALIDATED' }, orderBy: { createdAt: 'desc' }, take: 1 },
       // Ne sert qu'aux dossiers SINGLE_INVESTOR : permet d'afficher "déjà pris"
       // sur les cards sans exposer les investissements eux-mêmes (voir
       // hasActiveInvestor plus bas dans ce fichier pour le détail à l'unité).
@@ -268,6 +279,17 @@ export class FundingRepository implements IFundingRepository {
       const claimed = await this.payoutClaims.sumClaimed(tx, 'FUNDING_TO_PME', { fundingRequestId });
       const available = Number(fundingRequest.amountRaised) - claimed;
 
+      // Plancher à 10% du disponible : évite le spam de micro-réclamations, chacune
+      // nécessitant une validation admin. Spécifique à FUNDING_TO_PME — n'affecte pas
+      // les réclamations de remboursement investisseur (validateAndCreate partagé).
+      // "Tout" (amount omis) passe toujours ce seuil tant qu'il reste du disponible.
+      const resolvedAmount = amount ?? available;
+      if (available > 0 && resolvedAmount < available * 0.1) {
+        throw new ConflictException(
+          `Le montant réclamé doit représenter au moins 10% du disponible (minimum ${Math.ceil(available * 0.1).toLocaleString('fr-FR')}).`,
+        );
+      }
+
       return this.payoutClaims.validateAndCreate(
         tx,
         'FUNDING_TO_PME',
@@ -282,7 +304,7 @@ export class FundingRepository implements IFundingRepository {
   // [ADMIN] Valide la réclamation : commission de financement prélevée au prorata du
   // montant réclamé, versement net à la PME. Dossier clôturé (CLOSED) dès que le
   // financement est complet (FUNDED) ET intégralement réclamé.
-  async approveFundingClaim(claimId: string, adminId: string) {
+  async approveFundingClaim(claimId: string, adminId: string, proofDocumentId: string, paidAt: string) {
     return this.prisma.$transaction(async (tx) => {
       const claim = await tx.payoutClaim.findUnique({ where: { id: claimId } });
       if (!claim || claim.direction !== 'FUNDING_TO_PME' || !claim.fundingRequestId) {
@@ -325,7 +347,7 @@ export class FundingRepository implements IFundingRepository {
         },
       });
 
-      const updatedClaim = await this.payoutClaims.markPaid(tx, claimId, amountNet, adminId);
+      const updatedClaim = await this.payoutClaims.markPaid(tx, claimId, amountNet, adminId, proofDocumentId, paidAt);
 
       // CLOSED doit refléter un décaissement réellement complet : on ne compte ici que
       // les réclamations déjà PAID (jamais celles encore REQUESTED, qui peuvent être
@@ -407,6 +429,22 @@ export class FundingRepository implements IFundingRepository {
     return count > 0;
   }
 
+  // [CRON] Dossiers en révision depuis `daysAgo` jours pile (fenêtre d'un jour
+  // civil) — sert de relance admin sur un backlog qui stagne. Bornée à un seul
+  // jour comme les rappels d'échéance : évite de renotifier le même dossier à
+  // chaque passage tant qu'aucune autre action n'a touché `updatedAt` entretemps.
+  async findStaleUnderReview(daysAgo: number) {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+
+    return this.prisma.fundingRequest.findMany({
+      where: { status: 'UNDER_REVIEW', updatedAt: { gte: start, lt: end } },
+      select: { id: true, title: true },
+    });
+  }
+
   async findOrganizationOwner(organizationId: string) {
     return this.prisma.organizationMember.findFirst({
       where: { organizationId, role: 'OWNER' },
@@ -442,7 +480,41 @@ export class FundingRepository implements IFundingRepository {
       hasPagination ? this.prisma.fundingRequest.count({ where }) : Promise.resolve(undefined),
     ]);
 
-    return { data, total: count ?? data.length };
+    // Preuves de virement soumises en attente de validation, par demande — sert de
+    // badge sur la ligne concernée dans la liste admin (pas juste dans son détail).
+    const pendingSettlements = await this.prisma.investment.groupBy({
+      by: ['fundingRequestId'],
+      where: { fundingRequestId: { in: data.map((fr) => fr.id) }, status: 'SETTLEMENT_SUBMITTED' },
+      _count: { _all: true },
+    });
+    const pendingSettlementsByRequest = new Map(
+      pendingSettlements.map((p) => [p.fundingRequestId, p._count._all]),
+    );
+
+    // Réclamations de décaissement (PayoutClaim) en attente, par demande — même logique
+    // que les preuves de virement ci-dessus : ces réclamations comptent dans le badge
+    // "Opportunités" du menu admin, donc la ligne concernée doit aussi être signalée.
+    const pendingClaims = await this.prisma.payoutClaim.groupBy({
+      by: ['fundingRequestId'],
+      where: {
+        fundingRequestId: { in: data.map((fr) => fr.id) },
+        direction: 'FUNDING_TO_PME',
+        status: 'REQUESTED',
+      },
+      _count: { _all: true },
+    });
+    const pendingClaimsByRequest = new Map(
+      pendingClaims.map((c) => [c.fundingRequestId, c._count._all]),
+    );
+
+    return {
+      data: data.map((fr) => ({
+        ...fr,
+        pendingSettlementsCount: pendingSettlementsByRequest.get(fr.id) ?? 0,
+        pendingClaimsCount: pendingClaimsByRequest.get(fr.id) ?? 0,
+      })),
+      total: count ?? data.length,
+    };
   }
 
   async getAdminStats() {

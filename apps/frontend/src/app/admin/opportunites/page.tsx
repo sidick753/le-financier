@@ -45,6 +45,8 @@ interface AdminFundingRequest {
   status: string;
   createdAt: string;
   organization?: { legalName: string };
+  pendingSettlementsCount: number;
+  pendingClaimsCount: number;
 }
 
 interface FundingAdminStats {
@@ -261,8 +263,19 @@ function AdminOpportunitesPageContent() {
                   const requested = Number(fr.amountRequested);
                   const raised = Number(fr.amountRaised ?? 0);
                   const progress = requested > 0 ? Math.min(100, (raised / requested) * 100) : 0;
+                  const needsAction =
+                    fr.status === "UNDER_REVIEW" ||
+                    fr.pendingSettlementsCount > 0 ||
+                    fr.pendingClaimsCount > 0;
                   return (
-                    <tr key={fr.id} className="hover:bg-gray-50">
+                    <tr
+                      key={fr.id}
+                      className={
+                        needsAction
+                          ? "border-l-4 border-l-amber-500 bg-amber-50/70 hover:bg-amber-50"
+                          : "border-l-4 border-l-transparent hover:bg-gray-50"
+                      }
+                    >
                       <td className="px-5 py-3">
                         <p className="font-medium text-gray-900">
                           {fr.organization?.legalName ?? "—"}
@@ -287,9 +300,41 @@ function AdminOpportunitesPageContent() {
                         </div>
                       </td>
                       <td className="px-5 py-3">
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${config.className}`}>
-                          {config.label}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                              fr.status === "UNDER_REVIEW"
+                                ? "font-bold ring-1 ring-yellow-300 " + config.className
+                                : config.className
+                            }`}
+                          >
+                            {fr.status === "UNDER_REVIEW" && (
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                <circle cx="12" cy="12" r="10" />
+                                <path d="M12 7v5l3 3" />
+                              </svg>
+                            )}
+                            {config.label}
+                          </span>
+                          {fr.pendingSettlementsCount > 0 && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500 px-2.5 py-0.5 text-xs font-bold text-white shadow-sm">
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                <path d="M12 9v4M12 17h.01" />
+                                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L14.71 3.86a2 2 0 0 0-3.42 0Z" />
+                              </svg>
+                              Preuve à valider{fr.pendingSettlementsCount > 1 ? ` (${fr.pendingSettlementsCount})` : ""}
+                            </span>
+                          )}
+                          {fr.pendingClaimsCount > 0 && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500 px-2.5 py-0.5 text-xs font-bold text-white shadow-sm">
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                <path d="M12 9v4M12 17h.01" />
+                                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L14.71 3.86a2 2 0 0 0-3.42 0Z" />
+                              </svg>
+                              Réclamation à valider{fr.pendingClaimsCount > 1 ? ` (${fr.pendingClaimsCount})` : ""}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-3 text-xs text-gray-500">
                         {formatAdminDate(fr.createdAt)}
@@ -302,7 +347,7 @@ function AdminOpportunitesPageContent() {
                           >
                             Voir le dossier →
                           </Link>
-                          {["PUBLISHED", "FUNDED"].includes(fr.status) && (
+                          {/* {["PUBLISHED", "FUNDED"].includes(fr.status) && (
                             <button
                               onClick={() => handleCancel(fr.id)}
                               disabled={actionLoading === fr.id}
@@ -310,7 +355,7 @@ function AdminOpportunitesPageContent() {
                             >
                               Suspendre
                             </button>
-                          )}
+                          )} */}
                           {fr.status === "CANCELLED" && (
                             <button
                               onClick={() => handleReactivate(fr.id)}

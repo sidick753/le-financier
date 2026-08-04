@@ -54,10 +54,24 @@ export class PayoutClaimsRepository {
     });
   }
 
-  async markPaid(tx: Tx, claimId: string, amountNet: number, adminId: string) {
+  async markPaid(
+    tx: Tx,
+    claimId: string,
+    amountNet: number,
+    adminId: string,
+    proofDocumentId: string,
+    paidAt: string,
+  ) {
     return tx.payoutClaim.update({
       where: { id: claimId },
-      data: { status: 'PAID', amountNet, decidedById: adminId, decidedAt: new Date() },
+      data: {
+        status: 'PAID',
+        amountNet,
+        decidedById: adminId,
+        decidedAt: new Date(),
+        proofDocumentId,
+        paidAt: new Date(paidAt),
+      },
     });
   }
 

@@ -46,12 +46,14 @@ export function AdminBadgesProvider({ children }: { children: ReactNode }) {
       // partiel, rattachées respectivement aux sections Opportunités et Remboursements.
       api.get<unknown[]>("/funding-requests/admin/claims/pending", token),
       api.get<unknown[]>("/repayments/admin/claims/pending", token),
+      // Preuves de virement soumises par les investisseurs, en attente de validation.
+      api.get<{ count: number }>("/investments/admin/pending-settlements-count", token),
     ])
-      .then(([pme, investisseurs, opportunites, partenaires, scoring, pendingPayments, pendingFundingClaims, pendingRepaymentClaims]) => {
+      .then(([pme, investisseurs, opportunites, partenaires, scoring, pendingPayments, pendingFundingClaims, pendingRepaymentClaims, pendingSettlements]) => {
         setBadges({
           pme: pme.pending,
           investisseurs: investisseurs.pendingKyc,
-          opportunites: opportunites.underReview + pendingFundingClaims.length,
+          opportunites: opportunites.underReview + pendingFundingClaims.length + pendingSettlements.count,
           partenaires: partenaires.pending,
           scoring: scoring.count,
           remboursements: pendingPayments.length + pendingRepaymentClaims.length,

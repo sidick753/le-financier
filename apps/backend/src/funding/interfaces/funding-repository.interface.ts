@@ -77,8 +77,9 @@ export interface IFundingRepository {
   hasCommittedInvestment(fundingRequestId: string, investorIds: string[]): Promise<boolean>;
   getClaimableAmount(fundingRequestId: string): Promise<number>;
   requestFundingClaim(fundingRequestId: string, userId: string, amount?: number): Promise<any>;
-  approveFundingClaim(claimId: string, adminId: string): Promise<any>;
+  approveFundingClaim(claimId: string, adminId: string, proofDocumentId: string, paidAt: string): Promise<any>;
   rejectFundingClaim(claimId: string, adminId: string, reason: string): Promise<any>;
   findClaimsForFundingRequest(fundingRequestId: string): Promise<any[]>;
   findPendingFundingClaims(): Promise<any[]>;
+  findStaleUnderReview(daysAgo: number): Promise<Array<{ id: string; title: string }>>;
 }

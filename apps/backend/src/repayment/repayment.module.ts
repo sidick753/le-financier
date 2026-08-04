@@ -7,11 +7,12 @@ import { OrganizationsModule } from '../organizations/organizations.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PayoutClaimsModule } from '../payout-claims/payout-claims.module';
 import { InstitutionsModule } from '../institutions/institutions.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
-  imports: [FundingModule, OrganizationsModule, NotificationsModule, PayoutClaimsModule, InstitutionsModule],
+  imports: [FundingModule, OrganizationsModule, NotificationsModule, PayoutClaimsModule, InstitutionsModule, UsersModule],
   controllers: [RepaymentController],
   providers: [RepaymentService, RepaymentRepository],
-  exports: [RepaymentService],
+  exports: [RepaymentService, RepaymentRepository],
 })
 export class RepaymentModule {}

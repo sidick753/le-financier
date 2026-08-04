@@ -126,6 +126,16 @@ export class InvestmentsController {
     return this.investmentsService.settle(id, dto, req.user.id);
   }
 
+  @ApiOperation({ summary: '[ADMIN] Nombre de preuves de virement en attente de validation', description: 'Sert de badge sur le menu Opportunités et sur les lignes concernées.' })
+  @ApiResponse({ status: 200, description: '{ count: number }' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Get('admin/pending-settlements-count')
+  async getPendingSettlementsCount() {
+    const count = await this.investmentsService.getPendingSettlementsCount();
+    return { count };
+  }
+
   @ApiOperation({
     summary: '[ADMIN] Valider la preuve de virement (SETTLEMENT_SUBMITTED → SETTLED_OFF_PLATFORM)',
     description: `Valide le justificatif de virement soumis par l'investisseur.

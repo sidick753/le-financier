@@ -815,6 +815,12 @@ model PayoutClaim {
   decidedAt       DateTime?
   rejectionReason String?
 
+  // Preuve du virement réel effectué par l'admin (hors plateforme) + date à
+  // laquelle il a été fait — requis à l'approbation : un simple clic ne suffit
+  // plus à attester qu'un versement a réellement eu lieu.
+  proofDocumentId String?   @unique
+  paidAt          DateTime?
+
   createdAt DateTime @default(now())
 
   @@index([fundingRequestId])

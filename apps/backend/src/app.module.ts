@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -14,6 +15,7 @@ import { ScoringModule } from './scoring/scoring.module';
 import { InstitutionsModule } from './institutions/institutions.module';
 import { MailModule } from './mail/mail.module';
 import { PlatformBankAccountsModule } from './platform-bank-accounts/platform-bank-accounts.module';
+import { RemindersModule } from './reminders/reminders.module';
 
 @Module({
   imports: [
@@ -21,6 +23,7 @@ import { PlatformBankAccountsModule } from './platform-bank-accounts/platform-ba
       isGlobal: true,
       envFilePath: '../../.env',
     }),
+    ScheduleModule.forRoot(),
     AuthModule,
     OrganizationsModule,
     FundingModule,
@@ -33,6 +36,7 @@ import { PlatformBankAccountsModule } from './platform-bank-accounts/platform-ba
     InstitutionsModule,
     MailModule,
     PlatformBankAccountsModule,
+    RemindersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

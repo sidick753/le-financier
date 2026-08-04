@@ -305,7 +305,7 @@ export class RepaymentRepository implements IRepaymentRepository {
   // [ADMIN] Valide la réclamation et verse le net — la commission d'intérêt a déjà été
   // collectée au prorata à la validation des tranches (voir approvePayment), donc le net
   // ici applique simplement le même ratio au montant réclamé.
-  async approveRepaymentClaim(claimId: string, adminId: string) {
+  async approveRepaymentClaim(claimId: string, adminId: string, proofDocumentId: string, paidAt: string) {
     return this.prisma.$transaction(async (tx) => {
       const claim = await tx.payoutClaim.findUnique({
         where: { id: claimId },
@@ -343,7 +343,7 @@ export class RepaymentRepository implements IRepaymentRepository {
       const interestRatio = amountDue > 0 ? Number(schedule.interestAmount) / amountDue : 0;
       const amountNet = Number(claim.amountRequested) * (1 - interestRatio * INTEREST_FEE_RATE);
 
-      return this.payoutClaims.markPaid(tx, claimId, amountNet, adminId);
+      return this.payoutClaims.markPaid(tx, claimId, amountNet, adminId, proofDocumentId, paidAt);
     });
   }
 
@@ -403,6 +403,51 @@ export class RepaymentRepository implements IRepaymentRepository {
       },
       orderBy: { paidAt: 'desc' },
     });
+  }
+
+  // [CRON] Échéances dues exactement le jour donné (comparaison sur la journée
+  // calendaire) et pas encore soldées — sert au rappel J-3 envoyé à la PME.
+  // Requête bornée à un seul jour civil : appelée une fois par jour, elle ne
+  // renvoie donc chaque échéance qu'une seule fois (pas de re-notification).
+  async findSchedulesDueOnDate(date: Date) {
+    const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const endOfDay = new Date(startOfDay);
+    endOfDay.setDate(endOfDay.getDate() + 1);
+
+    return this.prisma.repaymentSchedule.findMany({
+      where: {
+        status: { in: ['PENDING', 'PARTIALLY_PAID'] },
+        dueDate: { gte: startOfDay, lt: endOfDay },
+      },
+      include: {
+        fundingRequest: { select: { id: true, title: true, organizationId: true } },
+      },
+    });
+  }
+
+  // [CRON] Bascule en OVERDUE les échéances dont la date est dépassée sans être
+  // soldées, et renvoie uniquement celles qui viennent de transitionner (jamais
+  // les mêmes deux fois : une fois passées OVERDUE, elles ne matchent plus le
+  // filtre PENDING/PARTIALLY_PAID du prochain passage).
+  async markOverdueSchedules() {
+    const overdue = await this.prisma.repaymentSchedule.findMany({
+      where: {
+        status: { in: ['PENDING', 'PARTIALLY_PAID'] },
+        dueDate: { lt: new Date() },
+      },
+      include: {
+        fundingRequest: { select: { id: true, title: true, organizationId: true } },
+      },
+    });
+
+    if (overdue.length === 0) return [];
+
+    await this.prisma.repaymentSchedule.updateMany({
+      where: { id: { in: overdue.map((s) => s.id) } },
+      data: { status: 'OVERDUE' },
+    });
+
+    return overdue;
   }
 
   async findCommissionsByFundingRequestId(fundingRequestId: string) {
