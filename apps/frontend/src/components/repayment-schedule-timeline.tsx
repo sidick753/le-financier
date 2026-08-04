@@ -144,7 +144,8 @@ function ClaimAction({ scheduleId }: { scheduleId: string }) {
             Disponible à réclamer :{" "}
             <span className="font-semibold text-slate-900">
               {claimable === null ? "—" : fmtFull(claimable)}
-            </span>
+            </span>{" "}
+            (commission de 3% déduite au versement)
           </p>
 
           {claimable !== null && claimable > 0 && (
@@ -172,7 +173,12 @@ function ClaimAction({ scheduleId }: { scheduleId: string }) {
                 const ccfg = CLAIM_STATUS_CONFIG[c.status] ?? CLAIM_STATUS_CONFIG.REQUESTED;
                 return (
                   <div key={c.id} className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-600">{fmtFull(Number(c.amountRequested))}</span>
+                    <span className="text-slate-600">
+                      {fmtFull(Number(c.amountRequested))}
+                      {c.amountNet
+                        ? ` · net ${fmtFull(Number(c.amountNet))} (commission 3%)`
+                        : " (commission 3% au versement)"}
+                    </span>
                     <span className={`rounded-full px-2 py-0.5 font-medium ${ccfg.className}`}>{ccfg.label}</span>
                   </div>
                 );
