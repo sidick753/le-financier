@@ -9,8 +9,10 @@ import { NotifBell } from "@/components/ui/notif-bell";
 import { DocumentPreviewModal } from "@/components/document-preview-modal";
 import { FundingDocument, DOCUMENT_TYPE_LABELS, DOCUMENT_STATUS_CONFIG, formatFileSize } from "@/lib/document-labels";
 import { EDITABLE_STATUSES } from "@/lib/funding-status";
-import { CLAIM_STATUS_CONFIG, formatAmountInput, parseAmountInput } from "@/lib/admin-ui";
+import { CLAIM_STATUS_CONFIG, INVESTMENT_STATUS_CONFIG } from "@/lib/admin-ui";
 import { alertError, alertSuccess, confirmDialog } from "@/lib/alert";
+import { FieldError } from "@/components/ui/field-error";
+import { PmeRepaymentSchedule } from "@/components/pme-repayment-schedule";
 
 // ── config ────────────────────────────────────────────────────────────────────
 
@@ -39,6 +41,24 @@ interface PayoutClaimRow {
   rejectionReason: string | null;
 }
 
+// Sous-ensemble de /investments/organization/:organizationId (voir useOffers) —
+// on filtre côté client sur cette demande précise, endpoint déjà réservé aux
+// membres de l'organisation (isMember), donc sûr à réutiliser tel quel ici.
+interface InvestorRow {
+  id: string;
+  amountCommitted: string;
+  lockedReturn: string | null;
+  status: string;
+  createdAt: string;
+  fundingRequest: { id: string };
+  investor: { firstName: string; lastName: string; email: string };
+}
+
+// Un engagement compte comme "investissement réel" (et entre dans le range de
+// tickets) une fois confirmé — avant ça (INTERESTED/NEGOTIATING), ce n'est
+// qu'une proposition qui peut encore changer de montant.
+const COMMITTED_STATUSES = ["COMMITTED", "SETTLEMENT_SUBMITTED", "SETTLED_OFF_PLATFORM"];
+
 interface FundingRequestDetail {
   id: string;
   title: string;
@@ -54,6 +74,7 @@ interface FundingRequestDetail {
   rejectionReason: string | null;
   publishedAt: string | null;
   closesAt: string | null;
+  disbursedAt: string | null;
   createdAt: string;
   organization: {
     id: string;
@@ -96,8 +117,10 @@ export default function DemandeDetailPage() {
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
   const [claimable, setClaimable] = useState<number | null>(null);
   const [claims, setClaims] = useState<PayoutClaimRow[]>([]);
-  const [claimAmount, setClaimAmount] = useState("");
+  const [claimPercent, setClaimPercent] = useState("");
   const [claimSubmitting, setClaimSubmitting] = useState(false);
+  const [claimAmountError, setClaimAmountError] = useState<string | null>(null);
+  const [investors, setInvestors] = useState<InvestorRow[]>([]);
 
   function loadClaims() {
     if (!token || !id) return;
@@ -119,13 +142,35 @@ export default function DemandeDetailPage() {
     loadClaims();
   }, [token, id]);
 
+  // Nécessite l'organisation (connue une fois `request` chargé) — endpoint
+  // organisation entière, filtré côté client sur cette demande précise.
+  useEffect(() => {
+    if (!token || !request) return;
+    api
+      .get<InvestorRow[]>(`/investments/organization/${request.organization.id}`, token)
+      .then((all) => setInvestors(all.filter((inv) => inv.fundingRequest.id === id)))
+      .catch(() => {});
+  }, [token, request, id]);
+
   async function handleRequestClaim() {
     if (!token || !id) return;
+    // Laisser vide = réclamer tout le disponible (100%), toujours autorisé. Un
+    // pourcentage saisi doit rester entre 10 et 100 — en dessous, ça fait autant
+    // de réclamations à valider par un admin pour presque rien.
+    let amount: number | undefined;
+    if (claimPercent.trim() && claimable !== null) {
+      const pct = Number(claimPercent);
+      if (!Number.isFinite(pct) || pct < 10 || pct > 100) {
+        setClaimAmountError("Entre 10% et 100% du disponible.");
+        return;
+      }
+      amount = Math.round(claimable * (pct / 100));
+    }
+    setClaimAmountError(null);
     setClaimSubmitting(true);
     try {
-      const amount = claimAmount.trim() ? parseAmountInput(claimAmount) : undefined;
       await api.post(`/funding-requests/${id}/claims`, { amount }, token);
-      setClaimAmount("");
+      setClaimPercent("");
       loadClaims();
       alertSuccess("Réclamation envoyée, elle est en attente de validation par un admin.");
     } catch (err) {
@@ -151,6 +196,14 @@ export default function DemandeDetailPage() {
   const cfg = request ? STATUS_CONFIG[request.status] ?? STATUS_CONFIG.DRAFT : null;
   const report = request?.scoringReports?.[0];
   const editable = request ? EDITABLE_STATUSES.includes(request.status) : false;
+  const requested = request ? Number(request.amountRequested) : 0;
+  const raised = request ? Number(request.amountRaised) : 0;
+  const progress = requested > 0 ? Math.min(100, (raised / requested) * 100) : 0;
+  const committedInvestors = investors.filter((inv) => COMMITTED_STATUSES.includes(inv.status));
+  const ticketAmounts = committedInvestors.map((inv) => Number(inv.amountCommitted));
+  const minTicket = ticketAmounts.length > 0 ? Math.min(...ticketAmounts) : null;
+  const maxTicket = ticketAmounts.length > 0 ? Math.max(...ticketAmounts) : null;
+  const visibleDocuments = documents.filter((doc) => doc.status !== "REJECTED");
 
   return (
     <>
@@ -239,6 +292,25 @@ export default function DemandeDetailPage() {
                   <p className="mt-0.5">{request.rejectionReason}</p>
                 </div>
               )}
+
+              {/* Progression du financement — même lecture que côté admin/investisseur :
+                  montant levé (validé par un admin) rapporté au montant demandé. */}
+              {["PUBLISHED", "FUNDED", "CLOSED"].includes(request.status) && (
+                <div className="mt-4">
+                  <div className="mb-1.5 flex items-center justify-between text-[12px]">
+                    <span className="font-medium text-slate-700">
+                      {fmtAmount(request.amountRaised, request.currency)} levés{" "}
+                      <span className="text-slate-400">({progress.toFixed(0)}%)</span>
+                    </span>
+                    <span className="text-slate-400">
+                      Reste {fmtAmount(Math.max(0, requested - raised), request.currency)}
+                    </span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                    <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${progress}%` }} />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Key figures */}
@@ -253,6 +325,17 @@ export default function DemandeDetailPage() {
                 <p className="mb-1 text-[11px] text-slate-500">Montant levé</p>
                 <p className="text-[15px] font-semibold text-slate-900">
                   {fmtAmount(request.amountRaised, request.currency)}
+                  {requested > 0 && <span className="ml-1 text-[12px] font-normal text-slate-400">({progress.toFixed(0)}%)</span>}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="mb-1 text-[11px] text-slate-500">Range d'investissement</p>
+                <p className="text-[15px] font-semibold text-slate-900">
+                  {minTicket === null
+                    ? "—"
+                    : minTicket === maxTicket
+                      ? fmtAmount(minTicket, request.currency)
+                      : `${fmtAmount(minTicket, request.currency)} – ${fmtAmount(maxTicket as number, request.currency)}`}
                 </p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -283,6 +366,55 @@ export default function DemandeDetailPage() {
               </div>
             </div>
 
+            {/* Investisseurs — qui a investi, combien, à quel taux, et quelle part du
+                montant demandé ça représente. */}
+            <div className="mb-5 rounded-2xl border border-slate-200 bg-white">
+              <div className="flex items-center justify-between gap-3 p-6 pb-4">
+                <h2 className="text-[14px] font-semibold text-slate-900">
+                  Investisseurs{investors.length > 0 && ` (${investors.length})`}
+                </h2>
+                {request.investorMode === "SINGLE_INVESTOR" && (
+                  <span className="text-[11px] font-medium text-amber-600">Investisseur unique attendu</span>
+                )}
+              </div>
+              {investors.length === 0 ? (
+                <p className="px-6 pb-6 text-[13px] text-slate-400">Aucun investisseur pour l'instant.</p>
+              ) : (
+                <div className="divide-y divide-slate-100 border-t border-slate-100">
+                  {investors.map((inv) => {
+                    const icfg = INVESTMENT_STATUS_CONFIG[inv.status] ?? INVESTMENT_STATUS_CONFIG.NEGOTIATING;
+                    const share = requested > 0 ? (Number(inv.amountCommitted) / requested) * 100 : 0;
+                    return (
+                      <div key={inv.id} className="flex items-center justify-between gap-3 px-6 py-3.5">
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-medium text-slate-900">
+                            {inv.investor.firstName} {inv.investor.lastName}
+                          </p>
+                          <p className="truncate text-[11px] text-slate-500">{inv.investor.email}</p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-[13px] font-semibold text-slate-900">
+                            {fmtAmount(inv.amountCommitted, request.currency)}
+                          </p>
+                          <p className="text-[11px] text-slate-500">
+                            {inv.lockedReturn ? `${Number(inv.lockedReturn)}%` : "—"} · {share.toFixed(1)}% du montant demandé
+                          </p>
+                        </div>
+                        <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${icfg.className}`}>
+                          {icfg.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Échéancier de remboursement — visible seulement une fois les fonds
+                réellement décaissés vers la PME (disbursedAt posé à l'approbation
+                d'une réclamation de financement), pas dès le virement investisseur. */}
+            {request.disbursedAt && <PmeRepaymentSchedule fundingRequestId={id} />}
+
             {/* Réclamation des fonds */}
             {["PUBLISHED", "FUNDED", "CLOSED"].includes(request.status) && (
               <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-6">
@@ -291,7 +423,7 @@ export default function DemandeDetailPage() {
                   Les virements des investisseurs sont d'abord validés par un admin sur le compte de la
                   plateforme. Vous pouvez réclamer le montant déjà validé à tout moment, même avant que la
                   demande soit intégralement financée — chaque réclamation est ensuite validée par un admin
-                  avant versement (commission déduite).
+                  avant versement, net de la commission plateforme de 2%.
                 </p>
 
                 <div className="mb-4 rounded-xl bg-slate-50 px-4 py-3">
@@ -302,21 +434,49 @@ export default function DemandeDetailPage() {
                 </div>
 
                 {claimable !== null && claimable > 0 && (
-                  <div className="mb-4 flex flex-wrap items-center gap-2">
-                    <input
-                      inputMode="numeric"
-                      placeholder={`Tout (${fmtAmount(claimable, request.currency)})`}
-                      value={claimAmount}
-                      onChange={(e) => setClaimAmount(formatAmountInput(e.target.value))}
-                      className="h-9 w-56 rounded-[9px] border border-slate-200 px-3 text-[13px] text-slate-900 outline-none focus:border-blue-400"
-                    />
-                    <button
-                      onClick={handleRequestClaim}
-                      disabled={claimSubmitting}
-                      className="inline-flex h-9 items-center gap-1.5 rounded-[9px] bg-blue-600 px-4 text-[13px] font-medium text-white shadow-[0_6px_16px_rgba(37,99,235,0.22)] transition hover:-translate-y-px hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {claimSubmitting ? "Envoi..." : "Réclamer"}
-                    </button>
+                  <div className="mb-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="relative">
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min={10}
+                          max={100}
+                          step={1}
+                          placeholder="100"
+                          value={claimPercent}
+                          onChange={(e) => {
+                            // min/max sur <input type="number"> ne bloque que les flèches, pas
+                            // la saisie clavier — on plafonne donc explicitement à 100 ici.
+                            const raw = e.target.value;
+                            const next = raw !== "" && Number(raw) > 100 ? "100" : raw;
+                            setClaimPercent(next);
+                            if (claimAmountError) setClaimAmountError(null);
+                          }}
+                          className={`h-9 w-24 rounded-[9px] border py-1.5 pl-3 pr-6 text-[13px] text-slate-900 outline-none ${
+                            claimAmountError
+                              ? "border-red-400 bg-red-50/60 focus:border-red-500"
+                              : "border-slate-200 focus:border-blue-400"
+                          }`}
+                        />
+                        <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[13px] text-slate-400">%</span>
+                      </div>
+                      <button
+                        onClick={handleRequestClaim}
+                        disabled={claimSubmitting}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-[9px] bg-blue-600 px-4 text-[13px] font-medium text-white shadow-[0_6px_16px_rgba(37,99,235,0.22)] transition hover:-translate-y-px hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {claimSubmitting ? "Envoi..." : "Réclamer"}
+                      </button>
+                    </div>
+                    <FieldError show={!!claimAmountError} msg={claimAmountError ?? ""} />
+                    {!claimAmountError && (
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        {claimPercent.trim() && Number.isFinite(Number(claimPercent))
+                          ? `= ${fmtAmount(claimable * (Number(claimPercent) / 100), request.currency)}`
+                          : `Entre 10% et 100% du disponible, ou laissez vide pour tout réclamer (${fmtAmount(claimable, request.currency)}).`}
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -330,7 +490,12 @@ export default function DemandeDetailPage() {
                             <p className="text-[13px] font-medium text-slate-900">
                               {fmtAmount(claim.amountRequested, request.currency)}
                             </p>
-                            <p className="text-[11px] text-slate-500">{fmtDate(claim.requestedAt)}</p>
+                            <p className="text-[11px] text-slate-500">
+                              {fmtDate(claim.requestedAt)}
+                              {claim.amountNet
+                                ? ` · net ${fmtAmount(claim.amountNet, request.currency)} (commission 2%)`
+                                : " (commission 2% au versement)"}
+                            </p>
                             {claim.status === "REJECTED" && claim.rejectionReason && (
                               <p className="mt-0.5 text-[11px] text-red-600">{claim.rejectionReason}</p>
                             )}
@@ -369,16 +534,18 @@ export default function DemandeDetailPage() {
               </div>
             )}
 
-            {/* Documents */}
+            {/* Documents — seuls "en attente" et "validé" sont pertinents ici ; un
+                document rejeté se corrige en le remplaçant depuis /dashboard/documents,
+                pas depuis cette page en lecture seule. */}
             <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-6">
               <h2 className="mb-3 text-[14px] font-semibold text-slate-900">
-                Documents{documents.length > 0 && ` (${documents.length})`}
+                Documents{visibleDocuments.length > 0 && ` (${visibleDocuments.length})`}
               </h2>
-              {documents.length === 0 ? (
+              {visibleDocuments.length === 0 ? (
                 <p className="text-[13px] text-slate-400">Aucun document déposé pour cette demande.</p>
               ) : (
                 <div className="-mx-6 divide-y divide-slate-100 border-t border-slate-100">
-                  {documents.map((doc) => {
+                  {visibleDocuments.map((doc) => {
                     const dcfg = DOCUMENT_STATUS_CONFIG[doc.status] ?? DOCUMENT_STATUS_CONFIG.PENDING_REVIEW;
                     return (
                       <div key={doc.id} className="flex items-center justify-between gap-3 px-6 py-3">
