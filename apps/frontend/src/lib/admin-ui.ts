@@ -33,6 +33,19 @@ export const CLAIM_STATUS_CONFIG: Record<string, { label: string; className: str
   REJECTED: { label: "Rejetée", className: "bg-red-50 text-red-600" },
 };
 
+// Investment.status côté PME (Offres reçues + détail d'une demande) — vocabulaire
+// différent de la version admin (qui décrit une action à mener : "Preuve à
+// valider"), ici on décrit l'état tel que la PME le vit.
+export const INVESTMENT_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
+  INTERESTED: { label: "Intéressé", className: "bg-gray-100 text-gray-600" },
+  NEGOTIATING: { label: "En négociation", className: "bg-yellow-100 text-yellow-700" },
+  COMMITTED: { label: "Confirmée", className: "bg-green-100 text-green-700" },
+  SETTLEMENT_SUBMITTED: { label: "Preuve soumise", className: "bg-amber-100 text-amber-700" },
+  SETTLED_OFF_PLATFORM: { label: "Réglée", className: "bg-blue-100 text-blue-700" },
+  CANCELLED: { label: "Annulée", className: "bg-gray-100 text-gray-600" },
+  REJECTED: { label: "Rejetée", className: "bg-red-100 text-red-700" },
+};
+
 export function formatAdminDate(dateString: string) {
   return new Date(dateString).toLocaleDateString("fr-FR", {
     day: "2-digit",

@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useOffers } from "@/lib/use-offers";
 import { useAuth } from "@/lib/auth-context";
@@ -10,15 +11,7 @@ import { usePmeBadges } from "@/lib/pme-badges-context";
 import { useNotifications } from "@/lib/use-notifications";
 import { alertError, alertSuccess, confirmDialog } from "@/lib/alert";
 import { FieldError } from "@/components/ui/field-error";
-
-const STATUS_LABELS: Record<string, { label: string; className: string }> = {
-  INTERESTED: { label: "Intéressé", className: "bg-gray-100 text-gray-600" },
-  NEGOTIATING: { label: "En négociation", className: "bg-yellow-100 text-yellow-700" },
-  COMMITTED: { label: "Confirmée", className: "bg-green-100 text-green-700" },
-  SETTLED_OFF_PLATFORM: { label: "Réglée", className: "bg-blue-100 text-blue-700" },
-  CANCELLED: { label: "Annulée", className: "bg-gray-100 text-gray-600" },
-  REJECTED: { label: "Rejetée", className: "bg-red-100 text-red-700" },
-};
+import { INVESTMENT_STATUS_CONFIG as STATUS_LABELS } from "@/lib/admin-ui";
 
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleDateString("fr-FR", {
@@ -53,7 +46,10 @@ function OffresPageContent() {
   const [counterNote, setCounterNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [counterReturnError, setCounterReturnError] = useState(false);
-  const targetRef = useRef<HTMLDivElement | null>(null);
+  // HTMLElement (pas HTMLDivElement) : partagé entre la section négociation (div)
+  // et la liste "Toutes les offres" (Link → <a>), qui pointe désormais vers le
+  // détail de la demande plutôt que de rester une simple div.
+  const targetRef = useRef<HTMLElement | null>(null);
   const [scrolledToTarget, setScrolledToTarget] = useState(false);
 
   useNegotiationSocket(() => {
@@ -177,7 +173,7 @@ function OffresPageContent() {
               return (
                 <div
                   key={offer.id}
-                  ref={offer.id === targetOfferId ? targetRef : undefined}
+                  ref={offer.id === targetOfferId ? (el) => { targetRef.current = el; } : undefined}
                   className={`rounded-xl border bg-white transition ${
                     offer.id === targetOfferId ? "border-blue-400 ring-2 ring-blue-200" : "border-yellow-200"
                   }`}
@@ -386,15 +382,20 @@ function OffresPageContent() {
             // Une offre acceptée/rejetée sort de "En négociation" et n'apparaît plus
             // que dans cette liste — c'est donc ici qu'il faut aussi cibler le scroll.
             const isTarget = offer.id === targetOfferId && offer.status !== "NEGOTIATING";
+            // Le virement validé se réclame sur la fiche de la demande (voir
+            // "Réclamer les fonds" sur /dashboard/demandes/[id]), pas ici — chaque
+            // offre y renvoie donc pour que la PME puisse consulter son opportunité
+            // et, une fois SETTLED_OFF_PLATFORM, réclamer le montant.
             return (
-              <div
+              <Link
                 key={offer.id}
-                ref={isTarget ? targetRef : undefined}
-                className={`flex items-center justify-between p-5 transition ${
+                href={`/dashboard/demandes/${offer.fundingRequest.id}`}
+                ref={isTarget ? (el) => { targetRef.current = el; } : undefined}
+                className={`flex items-center justify-between gap-3 p-5 transition hover:bg-gray-50 ${
                   isTarget ? "bg-blue-50/60 ring-2 ring-inset ring-blue-200" : ""
                 }`}
               >
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-900">
                     {offer.investor.firstName} {offer.investor.lastName}
                   </p>
@@ -408,11 +409,21 @@ function OffresPageContent() {
                   {offer.conditions && (
                     <p className="mt-0.5 text-xs italic text-gray-400">Conditions : {offer.conditions}</p>
                   )}
+                  {offer.status === "SETTLED_OFF_PLATFORM" && (
+                    <p className="mt-0.5 text-xs font-medium text-blue-600">
+                      Virement confirmé — réclamer les fonds sur la demande →
+                    </p>
+                  )}
                 </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-medium ${statusInfo.className}`}>
-                  {statusInfo.label}
-                </span>
-              </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className={`rounded-full px-3 py-1 text-xs font-medium ${statusInfo.className}`}>
+                    {statusInfo.label}
+                  </span>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-gray-300">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </div>
+              </Link>
             );
           })}
         </div>

@@ -300,12 +300,16 @@ export class InvestmentsRepository implements IInvestmentsRepository {
     return this.prisma.investment.findMany({
       where: { fundingRequest: { organizationId } },
       include: {
-        fundingRequest: { select: { title: true, currency: true, organizationId: true } },
+        fundingRequest: { select: { id: true, title: true, currency: true, organizationId: true } },
         investor: { select: { firstName: true, lastName: true, email: true } },
         negotiationOffers: { orderBy: { createdAt: 'desc' } },
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async countPendingSettlements() {
+    return this.prisma.investment.count({ where: { status: 'SETTLEMENT_SUBMITTED' } });
   }
 
   // Soumission par l'investisseur : dépose une preuve de virement, en attente de

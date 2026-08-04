@@ -22,7 +22,7 @@ export interface Offer {
   lockedReturn: string | null;
   conditions: string | null;
   createdAt: string;
-  fundingRequest: { title: string; currency: string };
+  fundingRequest: { id: string; title: string; currency: string };
   investor: { firstName: string; lastName: string; email: string };
   negotiationOffers: NegotiationOffer[];
 }

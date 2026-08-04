@@ -20,6 +20,13 @@ const pmeOfferLink = (investmentId: string) => `${FRONTEND_URL}/dashboard/offres
 const investorOpportunityLink = (role: string | undefined, fundingRequestId: string) =>
   `${FRONTEND_URL}${role === 'INSTITUTION' ? '/institution/deal-flow' : '/investor/opportunites'}/${fundingRequestId}`;
 
+const adminOpportunityLink = (fundingRequestId: string) => `${FRONTEND_URL}/admin/opportunites/${fundingRequestId}`;
+
+// Portefeuille de l'investisseur — utilisé pour les notifs de virement (validé/
+// rejeté) qui concernent son engagement déjà confirmé, pas une négociation en cours.
+const investorPortfolioLink = (role: string | undefined) =>
+  `${FRONTEND_URL}${role === 'INSTITUTION' ? '/institution/portefeuille' : '/investor/portefeuille'}`;
+
 @Injectable()
 export class InvestmentsService {
   constructor(
@@ -33,6 +40,17 @@ export class InvestmentsService {
   ) {}
 
   async createNegotiation(dto: CreateInvestmentDto, investorId: string) {
+    // La PME reçoit immédiatement une notification "nouvelle proposition" — elle ne
+    // doit jamais recevoir une offre venant d'une identité que l'admin n'a pas encore
+    // vérifiée (KYC). Pour un membre d'institution, c'est l'identité de l'institution
+    // (son OWNER) qui fait foi, pas celle de l'analyste qui clique.
+    const kycStatus = await this.institutionsService.getRepresentativeKycStatus(investorId);
+    if (kycStatus !== 'VERIFIED') {
+      throw new ForbiddenException(
+        "Votre identité (KYC) doit d'abord être vérifiée par un administrateur avant de pouvoir proposer un investissement.",
+      );
+    }
+
     const investment = await this.investmentsRepository.createNegotiation(
       dto.fundingRequestId,
       investorId,
@@ -268,6 +286,8 @@ export class InvestmentsService {
     await this.notificationsService.notifyAdmins(
       'Preuve de virement à valider',
       `Une preuve de virement de ${Number(investment.amountCommitted).toLocaleString('fr-FR')} F CFA a été soumise sur "${fundingRequest?.title ?? 'une demande'}".`,
+      adminOpportunityLink(investment.fundingRequestId),
+      { email: true, ctaLabel: 'Valider la preuve' },
     );
 
     return submitted;
@@ -303,24 +323,39 @@ export class InvestmentsService {
       });
     }
 
+    const investorUser = await this.usersRepository.findById(investment.investorId);
     await this.notificationsService.notify(
       investment.investorId,
       'Virement validé',
-      `Votre virement de ${Number(investment.amountCommitted).toLocaleString('fr-FR')} F CFA sur "${fundingRequest?.title ?? 'une demande'}" a été validé.`,
+      `Votre virement de ${Number(investment.amountCommitted).toLocaleString('fr-FR')} F CFA sur "${fundingRequest?.title ?? 'une demande'}" a été validé. Votre échéancier de remboursement est disponible.`,
+      investorPortfolioLink(investorUser?.role),
+      { email: true, ctaLabel: 'Voir mon portefeuille' },
     );
 
     if (fundingRequest) {
       const owner = await this.fundingRepository.findOrganizationOwner(fundingRequest.organizationId);
       if (owner) {
+        // Sans `link` ici auparavant : la notif n'alimentait ni le badge "offre
+        // confirmée" du menu (sidebar filtre sur les notifs pointant vers
+        // /dashboard/offres) ni un clic possible. pmeOfferLink ouvre l'offre
+        // précise, qui pointe elle-même vers la demande pour la réclamation.
         await this.notificationsService.notify(
           owner.userId,
           'Financement confirmé',
-          `Un virement de ${Number(investment.amountCommitted).toLocaleString('fr-FR')} F CFA a été validé sur "${fundingRequest.title}".`,
+          `Un virement de ${Number(investment.amountCommitted).toLocaleString('fr-FR')} F CFA a été validé sur "${fundingRequest.title}". Vous pouvez désormais le réclamer.`,
+          pmeOfferLink(investmentId),
+          { email: true, ctaLabel: 'Voir mes offres reçues' },
         );
       }
     }
 
     return approved;
+  }
+
+  // [ADMIN] Nombre de preuves de virement en attente de validation — sert de badge
+  // sur le menu Opportunités et sur la ligne de la demande concernée.
+  async getPendingSettlementsCount() {
+    return this.investmentsRepository.countPendingSettlements();
   }
 
   // [ADMIN] Rejette la preuve : l'investisseur retombe en COMMITTED et doit resoumettre.
@@ -333,10 +368,13 @@ export class InvestmentsService {
     const rejected = await this.investmentsRepository.rejectSettlement(investmentId, adminId, reason);
 
     const fundingRequest = await this.fundingRepository.findById(investment.fundingRequestId);
+    const investorUser = await this.usersRepository.findById(investment.investorId);
     await this.notificationsService.notify(
       investment.investorId,
       'Preuve de virement rejetée',
-      `Votre preuve de virement sur "${fundingRequest?.title ?? 'une demande'}" a été rejetée : ${reason}`,
+      `Votre preuve de virement sur "${fundingRequest?.title ?? 'une demande'}" a été rejetée : ${reason}. Merci de resoumettre une preuve valide.`,
+      investorPortfolioLink(investorUser?.role),
+      { email: true, ctaLabel: 'Resoumettre ma preuve' },
     );
 
     return rejected;
