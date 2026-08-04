@@ -16,8 +16,8 @@ export function NotifBell({ href = "/dashboard/notifications" }: { href?: string
         <path d="M13.73 21a2 2 0 0 1-3.46 0" />
       </svg>
       {unreadCount > 0 && (
-        <span className="absolute -right-1.5 -top-1.5 flex min-w-[18px] items-center justify-center rounded-full border-2 border-white bg-red-600 px-1 py-px text-[9px] font-bold leading-none text-white">
-          {unreadCount}
+        <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-red-600 px-1 text-[11px] font-bold leading-none text-white">
+          {unreadCount > 99 ? "99+" : unreadCount}
         </span>
       )}
     </Link>

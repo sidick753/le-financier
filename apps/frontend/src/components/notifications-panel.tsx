@@ -102,13 +102,24 @@ export function NotificationsPanel() {
   return (
     <>
       <header className="sticky top-0 z-10 flex h-[60px] items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
-        <div>
-          <p className="text-[15px] font-black tracking-tight text-slate-900">Notifications</p>
-          <p className="text-xs text-slate-500">
-            {unreadCount > 0
-              ? `${unreadCount} non lue${unreadCount > 1 ? "s" : ""}`
-              : "Tout est à jour"}
-          </p>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => router.back()}
+            className="flex h-8 w-8 items-center justify-center rounded-[8px] text-slate-400 transition hover:bg-slate-50 hover:text-slate-900"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="19" y1="12" x2="5" y2="12" />
+              <polyline points="12 19 5 12 12 5" />
+            </svg>
+          </button>
+          <div>
+            <p className="text-[15px] font-black tracking-tight text-slate-900">Notifications</p>
+            <p className="text-xs text-slate-500">
+              {unreadCount > 0
+                ? `${unreadCount} non lue${unreadCount > 1 ? "s" : ""}`
+                : "Tout est à jour"}
+            </p>
+          </div>
         </div>
         {unreadCount > 0 && (
           <button
