@@ -9,6 +9,7 @@ interface Notification {
   id: string;
   title: string;
   body: string;
+  link: string | null;
   readAt: string | null;
   createdAt: string;
 }
@@ -18,6 +19,7 @@ interface NotificationsContextValue {
   unreadCount: number;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  markAllAsReadForLink: (link: string) => Promise<void>;
 }
 
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
@@ -33,10 +35,14 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!token) return;
 
-    api
-      .get<Notification[]>("/notifications", token)
-      .then(setNotifications)
-      .catch(() => {});
+    const refetch = () => {
+      api
+        .get<Notification[]>("/notifications", token)
+        .then(setNotifications)
+        .catch(() => {});
+    };
+
+    refetch();
 
     // auth en callback (pas un objet figé) : relu à chaque tentative de reconnexion
     // automatique de socket.io-client (ex: après un redémarrage du backend), pour éviter
@@ -45,8 +51,27 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       auth: (cb) => cb({ token: sessionStorage.getItem("accessToken") ?? token }),
     });
 
+    // Toute notification émise pendant une coupure (redémarrage backend, veille,
+    // perte réseau...) n'arrive jamais via l'event "notification" — resynchroniser
+    // par un refetch complet à chaque (re)connexion évite d'avoir à recharger la
+    // page pour les voir apparaître.
+    socket.on("connect", refetch);
+
+    // "io server disconnect" (redémarrage/déploiement backend) est le seul cas où
+    // socket.io-client ne retente PAS la reconnexion automatiquement — sans ce
+    // rappel manuel, le socket reste mort en silence et plus aucune notification
+    // n'arrive tant que la page n'est pas rechargée.
+    socket.on("disconnect", (reason) => {
+      if (reason === "io server disconnect") {
+        socket.connect();
+      }
+    });
+
     socket.on("notification", (notification: Notification) => {
-      setNotifications((prev) => [notification, ...prev]);
+      setNotifications((prev) => {
+        if (prev.some((n) => n.id === notification.id)) return prev;
+        return [notification, ...prev];
+      });
     });
 
     return () => {
@@ -87,8 +112,27 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function markAllAsReadForLink(link: string) {
+    if (!token) return;
+    const unread = notifications.filter((n) => !n.readAt && n.link?.includes(link));
+    if (unread.length === 0) return;
+    const now = new Date().toISOString();
+    setNotifications((prev) =>
+      prev.map((n) => (unread.some((u) => u.id === n.id) ? { ...n, readAt: now } : n)),
+    );
+    try {
+      await Promise.all(unread.map((n) => api.patch(`/notifications/${n.id}/read`, {}, token)));
+    } catch {
+      setNotifications((prev) =>
+        prev.map((n) => (unread.some((u) => u.id === n.id) ? { ...n, readAt: null } : n)),
+      );
+    }
+  }
+
   return (
-    <NotificationsContext.Provider value={{ notifications, unreadCount, markAsRead, markAllAsRead }}>
+    <NotificationsContext.Provider
+      value={{ notifications, unreadCount, markAsRead, markAllAsRead, markAllAsReadForLink }}
+    >
       {children}
     </NotificationsContext.Provider>
   );

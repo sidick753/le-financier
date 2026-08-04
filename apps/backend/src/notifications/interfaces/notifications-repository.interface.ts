@@ -4,6 +4,7 @@ export interface CreateNotificationData {
   userId: string;
   title: string;
   body: string;
+  link?: string;
   channel?: 'EMAIL' | 'IN_APP';
 }
 

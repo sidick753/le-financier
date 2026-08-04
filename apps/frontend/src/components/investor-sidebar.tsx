@@ -71,7 +71,10 @@ const NAV_ITEMS = [
 export function InvestorSidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const { unreadCount } = useNotifications();
+  const { unreadCount, notifications } = useNotifications();
+  const portfolioConfirmedUnseen = notifications.filter(
+    (n) => !n.readAt && n.link?.includes('/investor/portefeuille'),
+  ).length;
 
   return (
     <aside className="fixed left-0 top-0 z-20 flex h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-white">
@@ -112,7 +115,11 @@ export function InvestorSidebar() {
           const isActive = item.href === "/investor"
             ? pathname === "/investor"
             : pathname.startsWith(item.href);
-          const showBadge = item.href === "/investor/notifications" && unreadCount > 0;
+          const badgeCount = item.href === "/investor/notifications"
+            ? unreadCount
+            : item.href === "/investor/portefeuille"
+              ? portfolioConfirmedUnseen
+              : 0;
           return (
             <Link
               key={item.href}
@@ -127,9 +134,9 @@ export function InvestorSidebar() {
                 {item.icon}
                 {item.label}
               </span>
-              {showBadge && (
+              {badgeCount > 0 && (
                 <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
-                  {unreadCount}
+                  {badgeCount}
                 </span>
               )}
             </Link>

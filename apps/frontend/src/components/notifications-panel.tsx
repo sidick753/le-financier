@@ -1,7 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useNotifications } from "@/lib/use-notifications";
+
+// Le lien stocké côté backend peut être relatif ("/dashboard/offres?offer=xxx")
+// ou absolu (FRONTEND_URL + chemin) selon l'environnement — on ne garde que le
+// chemin + query pour router.push, quel que soit le format reçu.
+function linkToPath(link: string): string {
+  try {
+    const url = new URL(link, window.location.origin);
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return link;
+  }
+}
 
 type Category = "paiement" | "offre" | "systeme";
 
@@ -69,7 +82,13 @@ function CategoryIcon({ category }: { category: Category }) {
 
 export function NotificationsPanel() {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabKey>("toutes");
+
+  function handleNotificationClick(notification: { id: string; link: string | null; readAt: string | null }) {
+    if (!notification.readAt) markAsRead(notification.id);
+    if (notification.link) router.push(linkToPath(notification.link));
+  }
 
   const filtered = notifications.filter((notification) => {
     if (activeTab === "toutes") return true;
@@ -81,11 +100,11 @@ export function NotificationsPanel() {
   });
 
   return (
-    <div className="p-8">
-      <div className="mb-6 flex items-center justify-between">
+    <>
+      <header className="sticky top-0 z-10 flex h-[60px] items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Notifications</h1>
-          <p className="text-sm text-slate-500">
+          <p className="text-[15px] font-black tracking-tight text-slate-900">Notifications</p>
+          <p className="text-xs text-slate-500">
             {unreadCount > 0
               ? `${unreadCount} non lue${unreadCount > 1 ? "s" : ""}`
               : "Tout est à jour"}
@@ -102,59 +121,66 @@ export function NotificationsPanel() {
             Tout marquer comme lu
           </button>
         )}
-      </div>
+      </header>
 
-      <div className="mb-5 flex flex-wrap gap-2">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition ${
-              activeTab === tab.key
-                ? "bg-slate-900 text-white"
-                : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <div className="p-8">
+        <div className="mb-5 flex flex-wrap gap-2">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition ${
+                activeTab === tab.key
+                  ? "bg-slate-900 text-white"
+                  : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        {filtered.length === 0 && (
-          <div className="p-10 text-center">
-            <p className="text-sm text-slate-400">Aucune notification pour le moment.</p>
-          </div>
-        )}
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          {filtered.length === 0 && (
+            <div className="p-10 text-center">
+              <p className="text-sm text-slate-400">Aucune notification pour le moment.</p>
+            </div>
+          )}
 
-        <div className="divide-y divide-slate-100">
-          {filtered.map((notification) => {
-            const isUnread = !notification.readAt;
-            const category = classify(notification.title);
-            return (
-              <button
-                key={notification.id}
-                onClick={() => isUnread && markAsRead(notification.id)}
-                className={`flex w-full items-start gap-4 p-5 text-left transition hover:bg-slate-50 ${
-                  isUnread ? "bg-blue-50/60" : ""
-                }`}
-              >
-                <CategoryIcon category={category} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-slate-900">{notification.title}</p>
-                    {isUnread && <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-600" />}
+          <div className="divide-y divide-slate-100">
+            {filtered.map((notification) => {
+              const isUnread = !notification.readAt;
+              const category = classify(notification.title);
+              return (
+                <button
+                  key={notification.id}
+                  onClick={() => handleNotificationClick(notification)}
+                  className={`flex w-full items-start gap-4 p-5 text-left transition hover:bg-slate-50 ${
+                    isUnread ? "bg-blue-50/60" : ""
+                  }`}
+                >
+                  <CategoryIcon category={category} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-900">{notification.title}</p>
+                      {isUnread && <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-600" />}
+                    </div>
+                    <p className="mt-0.5 text-sm text-slate-500">{notification.body}</p>
                   </div>
-                  <p className="mt-0.5 text-sm text-slate-500">{notification.body}</p>
-                </div>
-                <span className="flex-shrink-0 whitespace-nowrap text-xs text-slate-400">
-                  {formatRelativeTime(notification.createdAt)}
-                </span>
-              </button>
-            );
-          })}
+                  <span className="flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap text-xs text-slate-400">
+                    {formatRelativeTime(notification.createdAt)}
+                    {notification.link && (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useOffers } from "@/lib/use-offers";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { useNegotiationSocket } from "@/lib/use-negotiation-socket";
 import { usePmeBadges } from "@/lib/pme-badges-context";
+import { useNotifications } from "@/lib/use-notifications";
 import { alertError, alertSuccess, confirmDialog } from "@/lib/alert";
+import { FieldError } from "@/components/ui/field-error";
 
 const STATUS_LABELS: Record<string, { label: string; className: string }> = {
   INTERESTED: { label: "Intéressé", className: "bg-gray-100 text-gray-600" },
@@ -28,26 +31,58 @@ function formatDate(dateString: string) {
 }
 
 export default function OffresPage() {
+  return (
+    <Suspense fallback={null}>
+      <OffresPageContent />
+    </Suspense>
+  );
+}
+
+function OffresPageContent() {
   const { offers, isLoading, refresh } = useOffers();
   const { token } = useAuth();
   const { refreshBadges } = usePmeBadges();
-  const [selectedOffer, setSelectedOffer] = useState<string | null>(null);
+  const { markAllAsReadForLink } = useNotifications();
+  const searchParams = useSearchParams();
+  // Depuis une notification (nouvelle offre, contre-proposition, annulation...) :
+  // ouvre et scrolle directement sur l'offre concernée plutôt que la liste entière.
+  const targetOfferId = searchParams.get("offer");
+  const [selectedOffer, setSelectedOffer] = useState<string | null>(targetOfferId);
   const [counterReturn, setCounterReturn] = useState("");
   const [counterConditions, setCounterConditions] = useState("");
   const [counterNote, setCounterNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [counterReturnError, setCounterReturnError] = useState(false);
+  const targetRef = useRef<HTMLDivElement | null>(null);
+  const [scrolledToTarget, setScrolledToTarget] = useState(false);
 
   useNegotiationSocket(() => {
     refresh();
     refreshBadges();
   });
 
+  // Efface le badge "nouvellement confirmée" du menu dès que la PME consulte la page.
+  useEffect(() => {
+    markAllAsReadForLink("/dashboard/offres");
+  }, [markAllAsReadForLink]);
+
+  // Une fois les offres chargées, scrolle jusqu'à celle visée par la notification
+  // (ne se déclenche qu'une fois, après le rendu du panneau éventuellement déplié).
+  useEffect(() => {
+    if (!targetOfferId || scrolledToTarget || isLoading || offers.length === 0) return;
+    const id = requestAnimationFrame(() => {
+      targetRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setScrolledToTarget(true);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [targetOfferId, scrolledToTarget, isLoading, offers.length]);
+
   const negotiatingOffers = offers.filter((o) => o.status === "NEGOTIATING");
   const otherOffers = offers.filter((o) => o.status !== "NEGOTIATING");
 
   async function handleCounter(offerId: string) {
     if (!counterReturn) {
-      alertError("Saisissez un taux de contre-proposition.");
+      setCounterReturnError(true);
       return;
     }
     setIsSubmitting(true);
@@ -110,19 +145,22 @@ export default function OffresPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Offres reçues</h1>
-        <p className="text-sm text-gray-500">
-          {offers.length} offre{offers.length !== 1 ? "s" : ""} au total
-          {negotiatingOffers.length > 0 && (
-            <span className="ml-2 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
-              {negotiatingOffers.length} en négociation
-            </span>
-          )}
-        </p>
-      </div>
+    <>
+      <header className="sticky top-0 z-10 flex h-[60px] items-center border-b border-slate-200 bg-white/90 px-8 backdrop-blur-md">
+        <div>
+          <p className="text-[15px] font-black tracking-tight text-gray-900">Offres reçues</p>
+          <p className="text-xs text-gray-500">
+            {offers.length} offre{offers.length !== 1 ? "s" : ""} au total
+            {negotiatingOffers.length > 0 && (
+              <span className="ml-2 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">
+                {negotiatingOffers.length} en négociation
+              </span>
+            )}
+          </p>
+        </div>
+      </header>
 
+      <div className="p-8">
       {/* Offres en négociation — action requise */}
       {negotiatingOffers.length > 0 && (
         <div className="mb-6">
@@ -137,7 +175,13 @@ export default function OffresPage() {
               const ballIsInInvestorCourt = lastOffer?.proposedBy === "PME" && lastOffer?.status === "PENDING";
 
               return (
-                <div key={offer.id} className="rounded-xl border border-yellow-200 bg-white">
+                <div
+                  key={offer.id}
+                  ref={offer.id === targetOfferId ? targetRef : undefined}
+                  className={`rounded-xl border bg-white transition ${
+                    offer.id === targetOfferId ? "border-blue-400 ring-2 ring-blue-200" : "border-yellow-200"
+                  }`}
+                >
                   <button
                     onClick={() => setSelectedOffer(isExpanded ? null : offer.id)}
                     className="flex w-full items-center justify-between p-5 text-left"
@@ -247,22 +291,32 @@ export default function OffresPage() {
                           >
                             ✓ Accepter {Number(lastOffer?.proposedReturn)}%
                           </button>
-                          <div className="flex gap-2">
-                            <input
-                              type="number"
-                              step="0.1"
-                              placeholder="Votre contre-proposition (%)"
-                              value={counterReturn}
-                              onChange={(e) => setCounterReturn(e.target.value)}
-                              className="flex-1 rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
-                            />
-                            <button
-                              onClick={() => handleCounter(offer.id)}
-                              disabled={isSubmitting}
-                              className="rounded-md border border-brand-700 px-4 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50"
-                            >
-                              Contre-proposer
-                            </button>
+                          <div>
+                            <div className="flex gap-2">
+                              <input
+                                type="number"
+                                step="0.1"
+                                placeholder="Votre contre-proposition (%)"
+                                value={counterReturn}
+                                onChange={(e) => {
+                                  setCounterReturn(e.target.value);
+                                  if (counterReturnError) setCounterReturnError(false);
+                                }}
+                                className={`flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none ${
+                                  counterReturnError
+                                    ? "border-red-400 bg-red-50/60 focus:border-red-500"
+                                    : "border-gray-200 focus:border-brand-700"
+                                }`}
+                              />
+                              <button
+                                onClick={() => handleCounter(offer.id)}
+                                disabled={isSubmitting}
+                                className="rounded-md border border-brand-700 px-4 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50"
+                              >
+                                Contre-proposer
+                              </button>
+                            </div>
+                            <FieldError msg="Saisissez un taux de contre-proposition." show={counterReturnError} />
                           </div>
                           <textarea
                             rows={2}
@@ -316,7 +370,7 @@ export default function OffresPage() {
       {/* Toutes les autres offres */}
       <div className="rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-sm font-semibold text-gray-900">Toutes les offres</p>
+          <p className="text-base font-semibold text-gray-900">Toutes les offres</p>
         </div>
 
         {isLoading && <p className="p-5 text-sm text-gray-400">Chargement...</p>}
@@ -329,8 +383,17 @@ export default function OffresPage() {
         <div className="divide-y divide-gray-100">
           {offers.map((offer) => {
             const statusInfo = STATUS_LABELS[offer.status] ?? STATUS_LABELS.NEGOTIATING;
+            // Une offre acceptée/rejetée sort de "En négociation" et n'apparaît plus
+            // que dans cette liste — c'est donc ici qu'il faut aussi cibler le scroll.
+            const isTarget = offer.id === targetOfferId && offer.status !== "NEGOTIATING";
             return (
-              <div key={offer.id} className="flex items-center justify-between p-5">
+              <div
+                key={offer.id}
+                ref={isTarget ? targetRef : undefined}
+                className={`flex items-center justify-between p-5 transition ${
+                  isTarget ? "bg-blue-50/60 ring-2 ring-inset ring-blue-200" : ""
+                }`}
+              >
                 <div>
                   <p className="text-sm font-medium text-gray-900">
                     {offer.investor.firstName} {offer.investor.lastName}
@@ -354,6 +417,7 @@ export default function OffresPage() {
           })}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

@@ -15,6 +15,7 @@ export class NotificationsRepository implements INotificationsRepository {
         userId: data.userId,
         title: data.title,
         body: data.body,
+        link: data.link,
         channel: data.channel ?? 'IN_APP',
       },
     });

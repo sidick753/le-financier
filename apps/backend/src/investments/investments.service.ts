@@ -5,8 +5,20 @@ import { OrganizationsRepository } from '../organizations/organizations.reposito
 import { NotificationsService } from '../notifications/notifications.service';
 import { RepaymentService } from '../repayment/repayment.service';
 import { InstitutionsService } from '../institutions/institutions.service';
+import { UsersRepository } from '../users/users.repository';
 import { CreateInvestmentDto } from './dto/create-investment.dto';
 import { SettleInvestmentDto } from './dto/settle-investment.dto';
+
+const FRONTEND_URL = process.env.FRONTEND_URL ?? '';
+
+// Renvoie vers l'offre précise (pas juste la liste) : la page Offres reçues lit
+// ce paramètre pour déplier et scroller automatiquement dessus.
+const pmeOfferLink = (investmentId: string) => `${FRONTEND_URL}/dashboard/offres?offer=${investmentId}`;
+
+// Le panneau de négociation vit directement sur la fiche d'opportunité — le
+// chemin diffère selon que l'investisseur agit en son nom ou pour une institution.
+const investorOpportunityLink = (role: string | undefined, fundingRequestId: string) =>
+  `${FRONTEND_URL}${role === 'INSTITUTION' ? '/institution/deal-flow' : '/investor/opportunites'}/${fundingRequestId}`;
 
 @Injectable()
 export class InvestmentsService {
@@ -17,6 +29,7 @@ export class InvestmentsService {
     private notificationsService: NotificationsService,
     private repaymentService: RepaymentService,
     private institutionsService: InstitutionsService,
+    private usersRepository: UsersRepository,
   ) {}
 
   async createNegotiation(dto: CreateInvestmentDto, investorId: string) {
@@ -39,6 +52,8 @@ export class InvestmentsService {
           owner.userId,
           "Nouvelle proposition d'investissement",
           `Un investisseur propose ${dto.amountCommitted.toLocaleString('fr-FR')} F CFA à ${dto.proposedReturn}% sur "${fundingRequest.title}".`,
+          pmeOfferLink(investment.id),
+          { email: true, ctaLabel: 'Voir la proposition' },
         );
       }
     }
@@ -70,12 +85,17 @@ export class InvestmentsService {
         pmeOwnerId,
         'Nouvelle contre-proposition reçue',
         `${investorName} contre-propose ${proposedReturn}% sur "${requestTitle}".`,
+        pmeOfferLink(investmentId),
+        { email: true, ctaLabel: 'Voir la contre-proposition' },
       );
     } else if (actingAs === 'PME' && investorId) {
+      const investor = await this.usersRepository.findById(investorId);
       await this.notificationsService.notify(
         investorId,
         'Réponse de la PME reçue',
         `${orgName} contre-propose ${proposedReturn}% sur votre engagement.`,
+        investorOpportunityLink(investor?.role, investment.fundingRequestId),
+        { email: true, ctaLabel: 'Voir la réponse' },
       );
     }
 
@@ -96,17 +116,22 @@ export class InvestmentsService {
     const lockedReturn = Number(updated?.lockedReturn);
 
     if (actingAs === 'INVESTOR' && pmeOwnerId) {
-      await this.notificationsService.notify(
-        pmeOwnerId,
-        "Offre acceptée par l'investisseur",
-        `L'investisseur a accepté ${lockedReturn}% sur "${requestTitle}". L'engagement est confirmé.`,
-      );
+      const title = "Offre acceptée par l'investisseur";
+      const body = `L'investisseur a accepté ${lockedReturn}% sur "${requestTitle}". L'engagement est confirmé.`;
+      const link = pmeOfferLink(investmentId);
+      await this.notificationsService.notify(pmeOwnerId, title, body, link, {
+        email: true,
+        ctaLabel: 'Voir mes offres reçues',
+      });
     } else if (actingAs === 'PME' && investorId) {
-      await this.notificationsService.notify(
-        investorId,
-        'Offre acceptée par la PME',
-        `${orgName} a accepté ${lockedReturn}% sur votre engagement. Vous êtes maintenant engagé.`,
-      );
+      const title = 'Offre acceptée par la PME';
+      const body = `${orgName} a accepté ${lockedReturn}% sur votre engagement. Vous êtes maintenant engagé.`;
+      const investor = await this.usersRepository.findById(investorId);
+      const link = investorOpportunityLink(investor?.role, investment.fundingRequestId);
+      await this.notificationsService.notify(investorId, title, body, link, {
+        email: true,
+        ctaLabel: 'Voir cette opportunité',
+      });
     }
 
     return updated;
@@ -129,12 +154,17 @@ export class InvestmentsService {
         pmeOwnerId,
         "Négociation abandonnée par l'investisseur",
         `L'investisseur a mis fin à la négociation sur "${requestTitle}".`,
+        pmeOfferLink(investmentId),
+        { email: true, ctaLabel: 'Voir mes offres reçues' },
       );
     } else if (actingAs === 'PME' && investorId) {
+      const investor = await this.usersRepository.findById(investorId);
       await this.notificationsService.notify(
         investorId,
         'Négociation abandonnée par la PME',
         `${orgName} a mis fin à la négociation sur votre engagement "${requestTitle}".`,
+        investorOpportunityLink(investor?.role, investment.fundingRequestId),
+        { email: true, ctaLabel: 'Voir cette opportunité' },
       );
     }
 
