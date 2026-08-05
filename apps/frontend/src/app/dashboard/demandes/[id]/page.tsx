@@ -370,7 +370,7 @@ export default function DemandeDetailPage() {
                 montant demandé ça représente. */}
             <div className="mb-5 rounded-2xl border border-slate-200 bg-white">
               <div className="flex items-center justify-between gap-3 p-6 pb-4">
-                <h2 className="text-[14px] font-semibold text-slate-900">
+                <h2 className="text-[16px] font-bold text-slate-900">
                   Investisseurs{investors.length > 0 && ` (${investors.length})`}
                 </h2>
                 {request.investorMode === "SINGLE_INVESTOR" && (
@@ -418,7 +418,7 @@ export default function DemandeDetailPage() {
             {/* Réclamation des fonds */}
             {["PUBLISHED", "FUNDED", "CLOSED"].includes(request.status) && (
               <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-6">
-                <h2 className="mb-1 text-[14px] font-semibold text-slate-900">Réclamer les fonds</h2>
+                <h2 className="mb-1 text-[16px] font-bold text-slate-900">Réclamer les fonds</h2>
                 <p className="mb-3 text-[12px] text-slate-500">
                   Les virements des investisseurs sont d'abord validés par un admin sur le compte de la
                   plateforme. Vous pouvez réclamer le montant déjà validé à tout moment, même avant que la
@@ -514,7 +514,7 @@ export default function DemandeDetailPage() {
             {/* Scoring */}
             {report && (
               <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-6">
-                <h2 className="mb-3 text-[14px] font-semibold text-slate-900">Scoring</h2>
+                <h2 className="mb-3 text-[16px] font-bold text-slate-900">Scoring</h2>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <p className="mb-1 text-[11px] text-slate-500">Note</p>
@@ -538,7 +538,7 @@ export default function DemandeDetailPage() {
                 document rejeté se corrige en le remplaçant depuis /dashboard/documents,
                 pas depuis cette page en lecture seule. */}
             <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-6">
-              <h2 className="mb-3 text-[14px] font-semibold text-slate-900">
+              <h2 className="mb-3 text-[16px] font-bold text-slate-900">
                 Documents{visibleDocuments.length > 0 && ` (${visibleDocuments.length})`}
               </h2>
               {visibleDocuments.length === 0 ? (
@@ -575,7 +575,7 @@ export default function DemandeDetailPage() {
 
             {/* Organization */}
             <div className="rounded-2xl border border-slate-200 bg-white p-6">
-              <h2 className="mb-3 text-[14px] font-semibold text-slate-900">Organisation</h2>
+              <h2 className="mb-3 text-[16px] font-bold text-slate-900">Organisation</h2>
               <p className="text-[13px] text-slate-900">{request.organization.legalName}</p>
               <p className="text-[12px] text-slate-500">{request.organization.sector}</p>
             </div>

@@ -252,7 +252,7 @@ export default function AdminInvestisseurDetailPage() {
 
       {user.role === "INSTITUTION" && user.institutionMembership && (
         <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
-          <p className="mb-2 text-base font-semibold text-gray-900">Institution rattachée</p>
+          <p className="mb-2 text-lg font-bold text-gray-900">Institution rattachée</p>
           <p className="text-sm text-gray-700">{user.institutionMembership.institution.name}</p>
           <p className="text-xs text-gray-500">
             {user.institutionMembership.institution.type ?? "—"} · {user.institutionMembership.role}
@@ -264,7 +264,7 @@ export default function AdminInvestisseurDetailPage() {
       {/* Pièces justificatives KYC */}
       <div className="mb-6 rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-base font-semibold text-gray-900">Pièces justificatives (KYC)</p>
+          <p className="text-lg font-bold text-gray-900">Pièces justificatives (KYC)</p>
           <p className="mt-0.5 text-xs text-gray-500">
             Documents déposés par l&apos;investisseur — à consulter avant de valider le KYC.
           </p>
@@ -326,7 +326,7 @@ export default function AdminInvestisseurDetailPage() {
       {/* Investissements */}
       <div className="rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-base font-semibold text-gray-900">Investissements</p>
+          <p className="text-lg font-bold text-gray-900">Investissements</p>
         </div>
         <div className="divide-y divide-gray-100">
           {user.investments.length === 0 && (

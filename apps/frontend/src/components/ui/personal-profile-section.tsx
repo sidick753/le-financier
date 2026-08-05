@@ -56,7 +56,7 @@ export function PersonalProfileSection({ showCni = false }: { showCni?: boolean 
 
   return (
     <div className="max-w-2xl rounded-xl border border-gray-200 bg-white p-6">
-      <p className="mb-1 text-base font-semibold text-gray-900">Informations personnelles</p>
+      <p className="mb-1 text-lg font-bold text-gray-900">Informations personnelles</p>
       <p className="mb-4 text-xs text-gray-500">Votre identité, utilisée pour vous contacter et vous identifier sur la plateforme.</p>
 
       {profile.kycStatus === "REJECTED" && profile.kycRejectionReason && (

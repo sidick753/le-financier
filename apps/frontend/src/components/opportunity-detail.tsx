@@ -822,13 +822,13 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
 
             {/* Description */}
             <div className="rounded-[18px] border border-slate-200 bg-white p-5">
-              <p className="mb-2.5 text-[13px] font-bold text-slate-900">Description du projet</p>
+              <p className="mb-2.5 text-[16px] font-bold text-slate-900">Description du projet</p>
               <p className="text-[13px] leading-relaxed text-slate-600">{opportunity.description}</p>
             </div>
 
             {/* Progression */}
             <div className="rounded-[18px] border border-slate-200 bg-white p-5">
-              <p className="mb-3 text-[13px] font-bold text-slate-900">Progression du financement</p>
+              <p className="mb-3 text-[16px] font-bold text-slate-900">Progression du financement</p>
               <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
                 <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${progress}%` }} />
               </div>
@@ -866,7 +866,7 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
 
             {/* Évaluation du risque */}
             <div className="rounded-[18px] border border-slate-200 bg-white p-5 text-center">
-              <p className="mb-2 flex items-center justify-center gap-1 text-[13px] font-bold text-slate-900">
+              <p className="mb-2 flex items-center justify-center gap-1 text-[16px] font-bold text-slate-900">
                 Évaluation du risque
                 <InfoTooltip text={glossaryText("score-risque")} />
               </p>
@@ -889,7 +889,7 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
 
             {/* Bloc engagement / négociation */}
             <div className="rounded-[18px] border border-slate-200 bg-white p-5">
-              <p className="mb-0.5 text-[13px] font-bold text-slate-900">Faire une offre</p>
+              <p className="mb-0.5 text-[16px] font-bold text-slate-900">Faire une offre</p>
               <p className="mb-4 text-[11px] text-slate-500">
                 Proposez un montant et un taux pour cette opportunité
               </p>
@@ -1359,7 +1359,7 @@ export function OpportunityDetail({ backHref, backLabel }: { backHref: string; b
 
             {/* Aide */}
             <div className="rounded-[18px] border border-slate-200 bg-white p-5">
-              <p className="mb-1 text-[13px] font-bold text-slate-900">Besoin d&apos;aide ?</p>
+              <p className="mb-1 text-[16px] font-bold text-slate-900">Besoin d&apos;aide ?</p>
               <p className="mb-3 text-[11px] text-slate-500">
                 Notre équipe est disponible pour vous accompagner dans votre décision.
               </p>

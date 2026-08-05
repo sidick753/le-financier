@@ -153,7 +153,7 @@ function CreditSection({ title, children }: { title: string; children: React.Rea
   return (
     <div className="rounded-xl border border-gray-200 bg-white">
       <div className="border-b border-gray-100 p-5">
-        <p className="text-base font-semibold text-gray-900">{title}</p>
+        <p className="text-lg font-bold text-gray-900">{title}</p>
       </div>
       <div className="grid grid-cols-4 gap-4 p-5">{children}</div>
     </div>

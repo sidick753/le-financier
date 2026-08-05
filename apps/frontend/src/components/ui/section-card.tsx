@@ -11,7 +11,7 @@ export function SectionCard({ title, sub, action, actionHref = "#", children }: 
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
         <div>
-          <p className="text-[14px] font-bold tracking-tight">{title}</p>
+          <p className="text-[16px] font-bold tracking-tight">{title}</p>
           {sub && <p className="mt-0.5 text-xs text-slate-500">{sub}</p>}
         </div>
         {action && (

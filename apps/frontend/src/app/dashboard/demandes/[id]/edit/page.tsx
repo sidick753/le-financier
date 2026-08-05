@@ -312,7 +312,7 @@ export default function EditDemandePage() {
 
         {!isLoading && !loadError && !notEditable && (
           <div className="mt-5 rounded-[18px] border border-slate-200 bg-white p-7">
-            <h2 className="mb-1 text-[15px] font-bold text-slate-900">Documents</h2>
+            <h2 className="mb-1 text-[16px] font-bold text-slate-900">Documents</h2>
             <p className="mb-4 text-[13px] text-slate-500">
               Ajoutez ou retirez des pièces justificatives. Même les documents non obligatoires sont très
               importants : chaque pièce ajoutée renforce la confiance des financeurs envers votre dossier.

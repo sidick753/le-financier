@@ -369,7 +369,7 @@ export default function AdminPmeDetailPage() {
       {/* Coordonnées bancaires — utilisées pour le versement des fonds levés */}
       <div className="mb-6 rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-base font-semibold text-gray-900">Coordonnées bancaires</p>
+          <p className="text-lg font-bold text-gray-900">Coordonnées bancaires</p>
         </div>
         <div className="grid grid-cols-4 gap-4 p-5">
           <div>
@@ -395,7 +395,7 @@ export default function AdminPmeDetailPage() {
           critère commun au scoring de chaque demande de financement (FACTURE/PRET/EQUITY). */}
       <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-base font-semibold text-gray-900">Score PME indépendant</p>
+          <p className="text-lg font-bold text-gray-900">Score PME indépendant</p>
           <div className="flex items-center gap-3">
             {pmeReport && (
               <button
@@ -509,7 +509,7 @@ export default function AdminPmeDetailPage() {
         {/* Membres */}
         <div className="rounded-xl border border-gray-200 bg-white">
           <div className="border-b border-gray-100 p-5">
-            <p className="text-base font-semibold text-gray-900">Membres</p>
+            <p className="text-lg font-bold text-gray-900">Membres</p>
           </div>
           <div className="divide-y divide-gray-100">
             {org.members.length === 0 && (
@@ -534,7 +534,7 @@ export default function AdminPmeDetailPage() {
         {/* Documents */}
         <div className="rounded-xl border border-gray-200 bg-white">
           <div className="border-b border-gray-100 p-5">
-            <p className="text-base font-semibold text-gray-900">Documents</p>
+            <p className="text-lg font-bold text-gray-900">Documents</p>
           </div>
           <div className="divide-y divide-gray-100">
             {org.documents.length === 0 && (
@@ -594,7 +594,7 @@ export default function AdminPmeDetailPage() {
       {/* Demandes de financement */}
       <div className="mt-4 rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-base font-semibold text-gray-900">Demandes de financement</p>
+          <p className="text-lg font-bold text-gray-900">Demandes de financement</p>
         </div>
         <div className="divide-y divide-gray-100">
           {org.fundingRequests.length === 0 && (
@@ -687,7 +687,7 @@ function CreditSection({ title, children }: { title: string; children: React.Rea
   return (
     <div className="rounded-xl border border-gray-200 bg-white">
       <div className="border-b border-gray-100 p-5">
-        <p className="text-base font-semibold text-gray-900">{title}</p>
+        <p className="text-lg font-bold text-gray-900">{title}</p>
       </div>
       <div className="grid grid-cols-4 gap-4 p-5">{children}</div>
     </div>

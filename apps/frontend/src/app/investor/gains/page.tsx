@@ -127,7 +127,7 @@ export default function GainsPage() {
       <div className="grid grid-cols-3 gap-4">
         {/* Graphique revenus mensuels */}
         <div className="col-span-2 rounded-xl border border-gray-200 bg-white p-5">
-          <p className="mb-4 text-base font-semibold text-gray-900">
+          <p className="mb-4 text-lg font-bold text-gray-900">
             Revenus mensuels {currentYear}
           </p>
           {isLoading ? (
@@ -139,7 +139,7 @@ export default function GainsPage() {
 
         {/* Prochaines échéances */}
         <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <p className="mb-4 text-base font-semibold text-gray-900">Prochaines échéances</p>
+          <p className="mb-4 text-lg font-bold text-gray-900">Prochaines échéances</p>
           {isLoading && <p className="text-xs text-gray-400">Chargement...</p>}
           {!isLoading && upcoming.length === 0 && (
             <p className="text-xs text-gray-400">Aucune échéance à venir.</p>
@@ -168,7 +168,7 @@ export default function GainsPage() {
       {/* Historique des paiements */}
       <div className="mt-4 rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-base font-semibold text-gray-900">Historique des paiements</p>
+          <p className="text-lg font-bold text-gray-900">Historique des paiements</p>
         </div>
 
         {!isLoading && payments.length === 0 && (
@@ -226,7 +226,7 @@ export default function GainsPage() {
 
       {/* Résumé fiscal */}
       <div className="mt-4 rounded-xl border border-gray-200 bg-white p-5">
-        <p className="mb-1 text-base font-semibold text-gray-900">Résumé fiscal {currentYear}</p>
+        <p className="mb-1 text-lg font-bold text-gray-900">Résumé fiscal {currentYear}</p>
         <p className="mb-3 text-xs text-gray-500">
           Revenus imposables {currentYear} (à ce jour)
         </p>

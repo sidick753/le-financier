@@ -337,7 +337,7 @@ function ParametresPageContent() {
                   C'est ce que l'admin voit dans la fiche PME (Forme juridique, Année de
                   création, Ville, Adresse). */}
               <section className="rounded-xl border border-gray-200 bg-white p-6">
-                <h2 className="mb-1 text-base font-semibold text-gray-900">Identité de l'entreprise</h2>
+                <h2 className="mb-1 text-lg font-bold text-gray-900">Identité de l'entreprise</h2>
                 <p className="mb-4 text-xs text-gray-500">
                   Visible par notre équipe lors de la vérification KYC et sur votre profil auprès des investisseurs.
                 </p>
@@ -392,7 +392,7 @@ function ParametresPageContent() {
 
               {/* Secteur & structure */}
               <section className="rounded-xl border border-gray-200 bg-white p-6">
-                <h2 className="mb-1 text-base font-semibold text-gray-900">Secteur & structure</h2>
+                <h2 className="mb-1 text-lg font-bold text-gray-900">Secteur & structure</h2>
                 <p className="mb-4 text-xs text-gray-500">Utilisé par le moteur de scoring Prêt MLT.</p>
 
                 <div className="mb-4">
@@ -424,7 +424,7 @@ function ParametresPageContent() {
 
               {/* Santé financière */}
               <section className="rounded-xl border border-gray-200 bg-white p-6">
-                <h2 className="mb-1 text-base font-semibold text-gray-900">Santé financière</h2>
+                <h2 className="mb-1 text-lg font-bold text-gray-900">Santé financière</h2>
                 <p className="mb-4 text-xs text-gray-500">Utilisé par les moteurs Prêt MLT et Equity.</p>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -496,7 +496,7 @@ function ParametresPageContent() {
 
               {/* Profil du dirigeant */}
               <section className="rounded-xl border border-gray-200 bg-white p-6">
-                <h2 className="mb-1 text-base font-semibold text-gray-900">Profil du dirigeant</h2>
+                <h2 className="mb-1 text-lg font-bold text-gray-900">Profil du dirigeant</h2>
                 <p className="mb-4 text-xs text-gray-500">Utilisé par les moteurs Prêt MLT et Equity.</p>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -544,7 +544,7 @@ function ParametresPageContent() {
 
               {/* Équipe, gouvernance & marché — Equity */}
               <section className="rounded-xl border border-gray-200 bg-white p-6">
-                <h2 className="mb-1 text-base font-semibold text-gray-900">Équipe, gouvernance & marché</h2>
+                <h2 className="mb-1 text-lg font-bold text-gray-900">Équipe, gouvernance & marché</h2>
                 <p className="mb-4 text-xs text-gray-500">Utilisé par le moteur de scoring Equity.</p>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -654,7 +654,7 @@ function ParametresPageContent() {
             </p>
 
             <section className="rounded-xl border border-gray-200 bg-white p-6">
-              <h2 className="mb-4 text-base font-semibold text-gray-900">Coordonnées bancaires</h2>
+              <h2 className="mb-4 text-lg font-bold text-gray-900">Coordonnées bancaires</h2>
               <div className="space-y-4">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">Nom de la banque</label>

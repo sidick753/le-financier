@@ -43,7 +43,7 @@ export function IdentityDocumentSection() {
 
   return (
     <div className="mt-6 max-w-2xl rounded-xl border border-gray-200 bg-white p-6">
-      <p className="mb-1 text-base font-semibold text-gray-900">Pièce d&apos;identité (KYC)</p>
+      <p className="mb-1 text-lg font-bold text-gray-900">Pièce d&apos;identité (KYC)</p>
       <p className="mb-4 text-xs text-gray-500">
         Une copie de votre CNI (ou pièce d&apos;identité équivalente), nécessaire à la vérification de
         votre compte investisseur.

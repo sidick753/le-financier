@@ -236,7 +236,7 @@ export default function InstitutionOverviewPage() {
         {/* Pipeline récent */}
         <div className="col-span-2 rounded-xl border border-gray-200 bg-white">
           <div className="flex items-center justify-between border-b border-gray-100 p-5">
-            <p className="text-base font-semibold text-gray-900">Pipeline récent</p>
+            <p className="text-lg font-bold text-gray-900">Pipeline récent</p>
             <button
               onClick={() => router.push("/institution/deal-flow")}
               className="text-xs text-brand-700 hover:underline"
@@ -320,7 +320,7 @@ export default function InstitutionOverviewPage() {
         <div className="space-y-4">
           {/* Répartition encours */}
           <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <p className="mb-4 text-base font-semibold text-gray-900">Répartition encours</p>
+            <p className="mb-4 text-lg font-bold text-gray-900">Répartition encours</p>
             {Object.keys(byCategory).length === 0 ? (
               <p className="text-xs text-gray-400">Aucun encours actif.</p>
             ) : (
@@ -355,7 +355,7 @@ export default function InstitutionOverviewPage() {
 
           {/* Accès rapide */}
           <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <p className="mb-3 text-base font-semibold text-gray-900">Accès rapide</p>
+            <p className="mb-3 text-lg font-bold text-gray-900">Accès rapide</p>
             <div className="space-y-2">
               {[
                 {
@@ -400,7 +400,7 @@ export default function InstitutionOverviewPage() {
 
       {/* Activité récente */}
       <div className="mt-4 rounded-xl border border-gray-200 bg-white p-5">
-        <p className="mb-4 text-base font-semibold text-gray-900">Activité récente</p>
+        <p className="mb-4 text-lg font-bold text-gray-900">Activité récente</p>
         {investments.length === 0 ? (
           <p className="text-sm text-gray-400">Aucune activité récente.</p>
         ) : (

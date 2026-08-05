@@ -426,14 +426,14 @@ export default function AdminOpportuniteDetailPage() {
       <div className="grid grid-cols-2 gap-4 items-start">
         {/* Description */}
         <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <p className="mb-2 text-base font-semibold text-gray-900">Description</p>
+          <p className="mb-2 text-lg font-bold text-gray-900">Description</p>
           <p className="text-sm leading-relaxed text-gray-600">{fr.description}</p>
         </div>
 
         {/* Scoring */}
         <div className="rounded-xl border border-gray-200 bg-white p-5">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-base font-semibold text-gray-900">Scoring</p>
+            <p className="text-lg font-bold text-gray-900">Scoring</p>
             {report && (
               <button
                 onClick={() => setSnapshotReportId(report.id)}
@@ -471,7 +471,7 @@ export default function AdminOpportuniteDetailPage() {
       <div className={`mb-4 rounded-xl border bg-white ${fr.investments.length > 0 ? "border-l-4 border-l-blue-500 border-gray-200" : "border-gray-200"}`}>
         <div className="border-b border-gray-100 p-5">
           <div className="flex items-center justify-between">
-            <p className="text-base font-semibold text-gray-900">Investissements</p>
+            <p className="text-lg font-bold text-gray-900">Investissements</p>
             <div className="flex items-center gap-1.5">
               {settledCount > 0 && (
                 <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
@@ -575,7 +575,7 @@ export default function AdminOpportuniteDetailPage() {
       {/* Réclamations de la PME */}
       <div className="mb-6 rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-base font-semibold text-gray-900">Réclamations</p>
+          <p className="text-lg font-bold text-gray-900">Réclamations</p>
           <p className="mt-0.5 text-xs text-gray-500">
             La PME peut réclamer les fonds déjà validés à tout moment, même avant 100% financé.
           </p>
@@ -639,7 +639,7 @@ export default function AdminOpportuniteDetailPage() {
       <div className="mt-4">
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <p className="text-base font-semibold text-gray-900">Profil de la PME</p>
+            <p className="text-lg font-bold text-gray-900">Profil de la PME</p>
             <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${(ORG_STATUS_CONFIG[fr.organization.verificationStatus] ?? ORG_STATUS_CONFIG.PENDING).className}`}>
               {(ORG_STATUS_CONFIG[fr.organization.verificationStatus] ?? ORG_STATUS_CONFIG.PENDING).label}
             </span>
@@ -660,7 +660,7 @@ export default function AdminOpportuniteDetailPage() {
           de doublon ici. */}
       {/* <div className="mt-4 rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-base font-semibold text-gray-900">Documents de la PME</p>
+          <p className="text-lg font-bold text-gray-900">Documents de la PME</p>
           <p className="mt-0.5 text-xs text-gray-500">
             Pièces déposées par la PME pour ce dossier — validez ou rejetez celles encore en revue.
           </p>

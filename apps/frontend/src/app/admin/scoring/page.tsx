@@ -548,7 +548,7 @@ export default function AdminScoringPage() {
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${productCfg.className}`}>
                       {productCfg.label}
                     </span>
-                    <p className="text-base font-semibold text-gray-900">Moteur {productCfg.label}</p>
+                    <p className="text-lg font-bold text-gray-900">Moteur {productCfg.label}</p>
                   </div>
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                     total === 100 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
@@ -612,7 +612,7 @@ export default function AdminScoringPage() {
           })}
 
           <div className="rounded-xl border border-gray-200 bg-white p-5">
-            <p className="mb-4 text-base font-semibold text-gray-900">
+            <p className="mb-4 text-lg font-bold text-gray-900">
               Barème des grades (commun aux 3 moteurs)
             </p>
             <div className="space-y-2">

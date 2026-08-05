@@ -49,7 +49,7 @@ export function PasswordSecuritySection() {
 
   return (
     <div className="max-w-2xl rounded-xl border border-gray-200 bg-white p-6">
-      <p className="mb-4 text-base font-semibold text-gray-900">Changement de mot de passe</p>
+      <p className="mb-4 text-lg font-bold text-gray-900">Changement de mot de passe</p>
       <div className="space-y-4">
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-700">Mot de passe actuel</label>

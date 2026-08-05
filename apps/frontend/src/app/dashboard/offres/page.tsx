@@ -367,7 +367,7 @@ function OffresPageContent() {
       {/* Toutes les autres offres */}
       <div className="rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-base font-semibold text-gray-900">Toutes les offres</p>
+          <p className="text-lg font-bold text-gray-900">Toutes les offres</p>
         </div>
 
         {isLoading && <p className="p-5 text-sm text-gray-400">Chargement...</p>}

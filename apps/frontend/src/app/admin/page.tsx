@@ -115,7 +115,7 @@ export default function AdminDashboardPage() {
         {/* Vérifications en attente */}
         <div className="flex flex-col rounded-xl border border-gray-200 bg-white">
           <div className="flex items-center justify-between border-b border-gray-100 p-5">
-            <p className="text-base font-semibold text-gray-900">
+            <p className="text-lg font-bold text-gray-900">
               Vérifications en attente
             </p>
             {pendingOrgs.length > 0 && (
@@ -168,7 +168,7 @@ export default function AdminDashboardPage() {
         {/* Opportunités à modérer */}
         <div className="flex flex-col rounded-xl border border-gray-200 bg-white">
           <div className="flex items-center justify-between border-b border-gray-100 p-5">
-            <p className="text-base font-semibold text-gray-900">
+            <p className="text-lg font-bold text-gray-900">
               Opportunités à modérer
             </p>
             {pendingFunding.length > 0 && (
@@ -255,7 +255,7 @@ export default function AdminDashboardPage() {
       {/* Reporting BCEAO */}
       {/* <div className="mt-4 rounded-xl border border-gray-200 bg-white p-5">
         <div className="mb-4 flex items-center justify-between">
-          <p className="text-base font-semibold text-gray-900">
+          <p className="text-lg font-bold text-gray-900">
             Reporting Réglementaire BCEAO
           </p>
           <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">

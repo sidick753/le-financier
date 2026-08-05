@@ -232,7 +232,7 @@ function AdminFinancesPageContent() {
         {/* Graphiques mensuels : commissions et volume ont des échelles trop différentes
             pour partager un axe (voir dataviz), donc deux petits graphiques distincts. */}
         <div className="col-span-2 rounded-xl border border-gray-200 bg-white p-5">
-          <p className="mb-4 text-base font-semibold text-gray-900">
+          <p className="mb-4 text-lg font-bold text-gray-900">
             Revenus et volume mensuels {currentYear}
           </p>
           <div className="grid grid-cols-2 gap-6">
@@ -250,7 +250,7 @@ function AdminFinancesPageContent() {
         {/* Répartition : 2 catégories en part-du-tout → une barre empilée, pas un donut
             (un donut à 2 tranches se lit moins bien qu'une barre, voir dataviz). */}
         <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <p className="mb-4 text-base font-semibold text-gray-900">Répartition commissions</p>
+          <p className="mb-4 text-lg font-bold text-gray-900">Répartition commissions</p>
           {!stats || stats.total === 0 ? (
             <p className="text-xs text-gray-400">Aucune commission pour le moment.</p>
           ) : (
@@ -318,7 +318,7 @@ function AdminFinancesPageContent() {
       {/* Transactions */}
       <div className="rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-base font-semibold text-gray-900">Transactions de commission</p>
+          <p className="text-lg font-bold text-gray-900">Transactions de commission</p>
         </div>
         {isLoading && <p className="p-5 text-sm text-gray-400">Chargement...</p>}
         {!isLoading && commissions.length === 0 && (
@@ -407,7 +407,7 @@ function AdminFinancesPageContent() {
           reliée de façon fiable à chaque commission), pas par partenaire institutionnel. */}
       <div className="mt-4 rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-base font-semibold text-gray-900">Top PME par volume</p>
+          <p className="text-lg font-bold text-gray-900">Top PME par volume</p>
         </div>
         {topOrganizations.length === 0 && (
           <p className="p-5 text-sm text-gray-400">Aucune donnée pour le moment.</p>

@@ -144,7 +144,7 @@ export function ScoringSnapshotModal({ reportId, onClose }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <div>
-            <p className="text-base font-semibold text-gray-900">
+            <p className="text-lg font-bold text-gray-900">
               Snapshot de scoring — {report?.organization.legalName ?? "…"}
             </p>
             <p className="text-xs text-gray-400">

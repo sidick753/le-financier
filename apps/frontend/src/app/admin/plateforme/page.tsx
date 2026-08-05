@@ -107,7 +107,7 @@ export default function PlatformSettingsPage() {
 
         <div className="rounded-[18px] border border-slate-200 bg-white">
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-            <p className="text-[14px] font-semibold text-slate-900">Comptes bancaires</p>
+            <p className="text-[16px] font-bold text-slate-900">Comptes bancaires</p>
             <button
               onClick={() => setShowForm((v) => !v)}
               className="rounded-lg bg-blue-700 px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-blue-800"

@@ -160,7 +160,7 @@ function InvestmentCard({ inv }: { inv: MyInvestment }) {
       {/* Header row */}
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <p className="text-[14px] font-semibold text-slate-900">
+          <p className="text-[16px] font-bold text-slate-900">
             {inv.fundingRequest.organization.legalName}
           </p>
           <div className="mt-1.5 flex items-center gap-2">
@@ -461,7 +461,7 @@ export default function PortefeuillePage() {
           {/* Left : investment list */}
           <div className="col-span-2 overflow-hidden rounded-[18px] border border-slate-200 bg-white">
             <div className="border-b border-slate-100 px-5 py-4">
-              <p className="text-[14px] font-semibold text-slate-900">Mes investissements</p>
+              <p className="text-[16px] font-bold text-slate-900">Mes investissements</p>
             </div>
 
             {isLoading && (

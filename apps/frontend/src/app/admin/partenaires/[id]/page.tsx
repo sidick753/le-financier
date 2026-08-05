@@ -214,7 +214,7 @@ export default function AdminPartenaireDetailPage() {
       {/* Membres */}
       <div className="rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-base font-semibold text-gray-900">Membres</p>
+          <p className="text-lg font-bold text-gray-900">Membres</p>
         </div>
         <div className="divide-y divide-gray-100">
           {institution.members.length === 0 && (

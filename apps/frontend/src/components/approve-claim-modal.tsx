@@ -25,7 +25,7 @@ export function ApproveClaimModal({ title, fundingRequestId, onConfirm, onClose,
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-        <p className="mb-1 text-base font-semibold text-gray-900">{title}</p>
+        <p className="mb-1 text-lg font-bold text-gray-900">{title}</p>
         <p className="mb-4 text-xs text-gray-500">
           Preuve du virement réel effectué hors plateforme + date, requises pour valider.
         </p>

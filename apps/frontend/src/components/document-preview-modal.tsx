@@ -37,7 +37,7 @@ export function DocumentPreviewModal({ documentId, onClose }: Props) {
     >
       <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-2xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-gray-100 p-4">
-          <p className="truncate text-base font-semibold text-gray-900">
+          <p className="truncate text-lg font-bold text-gray-900">
             {data?.fileName ?? "Document"}
           </p>
           <div className="flex items-center gap-4">

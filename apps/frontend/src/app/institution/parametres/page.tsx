@@ -142,7 +142,7 @@ export default function InstitutionParametresPage() {
 
       {tab === "institution" && (
         <div className="max-w-2xl rounded-xl border border-gray-200 bg-white p-6">
-          <p className="mb-4 text-base font-semibold text-gray-900">Informations institutionnelles</p>
+          <p className="mb-4 text-lg font-bold text-gray-900">Informations institutionnelles</p>
           <div className="space-y-4">
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-700">Nom de l'institution</label>
@@ -189,7 +189,7 @@ export default function InstitutionParametresPage() {
 
       {tab === "limites" && (
         <div className="max-w-2xl rounded-xl border border-gray-200 bg-white p-6">
-          <p className="mb-4 text-base font-semibold text-gray-900">Limites & Mandats d'investissement</p>
+          <p className="mb-4 text-lg font-bold text-gray-900">Limites & Mandats d'investissement</p>
           <div className="space-y-4">
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-700">Enveloppe annuelle max (FCFA)</label>
@@ -257,7 +257,7 @@ export default function InstitutionParametresPage() {
           <PushNotificationsSection />
 
           <div className="rounded-xl border border-gray-200 bg-white p-6">
-            <p className="mb-2 text-base font-semibold text-gray-900">Clé API</p>
+            <p className="mb-2 text-lg font-bold text-gray-900">Clé API</p>
             <p className="mb-3 text-xs text-gray-400">
               La clé API permet d'intégrer LeFinancier à votre système de gestion interne (core banking).
             </p>

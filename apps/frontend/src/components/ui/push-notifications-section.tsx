@@ -27,7 +27,7 @@ export function PushNotificationsSection() {
 
   return (
     <div className="max-w-2xl rounded-xl border border-gray-200 bg-white p-6">
-      <p className="mb-1 text-base font-semibold text-gray-900">Notifications push</p>
+      <p className="mb-1 text-lg font-bold text-gray-900">Notifications push</p>
       <p className="mb-4 text-xs text-gray-500">
         Recevez une notification sur cet appareil dès qu'une offre, un virement ou une réclamation
         vous concerne — même onglet fermé. En plus des notifications déjà visibles dans la cloche et par email.

@@ -128,7 +128,7 @@ function Step1({
 
   return (
     <div className="rounded-[18px] border border-slate-200 bg-white p-7">
-      <h2 className="mb-1 text-[15px] font-bold text-slate-900">Type de financement</h2>
+      <h2 className="mb-1 text-[16px] font-bold text-slate-900">Type de financement</h2>
       <p className="mb-5 text-[13px] text-slate-500">Sélectionnez le type de financement adapté à votre besoin</p>
 
       {(["INVOICE", "LOAN", "EQUITY"] as FinancingType[]).map((t) => {
@@ -271,7 +271,7 @@ function Step2({
 }) {
   return (
     <div className="rounded-[18px] border border-slate-200 bg-white p-7">
-      <h2 className="mb-1 text-[15px] font-bold text-slate-900">Détails de votre demande</h2>
+      <h2 className="mb-1 text-[16px] font-bold text-slate-900">Détails de votre demande</h2>
       <p className="mb-5 text-[13px] text-slate-500">Décrivez votre besoin de financement de manière claire et détaillée</p>
 
       <div className="mb-4">
@@ -436,7 +436,7 @@ function Step3({ data, organizationId, fundingRequestId, docs, onDocUploaded, at
   const slots = DOC_SLOTS_BY_TYPE[data.type];
   return (
     <div className="rounded-[18px] border border-slate-200 bg-white p-7">
-      <h2 className="mb-1 text-[15px] font-bold text-slate-900">Documents justificatifs</h2>
+      <h2 className="mb-1 text-[16px] font-bold text-slate-900">Documents justificatifs</h2>
       <p className="mb-5 text-[13px] text-slate-500">
         Ajoutez les documents qui appuient votre demande. Même ceux qui ne sont pas obligatoires sont très
         importants : ils accélèrent l'analyse et augmentent vos chances d'obtenir une offre.
@@ -467,7 +467,7 @@ function Step4({ data }: { data: FormData }) {
 
   return (
     <div className="rounded-[18px] border border-slate-200 bg-white p-7">
-      <h2 className="mb-1 text-[15px] font-bold text-slate-900">Résumé de votre demande</h2>
+      <h2 className="mb-1 text-[16px] font-bold text-slate-900">Résumé de votre demande</h2>
       <p className="mb-5 text-[13px] text-slate-500">Vérifiez les informations avant de publier</p>
 
       {/* Finance grid */}
