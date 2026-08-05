@@ -141,8 +141,9 @@ export class RepaymentService {
 
     const investorId = payment.repaymentSchedule.investment.investorId;
     const investorUser = await this.usersRepository.findById(investorId);
-    await this.notificationsService.notify(
-      investorId,
+    const investorIds = await this.institutionsService.getFellowMemberUserIds(investorId);
+    await this.notificationsService.notifyMany(
+      investorIds,
       'Remboursement validé',
       `Un remboursement de ${Number(payment.amountPaid).toLocaleString('fr-FR')} F CFA a été validé et est disponible à la réclamation (commission plateforme de 3% déduite au versement).`,
       investorPortfolioLink(investorUser?.role),
@@ -164,8 +165,14 @@ export class RepaymentService {
 
     const rejected = await this.repaymentRepository.rejectPayment(paymentId, adminId, reason);
 
-    await this.notificationsService.notify(
-      payment.confirmedById,
+    // Toute l'équipe PME doit savoir, pas seulement le membre qui a confirmé le
+    // paiement — n'importe quel membre peut ensuite resoumettre une preuve.
+    const fundingRequest = await this.fundingRepository.findById(payment.repaymentSchedule.fundingRequestId);
+    const memberIds = fundingRequest
+      ? await this.organizationsRepository.findAllMemberUserIds(fundingRequest.organizationId)
+      : [payment.confirmedById];
+    await this.notificationsService.notifyMany(
+      memberIds,
       'Preuve de remboursement rejetée',
       `Votre preuve de remboursement a été rejetée : ${reason}. Merci de resoumettre une preuve valide.`,
       pmeFundingRequestLink(payment.repaymentSchedule.fundingRequestId),
@@ -231,8 +238,9 @@ export class RepaymentService {
     const approved = await this.repaymentRepository.approveRepaymentClaim(claimId, adminId, proofDocumentId, paidAt);
 
     const requester = await this.usersRepository.findById(approved.requestedById);
-    await this.notificationsService.notify(
-      approved.requestedById,
+    const investorIds = await this.institutionsService.getFellowMemberUserIds(approved.requestedById);
+    await this.notificationsService.notifyMany(
+      investorIds,
       'Réclamation de remboursement validée',
       `Votre réclamation de ${Number(approved.amountRequested).toLocaleString('fr-FR')} F CFA a été validée et versée, net de la commission plateforme de 3% : ${Number(approved.amountNet).toLocaleString('fr-FR')} F CFA.`,
       investorPortfolioLink(requester?.role),
@@ -247,8 +255,9 @@ export class RepaymentService {
     const rejected = await this.repaymentRepository.rejectRepaymentClaim(claimId, adminId, reason);
 
     const requester = await this.usersRepository.findById(rejected.requestedById);
-    await this.notificationsService.notify(
-      rejected.requestedById,
+    const investorIds = await this.institutionsService.getFellowMemberUserIds(rejected.requestedById);
+    await this.notificationsService.notifyMany(
+      investorIds,
       'Réclamation de remboursement rejetée',
       `Votre réclamation a été rejetée : ${reason}`,
       investorPortfolioLink(requester?.role),

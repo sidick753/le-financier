@@ -291,8 +291,14 @@ export class DocumentsService {
     // un document personnel (KYC investisseur/institution sans organizationId) n'a pas
     // encore d'équivalent frontend, on omet alors le lien plutôt que d'en deviner un faux.
     const link = document.organizationId ? `${FRONTEND_URL}/dashboard/documents` : undefined;
-    await this.notificationsService.notify(
-      document.uploadedById,
+    // Rattaché à une organisation (RCCM, bilan...) : toute l'équipe PME doit savoir,
+    // pas seulement le membre qui a déposé le document. Document personnel (KYC
+    // investisseur/institution) : uploadedById reste le seul destinataire pertinent.
+    const recipientIds = document.organizationId
+      ? await this.organizationsRepository.findAllMemberUserIds(document.organizationId)
+      : [document.uploadedById];
+    await this.notificationsService.notifyMany(
+      recipientIds,
       'Document validé',
       `Votre document "${document.title ?? document.fileName}" a été validé.`,
       link,
@@ -315,8 +321,11 @@ export class DocumentsService {
     const rejected = await this.documentsRepository.updateStatus(documentId, 'REJECTED', reason);
 
     const link = document.organizationId ? `${FRONTEND_URL}/dashboard/documents` : undefined;
-    await this.notificationsService.notify(
-      document.uploadedById,
+    const recipientIds = document.organizationId
+      ? await this.organizationsRepository.findAllMemberUserIds(document.organizationId)
+      : [document.uploadedById];
+    await this.notificationsService.notifyMany(
+      recipientIds,
       'Document rejeté',
       `Votre document "${document.title ?? document.fileName}" a été rejeté : ${reason}. Merci de le resoumettre.`,
       link,

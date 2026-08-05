@@ -82,18 +82,16 @@ export class OrganizationsService {
     }
     const updated = await this.organizationsRepository.updateVerificationStatus(id, status, rejectionReason);
 
-    const owner = await this.organizationsRepository.findOwnerMember(id);
-    if (owner) {
-      await this.notificationsService.notify(
-        owner.userId,
-        status === 'VERIFIED' ? 'Organisation vérifiée' : 'Vérification rejetée',
-        status === 'VERIFIED'
-          ? `${organization.legalName} a été vérifiée avec succès.`
-          : `La vérification de ${organization.legalName} a été rejetée : ${rejectionReason ?? 'raison non précisée'}`,
-        `${FRONTEND_URL}/dashboard/parametres`,
-        { email: true, ctaLabel: 'Voir mon organisation' },
-      );
-    }
+    const memberIds = await this.organizationsRepository.findAllMemberUserIds(id);
+    await this.notificationsService.notifyMany(
+      memberIds,
+      status === 'VERIFIED' ? 'Organisation vérifiée' : 'Vérification rejetée',
+      status === 'VERIFIED'
+        ? `${organization.legalName} a été vérifiée avec succès.`
+        : `La vérification de ${organization.legalName} a été rejetée : ${rejectionReason ?? 'raison non précisée'}`,
+      `${FRONTEND_URL}/dashboard/parametres`,
+      { email: true, ctaLabel: 'Voir mon organisation' },
+    );
 
     return updated;
   }

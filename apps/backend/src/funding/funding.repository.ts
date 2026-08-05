@@ -451,6 +451,17 @@ export class FundingRepository implements IFundingRepository {
     });
   }
 
+  // Tous les membres de la PME (voir OrganizationsRepository.findAllMemberUserIds,
+  // dupliqué ici pour éviter une dépendance croisée de module) — une demande de
+  // financement appartient à l'organisation entière, pas au seul OWNER.
+  async findAllMemberUserIds(organizationId: string): Promise<string[]> {
+    const members = await this.prisma.organizationMember.findMany({
+      where: { organizationId },
+      select: { userId: true },
+    });
+    return members.map((m) => m.userId);
+  }
+
   async findAllForAdmin(filters?: FundingAdminFilters) {
     const where: Prisma.FundingRequestWhereInput = {
       ...(filters?.status ? { status: filters.status as any } : {}),

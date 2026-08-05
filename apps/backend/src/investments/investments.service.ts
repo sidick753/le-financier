@@ -62,18 +62,18 @@ export class InvestmentsService {
 
     const fundingRequest = await this.fundingRepository.findById(dto.fundingRequestId);
     if (fundingRequest) {
-      const owner = await this.fundingRepository.findOrganizationOwner(
+      // Toute l'équipe PME doit être notifiée, pas seulement l'OWNER — n'importe quel
+      // membre de l'organisation peut ensuite répondre à cette proposition.
+      const memberIds = await this.organizationsRepository.findAllMemberUserIds(
         fundingRequest.organizationId,
       );
-      if (owner) {
-        await this.notificationsService.notify(
-          owner.userId,
-          "Nouvelle proposition d'investissement",
-          `Un investisseur propose ${dto.amountCommitted.toLocaleString('fr-FR')} F CFA à ${dto.proposedReturn}% sur "${fundingRequest.title}".`,
-          pmeOfferLink(investment.id),
-          { email: true, ctaLabel: 'Voir la proposition' },
-        );
-      }
+      await this.notificationsService.notifyMany(
+        memberIds,
+        "Nouvelle proposition d'investissement",
+        `Un investisseur propose ${dto.amountCommitted.toLocaleString('fr-FR')} F CFA à ${dto.proposedReturn}% sur "${fundingRequest.title}".`,
+        pmeOfferLink(investment.id),
+        { email: true, ctaLabel: 'Voir la proposition' },
+      );
     }
 
     return investment;
@@ -92,15 +92,16 @@ export class InvestmentsService {
       note,
     ) as any;
 
-    const pmeOwnerId = updated?.fundingRequest?.organization?.members?.[0]?.userId;
+    const organizationId = updated?.fundingRequest?.organizationId;
     const investorId = updated?.investor?.id;
     const investorName = `${updated?.investor?.firstName} ${updated?.investor?.lastName}`;
     const orgName = updated?.fundingRequest?.organization?.legalName;
     const requestTitle = updated?.fundingRequest?.title;
 
-    if (actingAs === 'INVESTOR' && pmeOwnerId) {
-      await this.notificationsService.notify(
-        pmeOwnerId,
+    if (actingAs === 'INVESTOR' && organizationId) {
+      const memberIds = await this.organizationsRepository.findAllMemberUserIds(organizationId);
+      await this.notificationsService.notifyMany(
+        memberIds,
         'Nouvelle contre-proposition reçue',
         `${investorName} contre-propose ${proposedReturn}% sur "${requestTitle}".`,
         pmeOfferLink(investmentId),
@@ -108,8 +109,9 @@ export class InvestmentsService {
       );
     } else if (actingAs === 'PME' && investorId) {
       const investor = await this.usersRepository.findById(investorId);
-      await this.notificationsService.notify(
-        investorId,
+      const investorIds = await this.institutionsService.getFellowMemberUserIds(investorId);
+      await this.notificationsService.notifyMany(
+        investorIds,
         'Réponse de la PME reçue',
         `${orgName} contre-propose ${proposedReturn}% sur votre engagement.`,
         investorOpportunityLink(investor?.role, investment.fundingRequestId),
@@ -127,17 +129,18 @@ export class InvestmentsService {
     const actingAs = await this.resolveActingRole(investment, userId, userRole);
     const updated = await this.investmentsRepository.acceptOffer(investmentId, actingAs) as any;
 
-    const pmeOwnerId = updated?.fundingRequest?.organization?.members?.[0]?.userId;
+    const organizationId = updated?.fundingRequest?.organizationId;
     const investorId = updated?.investor?.id;
     const orgName = updated?.fundingRequest?.organization?.legalName;
     const requestTitle = updated?.fundingRequest?.title;
     const lockedReturn = Number(updated?.lockedReturn);
 
-    if (actingAs === 'INVESTOR' && pmeOwnerId) {
+    if (actingAs === 'INVESTOR' && organizationId) {
       const title = "Offre acceptée par l'investisseur";
       const body = `L'investisseur a accepté ${lockedReturn}% sur "${requestTitle}". L'engagement est confirmé.`;
       const link = pmeOfferLink(investmentId);
-      await this.notificationsService.notify(pmeOwnerId, title, body, link, {
+      const memberIds = await this.organizationsRepository.findAllMemberUserIds(organizationId);
+      await this.notificationsService.notifyMany(memberIds, title, body, link, {
         email: true,
         ctaLabel: 'Voir mes offres reçues',
       });
@@ -146,7 +149,8 @@ export class InvestmentsService {
       const body = `${orgName} a accepté ${lockedReturn}% sur votre engagement. Vous êtes maintenant engagé.`;
       const investor = await this.usersRepository.findById(investorId);
       const link = investorOpportunityLink(investor?.role, investment.fundingRequestId);
-      await this.notificationsService.notify(investorId, title, body, link, {
+      const investorIds = await this.institutionsService.getFellowMemberUserIds(investorId);
+      await this.notificationsService.notifyMany(investorIds, title, body, link, {
         email: true,
         ctaLabel: 'Voir cette opportunité',
       });
@@ -162,14 +166,15 @@ export class InvestmentsService {
     const actingAs = await this.resolveActingRole(investment, userId, userRole);
     const updated = await this.investmentsRepository.rejectOffer(investmentId, actingAs) as any;
 
-    const pmeOwnerId = updated?.fundingRequest?.organization?.members?.[0]?.userId;
+    const organizationId = updated?.fundingRequest?.organizationId;
     const investorId = updated?.investor?.id;
     const orgName = updated?.fundingRequest?.organization?.legalName;
     const requestTitle = updated?.fundingRequest?.title;
 
-    if (actingAs === 'INVESTOR' && pmeOwnerId) {
-      await this.notificationsService.notify(
-        pmeOwnerId,
+    if (actingAs === 'INVESTOR' && organizationId) {
+      const memberIds = await this.organizationsRepository.findAllMemberUserIds(organizationId);
+      await this.notificationsService.notifyMany(
+        memberIds,
         "Négociation abandonnée par l'investisseur",
         `L'investisseur a mis fin à la négociation sur "${requestTitle}".`,
         pmeOfferLink(investmentId),
@@ -177,8 +182,9 @@ export class InvestmentsService {
       );
     } else if (actingAs === 'PME' && investorId) {
       const investor = await this.usersRepository.findById(investorId);
-      await this.notificationsService.notify(
-        investorId,
+      const investorIds = await this.institutionsService.getFellowMemberUserIds(investorId);
+      await this.notificationsService.notifyMany(
+        investorIds,
         'Négociation abandonnée par la PME',
         `${orgName} a mis fin à la négociation sur votre engagement "${requestTitle}".`,
         investorOpportunityLink(investor?.role, investment.fundingRequestId),
@@ -324,8 +330,9 @@ export class InvestmentsService {
     }
 
     const investorUser = await this.usersRepository.findById(investment.investorId);
-    await this.notificationsService.notify(
-      investment.investorId,
+    const investorIds = await this.institutionsService.getFellowMemberUserIds(investment.investorId);
+    await this.notificationsService.notifyMany(
+      investorIds,
       'Virement validé',
       `Votre virement de ${Number(investment.amountCommitted).toLocaleString('fr-FR')} F CFA sur "${fundingRequest?.title ?? 'une demande'}" a été validé. Votre échéancier de remboursement est disponible.`,
       investorPortfolioLink(investorUser?.role),
@@ -333,20 +340,18 @@ export class InvestmentsService {
     );
 
     if (fundingRequest) {
-      const owner = await this.fundingRepository.findOrganizationOwner(fundingRequest.organizationId);
-      if (owner) {
-        // Sans `link` ici auparavant : la notif n'alimentait ni le badge "offre
-        // confirmée" du menu (sidebar filtre sur les notifs pointant vers
-        // /dashboard/offres) ni un clic possible. pmeOfferLink ouvre l'offre
-        // précise, qui pointe elle-même vers la demande pour la réclamation.
-        await this.notificationsService.notify(
-          owner.userId,
-          'Financement confirmé',
-          `Un virement de ${Number(investment.amountCommitted).toLocaleString('fr-FR')} F CFA a été validé sur "${fundingRequest.title}". Vous pouvez désormais le réclamer.`,
-          pmeOfferLink(investmentId),
-          { email: true, ctaLabel: 'Voir mes offres reçues' },
-        );
-      }
+      // Sans `link` ici auparavant : la notif n'alimentait ni le badge "offre
+      // confirmée" du menu (sidebar filtre sur les notifs pointant vers
+      // /dashboard/offres) ni un clic possible. pmeOfferLink ouvre l'offre
+      // précise, qui pointe elle-même vers la demande pour la réclamation.
+      const memberIds = await this.organizationsRepository.findAllMemberUserIds(fundingRequest.organizationId);
+      await this.notificationsService.notifyMany(
+        memberIds,
+        'Financement confirmé',
+        `Un virement de ${Number(investment.amountCommitted).toLocaleString('fr-FR')} F CFA a été validé sur "${fundingRequest.title}". Vous pouvez désormais le réclamer.`,
+        pmeOfferLink(investmentId),
+        { email: true, ctaLabel: 'Voir mes offres reçues' },
+      );
     }
 
     return approved;
@@ -369,8 +374,9 @@ export class InvestmentsService {
 
     const fundingRequest = await this.fundingRepository.findById(investment.fundingRequestId);
     const investorUser = await this.usersRepository.findById(investment.investorId);
-    await this.notificationsService.notify(
-      investment.investorId,
+    const investorIds = await this.institutionsService.getFellowMemberUserIds(investment.investorId);
+    await this.notificationsService.notifyMany(
+      investorIds,
       'Preuve de virement rejetée',
       `Votre preuve de virement sur "${fundingRequest?.title ?? 'une demande'}" a été rejetée : ${reason}. Merci de resoumettre une preuve valide.`,
       investorPortfolioLink(investorUser?.role),

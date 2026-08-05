@@ -105,6 +105,17 @@ export class OrganizationsRepository implements IOrganizationsRepository {
     });
   }
 
+  // Tous les membres de la PME (OWNER + MEMBER) — une demande de financement/un
+  // engagement appartient à l'organisation, pas au seul membre qui l'a créée ou
+  // qui a cliqué (voir NotificationsService.notifyMany et son usage côté PME).
+  async findAllMemberUserIds(organizationId: string): Promise<string[]> {
+    const members = await this.prisma.organizationMember.findMany({
+      where: { organizationId },
+      select: { userId: true },
+    });
+    return members.map((m) => m.userId);
+  }
+
   async findAll(filters?: { status?: string; search?: string; page?: number; limit?: number }) {
     const where: Prisma.OrganizationWhereInput = {
       ...(filters?.status ? { verificationStatus: filters.status as any } : {}),

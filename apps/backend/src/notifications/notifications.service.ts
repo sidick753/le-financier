@@ -44,10 +44,17 @@ export class NotificationsService {
     }
 
     if (options?.email) {
-      const user = await this.usersRepository.findById(userId);
-      if (user) {
-        const cta = link ? { label: options.ctaLabel ?? 'Voir sur LeFinancier', url: link } : undefined;
-        await this.mailService.send(user.email, title, renderEmail(title, body, cta));
+      try {
+        const user = await this.usersRepository.findById(userId);
+        if (user) {
+          const cta = link ? { label: options.ctaLabel ?? 'Voir sur LeFinancier', url: link } : undefined;
+          await this.mailService.send(user.email, title, renderEmail(title, body, cta));
+        }
+      } catch {
+        // Best-effort comme le push ci-dessus : MailService.send() encaisse déjà
+        // l'échec Resend en interne, mais un souci réseau/SDK plus en amont ne doit
+        // jamais faire échouer l'action métier qui a déclenché cette notification
+        // (ex. approveSettlement — l'argent a déjà bougé, l'email n'est qu'un relais).
       }
     }
 
@@ -57,6 +64,16 @@ export class NotificationsService {
   async notifyAdmins(title: string, body: string, link?: string, options?: NotifyOptions) {
     const adminIds = await this.usersRepository.findAdminIds();
     await Promise.all(adminIds.map((adminId) => this.notify(adminId, title, body, link, options)));
+  }
+
+  // Événement qui concerne une entité représentée par plusieurs personnes (tous les
+  // membres d'une institution investisseuse, ou tous les membres d'une PME) plutôt
+  // qu'un individu précis — voir InstitutionsService (représentation) : l'action
+  // appartient à l'entité, chacun de ses membres doit donc être informé, pas
+  // seulement celui qui a cliqué à l'origine.
+  async notifyMany(userIds: string[], title: string, body: string, link?: string, options?: NotifyOptions) {
+    const uniqueIds = [...new Set(userIds)];
+    await Promise.all(uniqueIds.map((userId) => this.notify(userId, title, body, link, options)));
   }
 
   async findMine(userId: string) {

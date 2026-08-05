@@ -51,11 +51,11 @@ export class RemindersService {
     for (const schedule of schedules as any[]) {
       const fundingRequest = schedule.fundingRequest;
       if (!fundingRequest) continue;
-      const owner = await this.fundingRepository.findOrganizationOwner(fundingRequest.organizationId);
-      if (!owner) continue;
+      const memberIds = await this.fundingRepository.findAllMemberUserIds(fundingRequest.organizationId);
+      if (memberIds.length === 0) continue;
 
-      await this.notificationsService.notify(
-        owner.userId,
+      await this.notificationsService.notifyMany(
+        memberIds,
         'Échéance de remboursement dans 3 jours',
         `Une échéance de ${Number(schedule.amountDue).toLocaleString('fr-FR')} F CFA arrive à terme le ${schedule.dueDate.toLocaleDateString('fr-FR')} sur "${fundingRequest.title}".`,
         pmeFundingRequestLink(fundingRequest.id),
@@ -72,10 +72,10 @@ export class RemindersService {
       const fundingRequest = schedule.fundingRequest;
       if (!fundingRequest) continue;
 
-      const owner = await this.fundingRepository.findOrganizationOwner(fundingRequest.organizationId);
-      if (owner) {
-        await this.notificationsService.notify(
-          owner.userId,
+      const memberIds = await this.fundingRepository.findAllMemberUserIds(fundingRequest.organizationId);
+      if (memberIds.length > 0) {
+        await this.notificationsService.notifyMany(
+          memberIds,
           'Échéance de remboursement en retard',
           `Une échéance de ${Number(schedule.amountDue).toLocaleString('fr-FR')} F CFA sur "${fundingRequest.title}" est en retard depuis le ${schedule.dueDate.toLocaleDateString('fr-FR')}. Merci de régulariser au plus vite.`,
           pmeFundingRequestLink(fundingRequest.id),

@@ -305,16 +305,14 @@ export class FundingService {
 
     const updated = await this.fundingRepository.updateStatus(fundingRequestId, 'PUBLISHED');
 
-    const owner = await this.fundingRepository.findOrganizationOwner(fundingRequest.organizationId);
-    if (owner) {
-      await this.notificationsService.notify(
-        owner.userId,
-        'Demande publiée',
-        `Votre demande "${fundingRequest.title}" a été validée et est maintenant visible par les investisseurs.`,
-        pmeFundingRequestLink(fundingRequestId),
-        { email: true, ctaLabel: 'Voir ma demande' },
-      );
-    }
+    const memberIds = await this.organizationsRepository.findAllMemberUserIds(fundingRequest.organizationId);
+    await this.notificationsService.notifyMany(
+      memberIds,
+      'Demande publiée',
+      `Votre demande "${fundingRequest.title}" a été validée et est maintenant visible par les investisseurs.`,
+      pmeFundingRequestLink(fundingRequestId),
+      { email: true, ctaLabel: 'Voir ma demande' },
+    );
 
     return updated;
   }
@@ -333,16 +331,14 @@ export class FundingService {
 
     const updated = await this.fundingRepository.updateStatus(fundingRequestId, 'REJECTED', reason);
 
-    const owner = await this.fundingRepository.findOrganizationOwner(fundingRequest.organizationId);
-    if (owner) {
-      await this.notificationsService.notify(
-        owner.userId,
-        'Demande rejetée',
-        `Votre demande "${fundingRequest.title}" a été rejetée : ${reason}`,
-        pmeFundingRequestLink(fundingRequestId),
-        { email: true, ctaLabel: 'Voir ma demande' },
-      );
-    }
+    const memberIds = await this.organizationsRepository.findAllMemberUserIds(fundingRequest.organizationId);
+    await this.notificationsService.notifyMany(
+      memberIds,
+      'Demande rejetée',
+      `Votre demande "${fundingRequest.title}" a été rejetée : ${reason}`,
+      pmeFundingRequestLink(fundingRequestId),
+      { email: true, ctaLabel: 'Voir ma demande' },
+    );
 
     return updated;
   }
@@ -368,16 +364,14 @@ export class FundingService {
     if (!fr) throw new NotFoundException('Demande introuvable.');
     const updated = await this.fundingRepository.updateStatus(id, 'CANCELLED');
 
-    const owner = await this.fundingRepository.findOrganizationOwner(fr.organizationId);
-    if (owner) {
-      await this.notificationsService.notify(
-        owner.userId,
-        'Demande suspendue',
-        `Votre demande "${fr.title}" a été suspendue par un administrateur et n'est plus visible par les investisseurs.`,
-        pmeFundingRequestLink(id),
-        { email: true, ctaLabel: 'Voir ma demande' },
-      );
-    }
+    const memberIds = await this.organizationsRepository.findAllMemberUserIds(fr.organizationId);
+    await this.notificationsService.notifyMany(
+      memberIds,
+      'Demande suspendue',
+      `Votre demande "${fr.title}" a été suspendue par un administrateur et n'est plus visible par les investisseurs.`,
+      pmeFundingRequestLink(id),
+      { email: true, ctaLabel: 'Voir ma demande' },
+    );
 
     return updated;
   }
@@ -390,16 +384,14 @@ export class FundingService {
     }
     const updated = await this.fundingRepository.updateStatus(id, 'PUBLISHED');
 
-    const owner = await this.fundingRepository.findOrganizationOwner(fr.organizationId);
-    if (owner) {
-      await this.notificationsService.notify(
-        owner.userId,
-        'Demande réactivée',
-        `Votre demande "${fr.title}" est de nouveau visible par les investisseurs.`,
-        pmeFundingRequestLink(id),
-        { email: true, ctaLabel: 'Voir ma demande' },
-      );
-    }
+    const memberIds = await this.organizationsRepository.findAllMemberUserIds(fr.organizationId);
+    await this.notificationsService.notifyMany(
+      memberIds,
+      'Demande réactivée',
+      `Votre demande "${fr.title}" est de nouveau visible par les investisseurs.`,
+      pmeFundingRequestLink(id),
+      { email: true, ctaLabel: 'Voir ma demande' },
+    );
 
     return updated;
   }
@@ -442,16 +434,38 @@ export class FundingService {
     return claim;
   }
 
+  // Toute l'équipe PME doit être notifiée d'une réclamation traitée, pas seulement
+  // le membre qui a cliqué "réclamer" — les fonds appartiennent à l'organisation.
+  private async notifyOrganizationOfFundingRequest(
+    fundingRequestId: string | null,
+    fallbackUserId: string,
+    title: string,
+    body: string,
+    ctaLabel: string,
+  ) {
+    const fundingRequest = fundingRequestId ? await this.fundingRepository.findById(fundingRequestId) : null;
+    const memberIds = fundingRequest
+      ? await this.organizationsRepository.findAllMemberUserIds(fundingRequest.organizationId)
+      : [fallbackUserId];
+    await this.notificationsService.notifyMany(
+      memberIds,
+      title,
+      body,
+      fundingRequestId ? pmeFundingRequestLink(fundingRequestId) : undefined,
+      { email: true, ctaLabel },
+    );
+  }
+
   // [ADMIN] Valide la réclamation : commission prélevée, versement net à la PME.
   async approveClaim(claimId: string, adminId: string, proofDocumentId: string, paidAt: string) {
     const approved = await this.fundingRepository.approveFundingClaim(claimId, adminId, proofDocumentId, paidAt);
 
-    await this.notificationsService.notify(
+    await this.notifyOrganizationOfFundingRequest(
+      approved.fundingRequestId,
       approved.requestedById,
       'Réclamation de financement validée',
       `Votre réclamation de ${Number(approved.amountRequested).toLocaleString('fr-FR')} F CFA a été validée et versée, net de la commission plateforme de 2% : ${Number(approved.amountNet).toLocaleString('fr-FR')} F CFA.`,
-      approved.fundingRequestId ? pmeFundingRequestLink(approved.fundingRequestId) : undefined,
-      { email: true, ctaLabel: 'Voir ma demande' },
+      'Voir ma demande',
     );
 
     return approved;
@@ -461,12 +475,12 @@ export class FundingService {
   async rejectClaim(claimId: string, adminId: string, reason: string) {
     const rejected = await this.fundingRepository.rejectFundingClaim(claimId, adminId, reason);
 
-    await this.notificationsService.notify(
+    await this.notifyOrganizationOfFundingRequest(
+      rejected.fundingRequestId,
       rejected.requestedById,
       'Réclamation de financement rejetée',
       `Votre réclamation a été rejetée : ${reason}`,
-      rejected.fundingRequestId ? pmeFundingRequestLink(rejected.fundingRequestId) : undefined,
-      { email: true, ctaLabel: 'Voir ma demande' },
+      'Voir ma demande',
     );
 
     return rejected;
