@@ -1,7 +1,8 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { useInstitutionData, isRecentlyCreated } from "@/lib/use-institution-data";
+import { useInstitutionData, InstitutionInvestment } from "@/lib/use-institution-data";
+import { useNegotiationSocket } from "@/lib/use-negotiation-socket";
 import { NotifBell } from "@/components/ui/notif-bell";
 import { useSortableRows } from "@/lib/use-sortable-rows";
 import { SortableTh } from "@/components/ui/sortable-th";
@@ -13,6 +14,50 @@ const CATEGORY_LABELS: Record<string, string> = {
   PRET: "Prêt MLT",
   EQUITY: "Equity",
 };
+
+// Même sémantique que le StatusBadge de investor/portefeuille — un membre d'institution
+// doit voir le statut réel de l'engagement, pas un simple "récent/en cours" cosmétique.
+const STATUS_BADGE: Record<string, { label: string; className: string }> = {
+  INTERESTED:            { label: "Intéressé",       className: "bg-slate-100 text-slate-500" },
+  NEGOTIATING:           { label: "En négociation",  className: "bg-yellow-100 text-yellow-700" },
+  COMMITTED:             { label: "En cours",        className: "bg-amber-100 text-amber-700" },
+  SETTLEMENT_SUBMITTED:  { label: "Preuve envoyée",  className: "bg-blue-100 text-blue-700" },
+  SETTLED_OFF_PLATFORM:  { label: "Terminé",         className: "bg-gray-100 text-gray-500" },
+  CANCELLED:             { label: "Annulé",          className: "bg-red-100 text-red-600" },
+  REJECTED:              { label: "Rejeté",          className: "bg-red-100 text-red-600" },
+};
+
+// Ordre d'attention pour le tri "Statut" : ce qui attend une action de l'institution
+// remonte en premier, comme la liste de cartes côté investisseur.
+const STATUS_RANK: Record<string, number> = {
+  NEGOTIATING: 0,
+  COMMITTED: 1,
+  SETTLEMENT_SUBMITTED: 2,
+  INTERESTED: 3,
+  SETTLED_OFF_PLATFORM: 4,
+  CANCELLED: 5,
+  REJECTED: 5,
+};
+
+function getActionBanner(inv: InstitutionInvestment) {
+  const lastOffer = inv.negotiationOffers?.[0];
+
+  if (inv.status === "NEGOTIATING") {
+    const pmeHasBall = lastOffer?.proposedBy === "PME" && lastOffer?.status === "PENDING";
+    return pmeHasBall
+      ? { className: "bg-yellow-50 text-yellow-700", text: "Répondre à la contre-proposition de la PME" }
+      : { className: "bg-slate-100 text-slate-500", text: "En attente de réponse de la PME…" };
+  }
+  if (inv.status === "COMMITTED") {
+    return inv.settlementRejectionReason
+      ? { className: "bg-red-50 text-red-700", text: `Preuve de virement rejetée : « ${inv.settlementRejectionReason} ». Nouvelle soumission requise.` }
+      : { className: "bg-amber-50 text-amber-700", text: "En attente de virement hors plateforme" };
+  }
+  if (inv.status === "SETTLEMENT_SUBMITTED") {
+    return { className: "bg-blue-50 text-blue-700", text: "Preuve de virement transmise — en attente de validation par notre équipe." };
+  }
+  return null;
+}
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
@@ -45,8 +90,9 @@ function BarChart({ data }: { data: { label: string; total: number }[] }) {
 }
 
 export default function InstitutionPortefeuillePage() {
-  const { investments, isLoading, totalDeployed, avgReturn, activeInvestments } =
+  const { investments, isLoading, totalDeployed, avgReturn, activeInvestments, refresh } =
     useInstitutionData();
+  useNegotiationSocket(refresh);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const deployedInvestments = investments.filter((i) =>
@@ -93,7 +139,7 @@ export default function InstitutionPortefeuillePage() {
         const raised = Number(inv.fundingRequest.amountRaised);
         return requested > 0 ? Math.min(100, (raised / requested) * 100) : 0;
       },
-      status: (inv) => (isRecentlyCreated(inv.createdAt) ? 1 : 0),
+      status: (inv) => STATUS_RANK[inv.status] ?? 3,
       createdAt: (inv) => inv.createdAt,
     },
   );
@@ -141,7 +187,7 @@ export default function InstitutionPortefeuillePage() {
 
       {/* Graphique évolution */}
       <div className="mb-4 rounded-xl border border-gray-200 bg-white p-5">
-        <p className="mb-4 text-base font-semibold text-gray-900">
+        <p className="mb-4 text-lg font-bold text-gray-900">
           Évolution des encours (M FCFA)
         </p>
         <BarChart data={monthlyData} />
@@ -150,7 +196,7 @@ export default function InstitutionPortefeuillePage() {
       {/* Tableau positions */}
       <div className="rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 p-5">
-          <p className="text-base font-semibold text-gray-900">Positions en portefeuille</p>
+          <p className="text-lg font-bold text-gray-900">Positions en portefeuille</p>
           <p className="text-xs text-gray-400">Cliquez sur une ligne pour le détail</p>
         </div>
         {isLoading && <p className="p-5 text-sm text-gray-400">Chargement...</p>}
@@ -187,7 +233,8 @@ export default function InstitutionPortefeuillePage() {
                   const raised = Number(inv.fundingRequest.amountRaised);
                   const progress = requested > 0 ? Math.min(100, (raised / requested) * 100) : 0;
 
-                  const isNew = isRecentlyCreated(inv.createdAt);
+                  const statusBadge = STATUS_BADGE[inv.status] ?? { label: inv.status, className: "bg-slate-100 text-slate-500" };
+                  const actionBanner = getActionBanner(inv);
                   const isExpanded = expandedId === inv.id;
 
                   return (
@@ -231,8 +278,8 @@ export default function InstitutionPortefeuillePage() {
                           </div>
                         </td>
                         <td className="px-5 py-3">
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${isNew ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
-                            {isNew ? "Nouveau" : "En cours"}
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadge.className}`}>
+                            {statusBadge.label}
                           </span>
                         </td>
                         <td className="px-5 py-3 text-xs text-gray-500">
@@ -262,6 +309,18 @@ export default function InstitutionPortefeuillePage() {
                                 Voir le dossier complet de l&apos;opportunité →
                               </a>
                             </div>
+                            {actionBanner && (
+                              <div className={`mb-3 flex items-center justify-between rounded-lg px-4 py-2.5 text-xs font-medium ${actionBanner.className}`}>
+                                <p>{actionBanner.text}</p>
+                                <a
+                                  href={`/institution/deal-flow/${inv.fundingRequest.id}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="shrink-0 hover:underline"
+                                >
+                                  Voir →
+                                </a>
+                              </div>
+                            )}
                             <div className="rounded-lg border border-gray-200 bg-white">
                               <p className="px-5 pt-4 text-xs font-semibold text-gray-900">
                                 Évolution du remboursement

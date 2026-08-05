@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useInstitutionData, gradeToRisk, isRecentlyCreated, GRADE_CLASSNAMES, RISK_CLASSNAMES } from "@/lib/use-institution-data";
+import { useInstitutionData, gradeToRisk, isRecentlyCreated, GRADE_CLASSNAMES, RISK_CLASSNAMES, InstitutionOpportunity } from "@/lib/use-institution-data";
 import { useRouter } from "next/navigation";
 import { NotifBell } from "@/components/ui/notif-bell";
 import { formatCompactAmount } from "@/lib/admin-ui";
@@ -18,25 +18,105 @@ const STATUS_DEAL_FLOW: Record<string, { label: string; className: string }> = {
   available: { label: "Disponible", className: "bg-blue-100 text-blue-700" },
 };
 
+// Mêmes clés que SORT_OPTIONS côté investor/explorer (et PUBLISHED_SORT_ORDER
+// côté backend) — appliqué ici côté client puisque le deal flow institution
+// charge déjà tout `opportunities` sans pagination.
+const SORT_OPTIONS = [
+  { value: "recent",       label: "Plus récentes" },
+  { value: "closing_soon", label: "Date limite proche" },
+  { value: "return_desc",  label: "Rendement le plus élevé" },
+  { value: "amount_desc",  label: "Montant décroissant" },
+  { value: "amount_asc",   label: "Montant croissant" },
+];
+
+function SortDropdown({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const current = SORT_OPTIONS.find((o) => o.value === value) ?? SORT_OPTIONS[0];
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-9 items-center gap-2 rounded-md border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 hover:bg-gray-50"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <line x1="3" y1="6" x2="21" y2="6" /><line x1="7" y1="12" x2="17" y2="12" /><line x1="11" y1="18" x2="13" y2="18" />
+        </svg>
+        <span className="whitespace-nowrap">{current.label}</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-gray-400">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-[calc(100%+6px)] z-50 min-w-full overflow-hidden rounded-xl border border-gray-200 bg-white p-1 shadow-[0_8px_24px_rgba(15,23,42,0.12)]">
+            {SORT_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => { onChange(o.value); setOpen(false); }}
+                className={`flex w-full items-center whitespace-nowrap rounded-lg px-3 py-2 text-left text-xs font-medium transition ${
+                  o.value === value ? "bg-brand-50 text-brand-700" : "text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function compareOpportunities(a: InstitutionOpportunity, b: InstitutionOpportunity, sort: string) {
+  switch (sort) {
+    case "return_desc": {
+      const ra = a.expectedReturn != null ? Number(a.expectedReturn) : -Infinity;
+      const rb = b.expectedReturn != null ? Number(b.expectedReturn) : -Infinity;
+      return rb - ra;
+    }
+    case "amount_desc":
+      return Number(b.amountRequested) - Number(a.amountRequested);
+    case "amount_asc":
+      return Number(a.amountRequested) - Number(b.amountRequested);
+    case "closing_soon": {
+      const ca = a.closesAt ? new Date(a.closesAt).getTime() : Infinity;
+      const cb = b.closesAt ? new Date(b.closesAt).getTime() : Infinity;
+      return ca - cb;
+    }
+    case "recent":
+    default:
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  }
+}
+
 export default function DealFlowPage() {
   const { opportunities, investments, isLoading } = useInstitutionData();
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("Tous");
   const [riskFilter, setRiskFilter] = useState("Tous");
+  const [sort, setSort] = useState("recent");
 
   const engagedFundingRequestIds = new Set(investments.map((inv) => inv.fundingRequest.id));
 
-  const filtered = opportunities.filter((opp) => {
-    const matchSearch =
-      opp.organization.legalName.toLowerCase().includes(search.toLowerCase()) ||
-      opp.organization.sector.toLowerCase().includes(search.toLowerCase());
-    const matchCategory =
-      categoryFilter === "Tous" || opp.category === categoryFilter;
-    const risk = gradeToRisk(opp.scoringReports[0]?.grade ?? null);
-    const matchRisk = riskFilter === "Tous" || risk === riskFilter;
-    return matchSearch && matchCategory && matchRisk;
-  });
+  const filtered = opportunities
+    .filter((opp) => {
+      const matchSearch =
+        opp.organization.legalName.toLowerCase().includes(search.toLowerCase()) ||
+        opp.organization.sector.toLowerCase().includes(search.toLowerCase());
+      const matchCategory =
+        categoryFilter === "Tous" || opp.category === categoryFilter;
+      const risk = gradeToRisk(opp.scoringReports[0]?.grade ?? null);
+      const matchRisk =
+        riskFilter === "Tous" ||
+        (riskFilter === "Non noté" ? risk === null : risk === riskFilter);
+      return matchSearch && matchCategory && matchRisk;
+    })
+    .sort((a, b) => compareOpportunities(a, b, sort));
 
   return (
     <>
@@ -52,13 +132,13 @@ export default function DealFlowPage() {
 
       <div className="p-8 pb-16">
         {/* Filtres */}
-      <div className="mb-6 flex items-center gap-3">
+      <div className="mb-6 flex flex-wrap items-center gap-3">
         <input
           type="text"
           placeholder="Rechercher une PME, un secteur..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
+          className="min-w-50 flex-1 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:border-brand-700 focus:outline-none"
         />
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-brand-700">Catégorie :</span>
@@ -79,7 +159,7 @@ export default function DealFlowPage() {
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-gray-800">Risque :</span>
           <div className="flex gap-1">
-            {["Tous", "Faible", "Modéré", "Élevé"].map((r) => (
+            {["Tous", "Faible", "Modéré", "Élevé", "Non noté"].map((r) => (
               <button
                 key={r}
                 onClick={() => setRiskFilter(r)}
@@ -92,6 +172,7 @@ export default function DealFlowPage() {
             ))}
           </div>
         </div>
+        <SortDropdown value={sort} onChange={setSort} />
       </div>
 
       {/* Grille 2 colonnes */}

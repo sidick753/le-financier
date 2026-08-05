@@ -15,6 +15,8 @@ export interface InstitutionInvestment {
   status: string;
   lockedReturn: string | null;
   createdAt: string;
+  settlementProofId: string | null;
+  settlementRejectionReason: string | null;
   fundingRequest: {
     id: string;
     title: string;
@@ -48,6 +50,7 @@ export interface InstitutionOpportunity {
   durationMonths: number | null;
   currency: string;
   createdAt: string;
+  closesAt: string | null;
   investorMode: "SINGLE_INVESTOR" | "MULTIPLE_INVESTORS";
   hasActiveInvestor: boolean;
   organization: {
